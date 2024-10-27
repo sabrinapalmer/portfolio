@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import Scrim from "./Scrim";
+import FloatingIcon from "./FloatingIcon";
 import {
   Code,
   Laptop,
@@ -10,64 +12,6 @@ import {
   Heart,
   Sparkles,
 } from "lucide-react";
-
-const FloatingIcon = ({
-  Icon,
-  delay,
-  speed,
-  initialPosition,
-  color = "currentColor",
-  size = 200,
-  opacity = 0.6,
-}) => {
-  const [position, setPosition] = useState(
-    initialPosition || {
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-    }
-  );
-  const [direction, setDirection] = useState({
-    x: Math.random() * 2 - 1,
-    y: Math.random() * 2 - 1,
-  });
-
-  useEffect(() => {
-    const moveIcon = () => {
-      const newX = position.x + direction.x * speed;
-      const newY = position.y + direction.y * speed;
-
-      if (newX < 0 || newX >= window.innerWidth) {
-        setDirection((prev) => ({ ...prev, x: -prev.x }));
-      }
-      if (newY < 0 || newY >= window.innerHeight) {
-        setDirection((prev) => ({ ...prev, y: -prev.y }));
-      }
-
-      setPosition({
-        x: Math.max(0, Math.min(window.innerWidth, newX)),
-        y: Math.max(0, Math.min(window.innerHeight, newY)),
-      });
-    };
-
-    const interval = setInterval(moveIcon, 50);
-    return () => clearInterval(interval);
-  }, [position, direction, speed]);
-
-  return (
-    <div
-      className="absolute transition-all duration-300"
-      style={{
-        transform: `translate(${position.x}px, ${position.y}px)`,
-        animation: `float ${speed}s ease-in-out infinite`,
-        animationDelay: `${delay}s`,
-        opacity: opacity,
-        zIndex: 0,
-      }}
-    >
-      <Icon size={size} className={color} />
-    </div>
-  );
-};
 
 const Layout = () => {
   const location = useLocation();
@@ -191,7 +135,7 @@ const Layout = () => {
             transition={{ duration: 0.5 }}
           >
             <div className="pl-16 pr-8 text-center">
-              <div className="flex items-center justify-center">
+              <Scrim className="flex items-center justify-center">
                 <h1
                   className="text-5xl mb-6 leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
                             bg-clip-text text-transparent"
@@ -199,36 +143,34 @@ const Layout = () => {
                 >
                   Hi, I'm Sabrina!
                 </h1>
-              </div>
-
-              <h1
-                className="text-5xl mb-6 leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
+                <h1
+                  className="text-5xl mb-6 leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
                             bg-clip-text text-transparent"
-                style={{ fontFamily: "Chango, sans-serif" }}
-              >
-                ✨
-              </h1>
-
-              <h2
-                className="text-2xl mb-3 leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
+                  style={{ fontFamily: "Chango, sans-serif" }}
+                >
+                  ✨
+                </h1>
+                <h2
+                  className="text-2xl mb-3 leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
                             bg-clip-text text-transparent"
-                style={{
-                  fontFamily: "Josefin Sans, sans-serif",
-                  fontWeight: 600,
-                }}
-              >
-                Software Engineer & Creative Artist
-              </h2>
-              <p
-                className="text-xl leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
+                  style={{
+                    fontFamily: "Josefin Sans, sans-serif",
+                    fontWeight: 600,
+                  }}
+                >
+                  Software Engineer & Creative Artist
+                </h2>
+                <p
+                  className="text-xl leading-tight bg-gradient-to-r from-purple-400 to-pink-400 
                             bg-clip-text text-transparent"
-                style={{
-                  fontFamily: "Josefin Sans, sans-serif",
-                  fontWeight: 400,
-                }}
-              >
-                Making beautiful things with code and creativity
-              </p>
+                  style={{
+                    fontFamily: "Josefin Sans, sans-serif",
+                    fontWeight: 400,
+                  }}
+                >
+                  Making beautiful things with code and creativity
+                </p>
+              </Scrim>
             </div>
           </motion.div>
         )}

@@ -1,4 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 const FloatingIcon = ({
   Icon,
@@ -6,8 +18,8 @@ const FloatingIcon = ({
   speed,
   initialPosition,
   color = "currentColor",
-  size = 24,
-  opacity = 0.2,
+  size = 200,
+  opacity = 0.6,
 }) => {
   const [position, setPosition] = useState(
     initialPosition || {
@@ -20,15 +32,15 @@ const FloatingIcon = ({
     y: Math.random() * 2 - 1,
   });
 
-  useEffect(() => {
-    const moveIcon = () => {
-      const newX = position.x + direction.x * speed;
-      const newY = position.y + direction.y * speed;
+  const updatePosition = useCallback(
+    debounce((pos, dir) => {
+      const newX = pos.x + dir.x * speed;
+      const newY = pos.y + dir.y * speed;
 
-      if (newX < 0 || newX > window.innerWidth) {
+      if (newX < 0 || newX >= window.innerWidth) {
         setDirection((prev) => ({ ...prev, x: -prev.x }));
       }
-      if (newY < 0 || newY > window.innerHeight) {
+      if (newY < 0 || newY >= window.innerHeight) {
         setDirection((prev) => ({ ...prev, y: -prev.y }));
       }
 
@@ -36,17 +48,24 @@ const FloatingIcon = ({
         x: Math.max(0, Math.min(window.innerWidth, newX)),
         y: Math.max(0, Math.min(window.innerHeight, newY)),
       });
-    };
+    }, 16),
+    [speed]
+  );
 
-    const interval = setInterval(moveIcon, 50);
-    return () => clearInterval(interval);
-  }, [position, direction, speed]);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      updatePosition(position, direction);
+    }, 50);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [position, direction, updatePosition]);
 
   return (
     <div
-      className="absolute transition-all duration-300"
+      className="absolute will-change-transform"
       style={{
-        transform: `translate(${position.x}px, ${position.y}px)`,
+        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
         animation: `float ${speed}s ease-in-out infinite`,
         animationDelay: `${delay}s`,
         opacity: opacity,
