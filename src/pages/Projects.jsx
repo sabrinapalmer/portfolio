@@ -7,14 +7,15 @@ const Projects = () => {
 
   const projects = [
     {
-      title: "Project 1",
-      description: "A brief description of project 1 and its key features",
-      tags: ["React", "Node.js", "MongoDB"],
-      type: "web",
-      image: "/api/placeholder/400/250",
+      title: "Stonemoth",
+      description:
+        "I built Stonemoth with my partner Brad Stevenson for Ludum Dare Game Jam 56. We made the whole game within a single weekend!",
+      tags: ["Unity", "C#"],
+      type: "games",
+      image: "src/assets/projects/Stonemoth.png",
       links: {
-        live: "https://project1.com",
-        github: "https://github.com/username/project1",
+        live: "https://bradjste.itch.io/stonemoth",
+        github: "https://github.com/bradjste/STONEMOTH",
       },
     },
     // Add more projects as needed
