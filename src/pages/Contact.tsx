@@ -45,7 +45,7 @@ const Contact: React.FC = () => {
 
   return (
     <motion.div {...pageTransition}>
-      <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
+      <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
         Contact Me
         <Mail className="text-pink-500 ml-2 mt-[-4px]" size={20} />
       </h2>
@@ -54,10 +54,10 @@ const Contact: React.FC = () => {
         {/* Contact Information */}
         <div className="space-y-8">
           <div className="prose prose-purple">
-            <h3 className="font-josefin text-xl font-semibold text-purple-500">
+            <h3 className="font-josefin text-xl font-semibold text-purple-500 backdrop-blur-xs">
               Let's Connect!
             </h3>
-            <p className="font-josefin text-gray-600">
+            <p className="font-josefin text-gray-600 backdrop-blur-xs">
               I'm always interested in hearing about new projects and
               opportunities. Feel free to reach out!
             </p>
@@ -65,12 +65,15 @@ const Contact: React.FC = () => {
 
           <div className="space-y-4">
             <div className="flex items-start space-x-4">
-              <Mail className="font-josefin text-purple-500 mt-1" size={20} />
+              <Mail
+                className="font-josefin text-purple-500 mt-1 backdrop-blur-xs"
+                size={20}
+              />
               <div>
-                <h4 className="font-josefin font-medium text-purple-500">
+                <h4 className="font-josefin font-medium text-purple-500 backdrop-blur-xs">
                   Email
                 </h4>
-                <p className="font-josefin text-gray-600">
+                <p className="font-josefin text-gray-600 backdrop-blur-xs">
                   sabrinampalmer@gmail.com
                 </p>
               </div>
@@ -79,7 +82,7 @@ const Contact: React.FC = () => {
         </div>
 
         {/* Contact Form */}
-        <div>
+        <div className="backdrop-blur-xs">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label
@@ -95,6 +98,7 @@ const Contact: React.FC = () => {
                 value={formState.name}
                 onChange={handleChange}
                 className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       backdrop-blur-xs
                        focus:border-purple-500 focus:ring-purple-500"
                 required
               />
@@ -114,6 +118,7 @@ const Contact: React.FC = () => {
                 value={formState.email}
                 onChange={handleChange}
                 className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       bg-white/50 backdrop-blur-xs
                        focus:border-purple-500 focus:ring-purple-500"
                 required
               />
@@ -133,6 +138,7 @@ const Contact: React.FC = () => {
                 value={formState.message}
                 onChange={handleChange}
                 className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       bg-white/50 backdrop-blur-xs
                        focus:border-purple-500 focus:ring-purple-500"
                 required
               />
@@ -145,7 +151,7 @@ const Contact: React.FC = () => {
                      rounded-md shadow-sm text-white bg-gradient-to-r from-purple-400 to-pink-400 
                      hover:from-purple-400 hover:to-pink-400 focus:outline-none focus:ring-2 
                      focus:ring-offset-2 focus:ring-purple-400 disabled:opacity-50 
-                     disabled:cursor-not-allowed"
+                     disabled:cursor-not-allowed backdrop-blur-xs"
             >
               {status === "submitting" ? (
                 "Sending..."
