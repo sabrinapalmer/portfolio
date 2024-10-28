@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Palette } from "lucide-react";
 import { pageTransition } from "../utils/animation";
-import Scrim from "../components/layout/Scrim";
 
 type Medium = "all" | "painting" | "photography" | "digital";
 
@@ -62,15 +61,15 @@ const Art: React.FC = () => {
   return (
     <motion.div {...pageTransition}>
       <div className="space-y-8">
-        <Scrim>
+        <div>
           <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
             Art Gallery
             <Palette className="text-pink-500 ml-2 mt-[-4px]" size={20} />
           </h2>
-        </Scrim>
+        </div>
 
         {/* Filter Buttons */}
-        <Scrim>
+        <div>
           <div className="flex gap-4 mb-8 overflow-x-auto pb-2">
             {(["all", "painting", "photography", "digital"] as Medium[]).map(
               (medium) => (
@@ -83,10 +82,10 @@ const Art: React.FC = () => {
               )
             )}
           </div>
-        </Scrim>
+        </div>
 
         {/* Gallery Grid */}
-        <Scrim>
+        <div>
           <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {filteredArtworks.map((artwork, index) => (
               <div
@@ -109,7 +108,7 @@ const Art: React.FC = () => {
               </div>
             ))}
           </div>
-        </Scrim>
+        </div>
       </div>
 
       {/* Lightbox */}
@@ -128,7 +127,7 @@ const Art: React.FC = () => {
             >
               <X size={24} />
             </button>
-            <Scrim>
+            <div>
               <div
                 className="max-w-4xl w-full"
                 onClick={(e) => e.stopPropagation()}
@@ -150,7 +149,7 @@ const Art: React.FC = () => {
                   </p>
                 </div>
               </div>
-            </Scrim>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

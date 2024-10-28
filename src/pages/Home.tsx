@@ -1,18 +1,32 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Heart, Star, Sparkles } from "lucide-react";
+import { Star, Heart, Sparkles, Moon, Cloud, Rainbow } from "lucide-react";
+import FloatingIcon from "../components/common/FloatingIcon";
 import Scrim from "../components/layout/Scrim";
 
 const Home: React.FC = () => {
-  const decorativeIcons = [
-    { Icon: Star, className: "top-20 left-10 animate-float-1" },
-    { Icon: Heart, className: "bottom-20 right-10 animate-float-2" },
-    { Icon: Sparkles, className: "top-40 right-20 animate-float-3" },
-    { Icon: Star, className: "bottom-40 left-20 animate-float-4" },
+  const backgroundElements = [
+    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
   ];
 
   return (
     <div className="min-h-screen flex flex-col justify-center px-12">
+      <div className="fixed inset-0 pointer-events-none">
+        {backgroundElements.map((element, index) => (
+          <FloatingIcon key={index} {...element} />
+        ))}
+      </div>
       <Scrim>
         {/* Profile Content */}
         <div className="text-center space-y-6">

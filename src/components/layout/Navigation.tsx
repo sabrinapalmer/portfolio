@@ -1,5 +1,6 @@
-import React from "react";
-import { motion } from "framer-motion";
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Menu, X } from "lucide-react";
 import { navItems } from "../../config/navigation";
 
 interface NavigationProps {
@@ -13,19 +14,22 @@ const Navigation: React.FC<NavigationProps> = ({
   isHome,
   onNavigate,
 }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const handleNavigation = (e: React.MouseEvent, path: string) => {
     e.preventDefault();
     if (path === currentPage && !isHome) return;
     onNavigate(path);
+    setIsMenuOpen(false);
   };
 
   const handleHomeClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isHome) return;
     onNavigate("");
+    setIsMenuOpen(false);
   };
 
-  // Container variants for staggered children animation
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -37,11 +41,10 @@ const Navigation: React.FC<NavigationProps> = ({
     },
   };
 
-  // Item variants for individual nav items
   const itemVariants = {
     hidden: {
       opacity: 0,
-      x: 50, // Start slightly to the right
+      x: 50,
     },
     visible: {
       opacity: 1,
@@ -50,6 +53,32 @@ const Navigation: React.FC<NavigationProps> = ({
         type: "spring",
         stiffness: 260,
         damping: 20,
+      },
+    },
+  };
+
+  const dropdownVariants = {
+    hidden: {
+      opacity: 0,
+      y: -20,
+      scale: 0.95,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 30,
+      },
+    },
+    exit: {
+      opacity: 0,
+      y: -20,
+      scale: 0.95,
+      transition: {
+        duration: 0.2,
       },
     },
   };
@@ -108,6 +137,7 @@ const Navigation: React.FC<NavigationProps> = ({
           Sabrina Palmer ✨
         </motion.button>
 
+        {/* Desktop Navigation */}
         <div className="hidden md:flex space-x-6">
           {navItems.map((item) => (
             <motion.button
@@ -149,6 +179,73 @@ const Navigation: React.FC<NavigationProps> = ({
             </motion.button>
           ))}
         </div>
+
+        {/* Mobile Menu Button */}
+        <motion.button
+          className="md:hidden p-2 rounded-lg hover:bg-purple-50"
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {isMenuOpen ? (
+            <X className="h-6 w-6 text-purple-500" />
+          ) : (
+            <Menu className="h-6 w-6 text-purple-500" />
+          )}
+        </motion.button>
+
+        {/* Mobile Dropdown Menu */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div
+              className="absolute top-16 left-0 right-0 bg-white shadow-lg rounded-b-xl p-4 md:hidden"
+              variants={dropdownVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
+              <div className="flex flex-col space-y-2">
+                {navItems.map((item) => (
+                  <motion.button
+                    key={item.path}
+                    onClick={(e) => handleNavigation(e, item.path)}
+                    className="w-full"
+                    whileHover={{ opacity: 0.9 }}
+                    whileTap={{ opacity: 0.8 }}
+                  >
+                    <div
+                      className={`px-4 py-3 rounded-lg ${
+                        currentPage === item.path
+                          ? `bg-gradient-to-r ${item.gradient} shadow-md`
+                          : "hover:bg-purple-50"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <item.icon
+                          size={20}
+                          className={
+                            currentPage === item.path
+                              ? "text-white"
+                              : "text-purple-500"
+                          }
+                        />
+                        <span
+                          className={`font-josefin ${
+                            currentPage === item.path
+                              ? "text-white"
+                              : "text-purple-500"
+                          }`}
+                        >
+                          {item.name}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

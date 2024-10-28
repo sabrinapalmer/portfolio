@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Code, Globe, Github, Gamepad2 } from "lucide-react";
 import { Project } from "../types";
 import { pageTransition } from "../utils/animation";
-import Scrim from "../components/layout/Scrim";
 
 const projects: Project[] = [
   {
@@ -30,14 +29,14 @@ const Projects: React.FC = () => {
   return (
     <motion.div {...pageTransition}>
       <div className="space-y-8">
-        <Scrim>
+        <div>
           <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
             Creative Projects
             <Gamepad2 className="text-pink-500 ml-2 mt-[-4px]" size={20} />
           </h2>
-        </Scrim>
+        </div>
 
-        <Scrim>
+        <div>
           <div className="flex gap-4 mb-8 overflow-x-auto pb-2">
             {["all", "web", "mobile", "games"].map((type) => (
               <button
@@ -53,15 +52,15 @@ const Projects: React.FC = () => {
               </button>
             ))}
           </div>
-        </Scrim>
+        </div>
 
-        <Scrim>
+        <div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredProjects.map((project, index) => (
               <ProjectCard key={index} project={project} />
             ))}
           </div>
-        </Scrim>
+        </div>
       </div>
     </motion.div>
   );

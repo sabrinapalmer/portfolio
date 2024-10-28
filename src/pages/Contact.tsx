@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
 import { pageTransition } from "../utils/animation";
-import Scrim from "../components/layout/Scrim";
 
 interface FormState {
   name: string;
@@ -54,7 +53,7 @@ const Contact: React.FC = () => {
       <div className="grid md:grid-cols-2 gap-12">
         {/* Contact Information */}
         <div className="space-y-8">
-          <Scrim className="prose prose-purple">
+          <div className="prose prose-purple">
             <h3 className="font-josefin text-xl font-semibold text-purple-500">
               Let's Connect!
             </h3>
@@ -62,10 +61,10 @@ const Contact: React.FC = () => {
               I'm always interested in hearing about new projects and
               opportunities. Feel free to reach out!
             </p>
-          </Scrim>
+          </div>
 
           <div className="space-y-4">
-            <Scrim className="flex items-start space-x-4">
+            <div className="flex items-start space-x-4">
               <Mail className="font-josefin text-purple-500 mt-1" size={20} />
               <div>
                 <h4 className="font-josefin font-medium text-purple-500">
@@ -75,12 +74,12 @@ const Contact: React.FC = () => {
                   sabrinampalmer@gmail.com
                 </p>
               </div>
-            </Scrim>
+            </div>
           </div>
         </div>
 
         {/* Contact Form */}
-        <Scrim>
+        <div>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label
@@ -169,7 +168,7 @@ const Contact: React.FC = () => {
               </p>
             )}
           </form>
-        </Scrim>
+        </div>
       </div>
     </motion.div>
   );

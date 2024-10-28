@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Navigation from "./Navigation";
-import { Star, Heart, Sparkles, Moon, Cloud, Rainbow } from "lucide-react";
-import FloatingIcon from "../common/FloatingIcon";
 
 const Layout: React.FC = () => {
   const location = useLocation();
@@ -16,21 +14,6 @@ const Layout: React.FC = () => {
     const path = location.pathname.substring(1);
     setCurrentPage(path || "home");
   }, [location]);
-
-  const backgroundElements = [
-    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
-    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
-    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
-    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
-    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
-    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
-    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
-    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
-    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
-    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
-    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
-    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
-  ];
 
   const handleNavigation = useCallback(
     (path: string) => {
@@ -65,12 +48,6 @@ const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 relative overflow-x-hidden">
-      <div className="fixed inset-0 pointer-events-none">
-        {backgroundElements.map((element, index) => (
-          <FloatingIcon key={index} {...element} />
-        ))}
-      </div>
-
       <AnimatePresence>
         {!isHome && (
           <motion.div
