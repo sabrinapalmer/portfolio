@@ -37,17 +37,17 @@ const Layout: React.FC = () => {
     type: "spring",
     stiffness: 260,
     damping: 20,
-    duration: 0.2, // Slightly faster
+    duration: 0.2,
   };
 
   const sideNavTransition = {
     type: "tween",
-    duration: 0.3, // Reduced from 0.5 to 0.3
-    ease: [0.25, 0.1, 0.25, 1], // Modified easing for a snappier feel
+    duration: 0.3,
+    ease: [0.25, 0.1, 0.25, 1],
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 relative overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 relative overflow-hidden">
       <AnimatePresence>
         {!isHome && (
           <motion.div
@@ -69,19 +69,21 @@ const Layout: React.FC = () => {
       </AnimatePresence>
 
       {isHome ? (
-        <div className="flex min-h-screen">
-          <div className="w-1/2">
+        <div className="flex flex-col md:flex-row min-h-screen">
+          {/* Profile Content Container */}
+          <div className="relative w-full md:w-1/2 h-[45vh] md:h-screen">
             <Outlet />
           </div>
 
+          {/* Navigation Container */}
           <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
             {!pendingPath && (
               <motion.div
                 key="home-nav"
-                className="fixed right-0 top-0 bottom-0 w-1/2 bg-white"
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
+                className="fixed bottom-0 left-0 right-0 h-[42vh] md:h-auto md:relative md:right-0 md:top-0 md:bottom-0 md:w-1/2 bg-white rounded-t-3xl md:rounded-none shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] md:shadow-none"
+                initial={{ y: 0, x: "100%" }}
+                animate={{ y: 0, x: 0 }}
+                exit={{ y: 0, x: "100%" }}
                 transition={sideNavTransition}
               >
                 <Navigation
@@ -99,7 +101,7 @@ const Layout: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }} // Faster page content fade in
+              transition={{ duration: 0.2 }}
             >
               <Outlet />
             </motion.div>

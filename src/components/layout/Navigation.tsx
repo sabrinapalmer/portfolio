@@ -86,40 +86,42 @@ const Navigation: React.FC<NavigationProps> = ({
   if (isHome) {
     return (
       <motion.div
-        className="h-full flex flex-col justify-center items-stretch px-12 py-12 space-y-6"
+        className="h-full flex flex-col justify-center px-4 md:px-12 py-8 md:py-12"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        {navItems.map((item) => (
-          <motion.button
-            key={item.path}
-            variants={itemVariants}
-            onClick={(e) => handleNavigation(e, item.path)}
-            className="w-full relative"
-            whileHover={{ opacity: 0.9 }}
-            whileTap={{ opacity: 0.8 }}
-          >
-            <div
-              className={`relative bg-gradient-to-r ${item.gradient} p-6 rounded-xl shadow-md hover:shadow-lg 
-                            transition-all duration-300 overflow-hidden`}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-1 md:gap-6">
+          {navItems.map((item) => (
+            <motion.button
+              key={item.path}
+              variants={itemVariants}
+              onClick={(e) => handleNavigation(e, item.path)}
+              className="w-full relative"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-                  <item.icon size={24} className="text-white" />
-                </div>
-                <div className="flex-1 text-left">
-                  <h3 className="font-josefin text-xl font-semibold text-white">
-                    {item.name}
-                  </h3>
-                  <p className="font-josefin text-sm text-white/90 mt-1">
-                    {item.description}
-                  </p>
+              <div
+                className={`relative bg-gradient-to-r ${item.gradient} p-4 md:p-6 rounded-xl shadow-md hover:shadow-lg 
+                          transition-all duration-300 overflow-hidden`}
+              >
+                <div className="flex items-center space-x-3 md:space-x-4">
+                  <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                    <item.icon size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="font-josefin text-lg md:text-xl font-semibold text-white">
+                      {item.name}
+                    </h3>
+                    <p className="font-josefin text-sm text-white/90 mt-1 hidden md:block">
+                      {item.description}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </motion.button>
-        ))}
+            </motion.button>
+          ))}
+        </div>
       </motion.div>
     );
   }

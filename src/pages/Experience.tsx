@@ -88,15 +88,11 @@ const projects = [
 
 const Experience = () => {
   return (
-    <div className="space-y-12 relative">
-      {/* Add a fixed background to ensure content stays loaded */}
-      <div className="fixed inset-0 bg-white/50 backdrop-blur-xl" />
-
-      {/* Main content */}
-      <div className="relative">
+    <motion.div {...pageTransition}>
+      <div className="space-y-8">
         {/* Professional Experience Section */}
         <section>
-          <div className="inline-block">
+          <div>
             <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
               Professional Experience
               <SquareCode className="text-pink-500 ml-2 mt-[-4px]" size={20} />
@@ -149,7 +145,7 @@ const Experience = () => {
 
         {/* Projects Section */}
         <section className="mt-12">
-          <div className="inline-block">
+          <div>
             <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
               Professional Projects & Speaking
               <Blocks className="text-pink-500 ml-2 mt-[-4px]" size={20} />
@@ -188,7 +184,7 @@ const Experience = () => {
           </div>
         </section>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
