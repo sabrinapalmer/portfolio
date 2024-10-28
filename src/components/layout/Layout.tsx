@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Navigation from "./Navigation";
+import { Star, Heart, Sparkles, Moon, Cloud, Rainbow } from "lucide-react";
+import FloatingIcon from "../common/FloatingIcon";
 
 const Layout: React.FC = () => {
   const location = useLocation();
@@ -14,6 +16,21 @@ const Layout: React.FC = () => {
     const path = location.pathname.substring(1);
     setCurrentPage(path || "home");
   }, [location]);
+
+  const backgroundElements = [
+    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
+  ];
 
   const handleNavigation = useCallback(
     (path: string) => {
@@ -37,17 +54,23 @@ const Layout: React.FC = () => {
     type: "spring",
     stiffness: 260,
     damping: 20,
-    duration: 0.2,
+    duration: 0.2, // Slightly faster
   };
 
   const sideNavTransition = {
     type: "tween",
-    duration: 0.3,
-    ease: [0.25, 0.1, 0.25, 1],
+    duration: 0.3, // Reduced from 0.5 to 0.3
+    ease: [0.25, 0.1, 0.25, 1], // Modified easing for a snappier feel
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 relative overflow-x-hidden">
+      <div className="fixed inset-0 pointer-events-none">
+        {backgroundElements.map((element, index) => (
+          <FloatingIcon key={index} {...element} />
+        ))}
+      </div>
+
       <AnimatePresence>
         {!isHome && (
           <motion.div
@@ -70,20 +93,18 @@ const Layout: React.FC = () => {
 
       {isHome ? (
         <div className="flex flex-col md:flex-row min-h-screen">
-          {/* Profile Content Container */}
           <div className="relative w-full md:w-1/2 h-[45vh] md:h-screen">
             <Outlet />
           </div>
 
-          {/* Navigation Container */}
           <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
             {!pendingPath && (
               <motion.div
                 key="home-nav"
                 className="fixed bottom-0 left-0 right-0 h-[42vh] md:h-auto md:relative md:right-0 md:top-0 md:bottom-0 md:w-1/2 bg-white rounded-t-3xl md:rounded-none shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] md:shadow-none"
-                initial={{ y: 0, x: "100%" }}
-                animate={{ y: 0, x: 0 }}
-                exit={{ y: 0, x: "100%" }}
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
                 transition={sideNavTransition}
               >
                 <Navigation
@@ -101,7 +122,7 @@ const Layout: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.2 }} // Faster page content fade in
             >
               <Outlet />
             </motion.div>

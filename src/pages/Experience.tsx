@@ -93,7 +93,7 @@ const Experience = () => {
         {/* Professional Experience Section */}
         <section>
           <div>
-            <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
+            <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
               Professional Experience
               <SquareCode className="text-pink-500 ml-2 mt-[-4px]" size={20} />
             </h2>
@@ -103,7 +103,7 @@ const Experience = () => {
             {experiences.map((experience, index) => (
               <div
                 key={index}
-                className="font-josefin p-6 rounded-2xl bg-white/90 shadow-md border border-purple-100 hover:shadow-lg transition-shadow"
+                className="font-josefin p-6 rounded-2xl bg-white/90 shadow-md border border-purple-100 hover:shadow-lg transition-shadow backdrop-blur-xs"
               >
                 <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-4">
                   <div>
@@ -146,7 +146,7 @@ const Experience = () => {
         {/* Projects Section */}
         <section className="mt-12">
           <div>
-            <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
+            <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
               Professional Projects & Speaking
               <Blocks className="text-pink-500 ml-2 mt-[-4px]" size={20} />
             </h2>
@@ -156,7 +156,7 @@ const Experience = () => {
             {projects.map((project, index) => (
               <div
                 key={index}
-                className="font-josefin p-6 rounded-2xl bg-white/90 shadow-md border border-purple-100 hover:shadow-lg transition-shadow"
+                className="font-josefin p-6 rounded-2xl bg-white/90 shadow-md border border-purple-100 hover:shadow-lg transition-shadow backdrop-blur-xs"
               >
                 <h3 className="font-josefin text-xl font-semibold text-purple-500 mb-2">
                   {project.title}

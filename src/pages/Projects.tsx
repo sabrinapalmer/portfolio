@@ -30,22 +30,20 @@ const Projects: React.FC = () => {
     <motion.div {...pageTransition}>
       <div className="space-y-8">
         <div>
-          <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
+          <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
             Creative Projects
             <Gamepad2 className="text-pink-500 ml-2 mt-[-4px]" size={20} />
           </h2>
-        </div>
 
-        <div>
-          <div className="flex gap-4 mb-8 overflow-x-auto pb-2">
+          <div className="flex flex-wrap gap-2">
             {["all", "web", "mobile", "games"].map((type) => (
               <button
                 key={type}
                 onClick={() => setFilter(type as typeof filter)}
-                className={`px-4 py-2 rounded-full transition-all duration-300 ${
+                className={`px-4 py-2 rounded-full transition-all duration-300 backdrop-blur-xs ${
                   filter === type
                     ? "font-josefin bg-gradient-to-r from-purple-400 to-pink-400 text-white shadow-md"
-                    : "font-josefin bg-white/50 text-gray-600 hover:text-purple-500 hover:bg-purple-50"
+                    : "font-josefin bg-white/90 text-gray-600 hover:text-purple-500 hover:bg-purple-50"
                 }`}
               >
                 {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -54,12 +52,10 @@ const Projects: React.FC = () => {
           </div>
         </div>
 
-        <div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProjects.map((project, index) => (
-              <ProjectCard key={index} project={project} />
-            ))}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredProjects.map((project, index) => (
+            <ProjectCard key={index} project={project} />
+          ))}
         </div>
       </div>
     </motion.div>
@@ -68,7 +64,7 @@ const Projects: React.FC = () => {
 
 const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
   <motion.div
-    className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+    className="bg-white/90 rounded-xl shadow-md border border-purple-100 hover:shadow-lg transition-shadow backdrop-blur-xs"
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
   >
@@ -86,7 +82,7 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
         {project.tags.map((tag) => (
           <span
             key={tag}
-            className="font-josefin px-3 py-1 bg-purple-50 text-purple-500 rounded-full text-sm"
+            className="font-josefin px-3 py-1 bg-purple-100 text-purple-500 rounded-full text-sm"
           >
             {tag}
           </span>

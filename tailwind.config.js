@@ -3,6 +3,9 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      backdropBlur: {
+        xs: "2px",
+      },
       animation: {
         "float-1": "float1 20s ease-in-out infinite",
         "float-2": "float2 23s ease-in-out infinite",

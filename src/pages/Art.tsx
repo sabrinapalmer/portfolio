@@ -40,10 +40,10 @@ const FilterButton: React.FC<{
 }> = ({ medium, currentFilter, onClick }) => (
   <button
     onClick={() => onClick(medium)}
-    className={`font-josefin px-4 py-2 rounded-full text-sm font-medium transition-all ${
+    className={`font-josefin px-4 py-2 rounded-full text-sm font-medium transition-all backdrop-blur-xs ${
       currentFilter === medium
         ? "font-josefin bg-gradient-to-r from-purple-400 to-pink-400 text-white shadow-md"
-        : "font-josefin bg-white/50 text-gray-600 hover:text-purple-500 hover:bg-purple-50"
+        : "font-josefin bg-white/90 text-gray-600 hover:text-purple-500 hover:bg-purple-50"
     }`}
   >
     {medium.charAt(0).toUpperCase() + medium.slice(1)}
@@ -62,15 +62,12 @@ const Art: React.FC = () => {
     <motion.div {...pageTransition}>
       <div className="space-y-8">
         <div>
-          <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center">
+          <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
             Art Gallery
             <Palette className="text-pink-500 ml-2 mt-[-4px]" size={20} />
           </h2>
-        </div>
 
-        {/* Filter Buttons */}
-        <div>
-          <div className="flex gap-4 mb-8 overflow-x-auto pb-2">
+          <div className="flex flex-wrap gap-2">
             {(["all", "painting", "photography", "digital"] as Medium[]).map(
               (medium) => (
                 <FilterButton
@@ -84,30 +81,26 @@ const Art: React.FC = () => {
           </div>
         </div>
 
-        {/* Gallery Grid */}
-        <div>
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {filteredArtworks.map((artwork, index) => (
-              <div
-                key={index}
-                onClick={() => setSelectedImage(index)}
-                className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
-              >
-                <img
-                  src={artwork.imageUrl}
-                  alt={artwork.title}
-                  className="object-cover w-full h-full transform transition-transform group-hover:scale-105"
-                />
-                {/* Hover Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-purple-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                  <div className="font-josefin text-white">
-                    <h3 className="font-semibold">{artwork.title}</h3>
-                    <p className="text-sm text-purple-200">{artwork.medium}</p>
-                  </div>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {filteredArtworks.map((artwork, index) => (
+            <div
+              key={index}
+              onClick={() => setSelectedImage(index)}
+              className="group relative aspect-square rounded-xl overflow-hidden backdrop-blur-xs cursor-pointer"
+            >
+              <img
+                src={artwork.imageUrl}
+                alt={artwork.title}
+                className="object-cover w-full h-full transition-all duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-purple-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                <div className="font-josefin text-white">
+                  <h3 className="font-semibold">{artwork.title}</h3>
+                  <p className="text-sm text-purple-200">{artwork.medium}</p>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
 
