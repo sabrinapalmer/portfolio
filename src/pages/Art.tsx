@@ -2,8 +2,20 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Palette } from "lucide-react";
 import { pageTransition } from "../utils/animation";
+import CoffeeTable from "../assets/art/coffeetable.png";
+import FilmLandscape1 from "../assets/art/film_landscape1.jpg";
+import FilmLandscape2 from "../assets/art/film_landscape2.jpeg";
+import FilmLandscape3 from "../assets/art/film_landscape3.jpeg";
+import FilmGriffith from "../assets/art/film_griffith.jpeg";
+import FilmBuilding from "../assets/art/film_building.jpeg";
+import FilmFlowers from "../assets/art/film_flowers.jpg";
 
-type Medium = "all" | "painting" | "photography" | "digital";
+type Medium =
+  | "All"
+  | "Painting"
+  | "Film Photography"
+  | "Digital Photography"
+  | "Wood";
 
 interface Artwork {
   title: string;
@@ -14,22 +26,46 @@ interface Artwork {
 
 const artworks: Artwork[] = [
   {
-    title: "Abstract Harmony",
-    medium: "digital",
-    description: "An exploration of color and movement in digital space.",
-    imageUrl: "/api/placeholder/400/400",
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "",
+    imageUrl: FilmLandscape1,
   },
   {
-    title: "Urban Landscape",
-    medium: "photography",
-    description: "Capturing the essence of city life through a geometric lens.",
-    imageUrl: "/api/placeholder/400/400",
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "",
+    imageUrl: FilmLandscape2,
   },
   {
-    title: "Sunset Dreams",
-    medium: "painting",
-    description: "Oil on canvas, inspired by California sunsets.",
-    imageUrl: "/api/placeholder/400/400",
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "",
+    imageUrl: FilmLandscape3,
+  },
+  {
+    title: "Griffith Observatory on Film",
+    medium: "Film Photography",
+    description: "",
+    imageUrl: FilmGriffith,
+  },
+  {
+    title: "Flowers on Film",
+    medium: "Film Photography",
+    description: "",
+    imageUrl: FilmFlowers,
+  },
+  {
+    title: "Building on Film",
+    medium: "Film Photography",
+    description: "",
+    imageUrl: FilmBuilding,
+  },
+  {
+    title: "Recycled Wood Coffee Table",
+    medium: "Wood",
+    description: "Coffee table made from old bed frame.",
+    imageUrl: CoffeeTable,
   },
 ];
 
@@ -52,10 +88,10 @@ const FilterButton: React.FC<{
 
 const Art: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
-  const [currentFilter, setCurrentFilter] = useState<Medium>("all");
+  const [currentFilter, setCurrentFilter] = useState<Medium>("All");
 
   const filteredArtworks = artworks.filter(
-    (artwork) => currentFilter === "all" || artwork.medium === currentFilter
+    (artwork) => currentFilter === "All" || artwork.medium === currentFilter
   );
 
   return (
@@ -68,16 +104,22 @@ const Art: React.FC = () => {
           </h2>
 
           <div className="flex flex-wrap gap-2">
-            {(["all", "painting", "photography", "digital"] as Medium[]).map(
-              (medium) => (
-                <FilterButton
-                  key={medium}
-                  medium={medium}
-                  currentFilter={currentFilter}
-                  onClick={setCurrentFilter}
-                />
-              )
-            )}
+            {(
+              [
+                "All",
+                "Painting",
+                "Film Photography",
+                "Digital Photography",
+                "Wood",
+              ] as Medium[]
+            ).map((medium) => (
+              <FilterButton
+                key={medium}
+                medium={medium}
+                currentFilter={currentFilter}
+                onClick={setCurrentFilter}
+              />
+            ))}
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Star, Heart, Sparkles, Moon, Cloud, Rainbow } from "lucide-react";
+import Profile from "../assets/profile.png";
 
 const Home: React.FC = () => {
   return (
@@ -11,9 +12,9 @@ const Home: React.FC = () => {
           <div className="relative inline-block group">
             <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full blur-md transform group-hover:scale-110 transition-transform"></div>
             <img
-              src="/api/placeholder/150/150"
+              src={Profile}
               alt="Profile"
-              className="relative w-24 h-24 md:w-32 md:h-32 mx-auto rounded-full border-4 border-white shadow-lg transform transition-transform group-hover:scale-105 backdrop-blur-xs"
+              className="object-contain relative w-24 h-24 md:w-32 md:h-32 mx-auto rounded-full border-4 border-white shadow-lg transform transition-transform group-hover:scale-105 backdrop-blur-xs"
             />
             <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full p-2 shadow-lg">
               <Sparkles className="text-purple-500" size={16} />

@@ -3,14 +3,16 @@ import { motion } from "framer-motion";
 import { Code, Globe, Github, Gamepad2 } from "lucide-react";
 import { Project } from "../types";
 import { pageTransition } from "../utils/animation";
+import Stonemoth from "../assets/projects/Stonemoth.png";
 
 const projects: Project[] = [
   {
-    title: "Creative Coding Experiment",
-    description: "Interactive art piece using generative algorithms",
-    tags: ["p5.js", "TypeScript", "WebGL"],
-    type: "web",
-    image: "/api/placeholder/400/300",
+    title: "Stonemoth",
+    description:
+      "Working with only one other person, we built Stonemoth for Ludum Dare Game Jam 56 over a single weekend. We scored within the top 100 for innovation, out of nearly 2000 submissions!",
+    tags: ["Unity", "c#"],
+    type: "games",
+    image: Stonemoth,
     links: {
       github: "#",
       demo: "#",
