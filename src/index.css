@@ -1,3 +1,18 @@
+@import url("https://fonts.googleapis.com/css2?family=Chango&family=Josefin+Sans:ital,wght@0,100..700;1,100..700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --font-chango: "Chango", cursive;
+  --font-josefin: "Josefin Sans", sans-serif;
+}
+
+.font-chango {
+  font-family: var(--font-chango);
+}
+
+.font-josefin {
+  font-family: var(--font-josefin);
+}
