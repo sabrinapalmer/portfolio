@@ -1,13 +1,12 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Star, Heart, Sparkles, Moon, Cloud, Rainbow } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import Profile from "../assets/profile.png";
 
 const Home: React.FC = () => {
   return (
-    <div className="h-full w-full flex items-center justify-center px-6 md:px-12">
-      <div>
-        {/* Profile Content */}
+    <div className="absolute inset-0 flex items-center justify-center px-6 md:px-12 overflow-hidden">
+      <div className="max-h-full">
         <div className="text-center space-y-4 md:space-y-6">
           <div className="relative inline-block group">
             <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full blur-md transform group-hover:scale-110 transition-transform"></div>

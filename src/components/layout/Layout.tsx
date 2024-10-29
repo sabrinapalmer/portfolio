@@ -64,7 +64,7 @@ const Layout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 relative overflow-x-hidden">
+    <div className="fixed inset-0 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
         {backgroundElements.map((element, index) => (
           <FloatingIcon key={index} {...element} />
@@ -92,8 +92,8 @@ const Layout: React.FC = () => {
       </AnimatePresence>
 
       {isHome ? (
-        <div className="flex flex-col md:flex-row min-h-screen">
-          <div className="relative w-full md:w-1/2 h-[45vh] md:h-screen">
+        <div className="fixed inset-0 flex flex-col md:flex-row">
+          <div className="fixed top-0 left-0 right-0 md:relative md:w-1/2 h-[45vh] md:h-full overflow-hidden">
             <Outlet />
           </div>
 
@@ -101,7 +101,7 @@ const Layout: React.FC = () => {
             {!pendingPath && (
               <motion.div
                 key="home-nav"
-                className="fixed bottom-0 left-0 right-0 h-[42vh] md:h-auto md:relative md:right-0 md:top-0 md:bottom-0 md:w-1/2 bg-white rounded-t-3xl md:rounded-none shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] md:shadow-none"
+                className="fixed bottom-0 left-0 right-0 h-[45vh] md:h-full md:relative md:w-1/2 bg-white rounded-t-3xl md:rounded-none shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] md:shadow-none overflow-hidden"
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
@@ -117,12 +117,12 @@ const Layout: React.FC = () => {
           </AnimatePresence>
         </div>
       ) : (
-        <div className="min-h-screen pt-20">
+        <div className="pt-20 h-full overflow-auto">
           <div className="container mx-auto px-4 py-4">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }} // Faster page content fade in
+              transition={{ duration: 0.2 }}
             >
               <Outlet />
             </motion.div>
