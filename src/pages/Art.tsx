@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Palette } from "lucide-react";
+import { X, Palette, ChevronLeft, ChevronRight } from "lucide-react";
 import { pageTransition } from "../utils/animation";
 import CoffeeTable from "../assets/art/coffeetable.png";
 import FilmLandscape1 from "../assets/art/film_landscape1.jpg";
@@ -89,10 +89,71 @@ const FilterButton: React.FC<{
 const Art: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [currentFilter, setCurrentFilter] = useState<Medium>("All");
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const filteredArtworks = artworks.filter(
     (artwork) => currentFilter === "All" || artwork.medium === currentFilter
   );
+
+  // Minimum swipe distance (in px)
+  const minSwipeDistance = 50;
+
+  const handlePrevious = useCallback(() => {
+    if (selectedImage === null) return;
+    setSelectedImage((prev) =>
+      prev === null ? null : prev === 0 ? filteredArtworks.length - 1 : prev - 1
+    );
+  }, [selectedImage, filteredArtworks.length]);
+
+  const handleNext = useCallback(() => {
+    if (selectedImage === null) return;
+    setSelectedImage((prev) =>
+      prev === null ? null : prev === filteredArtworks.length - 1 ? 0 : prev + 1
+    );
+  }, [selectedImage, filteredArtworks.length]);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      handleNext();
+    }
+    if (isRightSwipe) {
+      handlePrevious();
+    }
+  };
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (selectedImage === null) return;
+
+      if (e.key === "ArrowLeft") {
+        handlePrevious();
+      } else if (e.key === "ArrowRight") {
+        handleNext();
+      } else if (e.key === "Escape") {
+        setSelectedImage(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [selectedImage, handlePrevious, handleNext]);
 
   return (
     <motion.div {...pageTransition}>
@@ -153,26 +214,68 @@ const Art: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
             onClick={() => setSelectedImage(null)}
           >
+            {/* Close button with better positioning and z-index */}
             <button
-              onClick={() => setSelectedImage(null)}
-              className="font-josefin absolute top-4 right-4 text-white hover:text-purple-300 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedImage(null);
+              }}
+              className="fixed top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
             >
               <X size={24} />
             </button>
-            <div>
+
+            {/* Previous Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrevious();
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors md:block hidden"
+              aria-label="Previous image"
+            >
+              <ChevronLeft size={24} />
+            </button>
+
+            {/* Next Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors md:block hidden"
+              aria-label="Next image"
+            >
+              <ChevronRight size={24} />
+            </button>
+
+            <div
+              className="w-full h-full flex flex-col items-center justify-center px-4"
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+            >
               <div
-                className="max-w-4xl w-full"
+                className="max-w-4xl w-full h-full flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
-                <img
-                  src={filteredArtworks[selectedImage].imageUrl}
-                  alt={filteredArtworks[selectedImage].title}
-                  className="w-full h-auto rounded-xl"
-                />
-                <div className="font-josefin text-white mt-4">
+                <div className="relative flex-1 min-h-0">
+                  <motion.img
+                    key={selectedImage}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    src={filteredArtworks[selectedImage].imageUrl}
+                    alt={filteredArtworks[selectedImage].title}
+                    className="absolute inset-0 w-full h-full object-contain"
+                    draggable={false}
+                  />
+                </div>
+                <div className="font-josefin text-white mt-4 mb-8">
                   <h3 className="font-josefin text-xl font-semibold">
                     {filteredArtworks[selectedImage].title}
                   </h3>
