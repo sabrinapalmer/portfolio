@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import Profile from "../assets/profile.png";
 
@@ -13,7 +12,11 @@ const Home: React.FC = () => {
             <img
               src={Profile}
               alt="Profile"
-              className="object-contain relative w-24 h-24 md:w-32 md:h-32 mx-auto rounded-full border-4 border-white shadow-lg transform transition-transform group-hover:scale-105 backdrop-blur-xs"
+              className="object-contain relative w-24 h-24 md:w-32 md:h-32 mx-auto rounded-full border-4 border-white shadow-lg transform transition-transform group-hover:scale-105 backdrop-blur-xs select-none pointer-events-none"
+              onContextMenu={(e) => e.preventDefault()}
+              data-pin-nopin="true"
+              draggable="false"
+              loading="lazy"
             />
             <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full p-2 shadow-lg">
               <Sparkles className="text-purple-500" size={16} />
