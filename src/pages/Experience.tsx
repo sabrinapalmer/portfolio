@@ -5,27 +5,48 @@ import { pageTransition } from "../utils/animation";
 
 const experiences = [
   {
-    role: "Data Projects Engineer",
+    role: "Data Projects Engineer, SE Strategy & Operations",
     company: "Splunk",
     location: "Remote, Chicago, IL",
-    period: "February 2020 - January 2024",
+    period: "November 2022 - January 2024",
     achievements: [
-      "Promoted after 2 years for taking on full scale projects from end to end",
-      "Developed competitive analysis dashboard that increased win rates by improving visibility of successful sales strategies",
-      "Built and maintained critical data pipelines processing 50,000+ events per hour from diverse sources",
-      "Integrated Google Calendar and Salesforce API into React web app, eliminating manual event logging for sales engineers and cutting their logging time by 50%",
-      "Participated in global executive sales strategy meetings, providing ad-hoc reports and dashboard demonstrations",
+      "Spearheaded analytics initiatives from ideation through implementation, ensuring alignment between stakeholder needs and technical solutions",
+      "Maintained critical data pipelines processing 50,000+ events/hour, ensuring reliable data flow from diverse sources",
+      "Developed comprehensive team performance dashboard, enabling data-driven management decisions through role-based views and expertise tracking",
+      "Built Google Drive analytics dashboard which correlated document engagement with sales outcomes, driving targeted improvements in sales enablement materials",
+      "Partnered with directors to identify key metrics and create executive-level dashboards for strategic decision-making",
     ],
     technologies: [
-      "Data Visualization",
-      "Dashboard Development",
-      "Business Analytics",
+      "React.js",
       "SPL",
-      "React",
       "Splunk",
-      "UI/UX Design",
+      "Data Analytics",
+      "Dashboard Development",
+      "Technical Documentation",
       "API Integration",
       "CI/CD",
+      "ETL",
+      "Project Management",
+    ],
+  },
+  {
+    role: "Data Analytics Developer, SE Strategy & Operations",
+    company: "Splunk",
+    location: "Remote, Chicago, IL",
+    period: "February 2020 - November 2022",
+    achievements: [
+      "Rapidly learned React.js to debug and maintain mission-critical sales activity logging application on day one",
+      "Cut Sales Engineer logging time by 50% through streamlined form inputs and Google Calendar integration",
+      "Maintained and enhanced existing dashboards based on user feedback and changing business needs",
+    ],
+    technologies: [
+      "React.js",
+      "SPL",
+      "Splunk",
+      "Data Analytics",
+      "Dashboard Development",
+      "Technical Documentation",
+      "API Integration",
     ],
   },
   {
@@ -34,40 +55,59 @@ const experiences = [
     location: "Dallas, TX",
     period: "February 2019 - February 2020",
     achievements: [
-      "Collaborated with customers to understand their data management needs and tailored custom demonstrations",
-      "Demonstrated time and cost-saving strategies through Splunk tool implementations",
-      "Worked closely with Splunk and partner engineers to provide continuous customer support",
-      "Built strong relationships with key stakeholders and technical teams",
+      "Built and presented AI-driven data exploration project (Splunking Blackjack below) at .conf19 in Las Vegas, demonstrating live model training capabilities of Splunk's Machine Learning Toolkit (MLTK)",
+      "Spoke at Baylor University Women in STEM panel about industry experiences, inspiring female students to pursue tech careers",
+      "Delivered technical demonstrations to customer executives, showcasing data management and analysis solutions",
+    ],
+    technologies: [
+      "Machine Learning",
+      "Technical Presentations",
+      "Solution Architecture",
+    ],
+  },
+  {
+    role: "Sales Engineer Intern",
+    company: "Splunk",
+    location: "Dallas, TX",
+    period: "June 2018 - February 2019",
+    achievements: [
+      "Achieved Splunk Certified Administrator certification",
+      "Co-built and presented an IoT data visualization project with full-time Engineers at .conf18 in Orlando, FL",
     ],
     technologies: [
       "Splunk",
+      "IoT",
+      "Data Visualization",
+      "Technical Presentations",
       "Technical Sales",
       "Solution Architecture",
-      "Data Management",
     ],
   },
 ];
 
 const projects = [
   {
-    title: "Splunking Blackjack at Splunk .conf19",
+    title: "Splunking Blackjack - Splunk .conf19",
     description:
-      "Designed and engineered an interactive machine learning system that allowed conference attendees to play blackjack against an AI opponent. The system uniquely incorporated live gameplay data to continuously train and improve the ML algorithm, creating an engaging demonstration of practical machine learning applications.",
+      "Built and presented an innovative machine learning system at Splunk's annual conference, demonstrating the live model training capabilities of Splunk's Machine Learning Toolkit (MLTK). The project showcased practical applications of AI in data exploration and analysis.",
     technologies: [
       "Machine Learning",
+      "Splunk",
+      "Splunk MLTK",
+      "OpenCV",
       "Real-time Processing",
-      "Python",
-      "Splunk ML Toolkit",
+      "Data Analytics",
     ],
     impact:
-      "Successfully engaged conference attendees with hands-on ML demonstration and live training data collection",
+      "Successfully demonstrated advanced ML capabilities to conference attendees and showcased practical applications of Splunk's MLTK",
   },
   {
-    title: "Splunking Ping Pong at Splunk .conf18",
+    title: "Splunking Ping Pong - Splunk .conf18",
     description:
-      "Built an innovative IoT system featuring a custom iPhone application utilizing GPU programming for real-time ball tracking. The system calculated ball position and height by analyzing the ball's apparent size in the camera feed, creating an interactive data visualization experience.",
+      "Co-developed an innovative IoT system that captured and visualized real-time data. Presented the project at Splunk's annual conference, demonstrating practical applications of IoT data collection and analysis.",
     technologies: [
       "IoT",
+      "Data Visualization",
       "Computer Vision",
       "GPU Programming",
       "iOS Development",
@@ -75,14 +115,14 @@ const projects = [
       "Splunk",
     ],
     impact:
-      "Demonstrated practical applications of computer vision and real-time data processing",
+      "Effectively showcased IoT capabilities and real-time data processing at conference",
   },
   {
-    title: "Women in Technology Panel Speaker - Baylor University",
+    title: "Women in STEM Panel Speaker - Baylor University",
     description:
-      "Served as a featured speaker at Baylor University's Women in Technology panel, sharing insights on software engineering careers and inspiring the next generation of women in tech. Discussed challenges, opportunities, and strategies for success in the technology industry.",
+      "Featured speaker at Baylor University's Women in STEM panel, sharing insights on technology careers and personal industry experiences. Focused on inspiring female students to pursue careers in technology and providing practical advice for success in the field.",
     impact:
-      "Motivated students and contributed to advancing women's representation in technology",
+      "Contributed to promoting diversity in tech and inspiring the next generation of women in STEM",
   },
 ];
 
