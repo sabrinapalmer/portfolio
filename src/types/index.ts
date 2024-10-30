@@ -2,12 +2,16 @@ export interface Project {
   title: string;
   description: string;
   tags: string[];
-  type: "web" | "mobile" | "games";
+  type: "web" | "games";
   image: string;
+  date: string;
   links: {
-    demo: any;
-    live?: string;
+    demo?: string; // Made optional
     github?: string;
+    extra?: {
+      label: string;
+      url: string;
+    };
   };
 }
 

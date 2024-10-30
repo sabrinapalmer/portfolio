@@ -1,32 +1,102 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Code, Globe, Github, Gamepad2 } from "lucide-react";
+import { Code, Globe, Github, Gamepad2, Calendar } from "lucide-react";
 import { Project } from "../types";
 import { pageTransition } from "../utils/animation";
 import Stonemoth from "../assets/projects/Stonemoth.png";
+import Flawp from "../assets/projects/Flawp.png";
+import WaywardWarlock from "../assets/projects/WaywardWarlock.png";
+import SpotifyCustomizer from "../assets/projects/SpotifyCustomizer.png";
+
+const formatDescription = (text: string) => {
+  // Replace **text** with <strong>text</strong>
+  return text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+};
 
 const projects: Project[] = [
   {
     title: "Stonemoth",
     description:
-      "Working with only one other person, we built Stonemoth for Ludum Dare Game Jam 56 over a single weekend. We scored within the top 100 for innovation, out of nearly 2000 submissions!",
-    tags: ["Unity", "c#"],
+      'Created for Ludum Dare Game Jam 56 with the theme "Tiny Creatures". Working alongside ' +
+      '<a href="https://bradjste.com" target="_blank" rel="noopener noreferrer" class="text-purple-500 hover:text-purple-700">Brad Stevenson</a>, ' +
+      "we built this game in just 72 hours. Out of nearly 2000 submissions, we achieved notable rankings: **94th** in Innovation and " +
+      "**168th** in Theme.",
+    tags: ["Unity", "C#", "Game Jam"],
     type: "games",
     image: Stonemoth,
+    date: "2024-10-07",
     links: {
-      github: "#",
-      demo: "#",
+      demo: "https://bradjste.itch.io/stonemoth",
+      github: "https://github.com/sabrinapalmer/STONEMOTH",
+      extra: {
+        label: "Game Jam Page",
+        url: "https://ldjam.com/events/ludum-dare/56/ld56-game",
+      },
     },
   },
-  // Add more projects as needed
+  {
+    title: "Spotify Playlist Customizer",
+    description:
+      "A web application that enhances the Spotify playlist experience by allowing users to create custom playlist " +
+      "covers that reflect the songs in their playlist. Users can also reorganize their playlists based on various song features, " +
+      "providing a new way to experience their music collections. Currently in development mode - email me to request access and try it out!",
+    tags: ["React", "Node.js", "Spotify API"],
+    type: "web",
+    image: SpotifyCustomizer,
+    date: "2024-10-01",
+    links: {
+      demo: "https://spotify-playlist-cover-photo.vercel.app/",
+      github: "https://github.com/sabrinapalmer/spotify-playlist-analyzer",
+    },
+  },
+  {
+    title: "Flawp",
+    description:
+      'Developed for the Game Maker\'s Toolkit Game Jam 2022 with the theme "Roll of the Dice". ' +
+      'Created in collaboration with <a href="https://bradjste.com" target="_blank" rel="noopener noreferrer" class="text-purple-500 hover:text-purple-700">Brad Stevenson</a>. ' +
+      "Out of over 6000 entries, we achieved rankings of **792nd** in Creativity, **1251st** in Presentation, and **1042nd** Overall.",
+    tags: ["Unity", "C#", "Game Jam"],
+    type: "games",
+    image: Flawp,
+    date: "2022-07-17",
+    links: {
+      demo: "https://bradjste.itch.io/flawp",
+      extra: {
+        label: "Game Jam Page",
+        url: "https://itch.io/jam/gmtk-jam-2022/rate/1625103",
+      },
+    },
+  },
+  {
+    title: "Wayward Warlock",
+    description:
+      'Created for Ludum Dare Game Jam 49 with the theme "Unstable". ' +
+      "As part of a team of four talented developers, we crafted this game competing against almost 3000 submissions. " +
+      "While we faced strong competition, we gained valuable experience working as a larger team in the game jam environment.",
+    tags: ["Unity", "C#", "Game Jam"],
+    type: "games",
+    image: WaywardWarlock,
+    date: "2021-10-04",
+    links: {
+      github: "https://github.com/sabrinapalmer/WaywardWarlock",
+      extra: {
+        label: "Game Jam Page",
+        url: "https://ldjam.com/events/ludum-dare/49/wayward-warlock",
+      },
+    },
+  },
 ];
 
 const Projects: React.FC = () => {
   const [filter, setFilter] = useState<"all" | Project["type"]>("all");
 
-  const filteredProjects = projects.filter(
-    (project) => filter === "all" || project.type === filter
-  );
+  const filteredProjects = projects
+    .filter((project) => filter === "all" || project.type === filter)
+    .sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    });
 
   return (
     <motion.div {...pageTransition}>
@@ -38,7 +108,7 @@ const Projects: React.FC = () => {
           </h2>
 
           <div className="flex flex-wrap gap-2">
-            {["all", "web", "mobile", "games"].map((type) => (
+            {["all", "web", "games"].map((type) => (
               <button
                 key={type}
                 onClick={() => setFilter(type as typeof filter)}
@@ -76,10 +146,29 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
       className="w-full h-48 object-cover rounded-t-xl"
     />
     <div className="p-6">
-      <h3 className="font-josefin text-xl font-semibold text-purple-500 mb-2">
-        {project.title}
-      </h3>
-      <p className="font-josefin text-gray-600 mb-4">{project.description}</p>
+      <div className="flex justify-between items-start mb-2">
+        <a
+          href={project.links.extra?.url || project.links.demo}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-josefin text-xl font-semibold text-purple-500 hover:text-purple-700"
+        >
+          {project.title}
+        </a>
+        <div className="flex items-center text-gray-500 text-sm">
+          <Calendar size={14} className="mr-1" />
+          {new Date(project.date).toLocaleDateString("en-US", {
+            month: "short",
+            year: "numeric",
+          })}
+        </div>
+      </div>
+      <p
+        className="font-josefin text-gray-600 mb-4"
+        dangerouslySetInnerHTML={{
+          __html: formatDescription(project.description),
+        }}
+      />
       <div className="flex flex-wrap gap-2 mb-4">
         {project.tags.map((tag) => (
           <span
@@ -111,6 +200,17 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
           >
             <Github size={18} />
             <span>Source Code</span>
+          </a>
+        )}
+        {project.links.extra && (
+          <a
+            href={project.links.extra.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-josefin flex items-center gap-2 text-purple-500 hover:text-purple-700"
+          >
+            <Code size={18} />
+            <span>{project.links.extra.label}</span>
           </a>
         )}
       </div>
