@@ -9,7 +9,6 @@ import emailjs from "@emailjs/browser";
 interface FormState {
   name: string;
   email: string;
-  subject: string;
   message: string;
 }
 
@@ -24,7 +23,6 @@ const Contact: React.FC = () => {
   const [formState, setFormState] = useState<FormState>({
     name: "",
     email: "",
-    subject: "",
     message: "",
   });
 
@@ -48,7 +46,6 @@ const Contact: React.FC = () => {
       const templateParams = {
         from_name: formState.name,
         from_email: formState.email,
-        subject: formState.subject,
         message: formState.message,
         to_name: import.meta.env.VITE_RECIPIENT_NAME || "Recipient",
       };
@@ -60,7 +57,7 @@ const Contact: React.FC = () => {
       );
 
       setStatus("success");
-      setFormState({ name: "", email: "", subject: "", message: "" });
+      setFormState({ name: "", email: "", message: "" });
     } catch (error) {
       console.error("Error sending email:", error);
       setStatus("error");
@@ -150,26 +147,6 @@ const Contact: React.FC = () => {
                 id="email"
                 name="email"
                 value={formState.email}
-                onChange={handleChange}
-                className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
-                       bg-white/50 backdrop-blur-xs
-                       focus:border-purple-500 focus:ring-purple-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="subject"
-                className="font-josefin block text-sm font-medium text-purple-500"
-              >
-                Subject
-              </label>
-              <input
-                type="text"
-                id="subject"
-                name="subject"
-                value={formState.subject}
                 onChange={handleChange}
                 className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
                        bg-white/50 backdrop-blur-xs
