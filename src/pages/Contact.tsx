@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mail, Phone, MapPin, Send } from "lucide-react";
+import { Mail, Send } from "lucide-react";
 import { pageTransition } from "../utils/animation";
+import emailjs from "@emailjs/browser";
 
 interface FormState {
   name: string;
@@ -13,6 +16,11 @@ interface FormState {
 type SubmissionStatus = "idle" | "submitting" | "success" | "error";
 
 const Contact: React.FC = () => {
+  // Initialize emailJS when component mounts
+  useEffect(() => {
+    emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY);
+  }, []);
+
   const [formState, setFormState] = useState<FormState>({
     name: "",
     email: "",
@@ -21,18 +29,44 @@ const Contact: React.FC = () => {
   });
 
   const [status, setStatus] = useState<SubmissionStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("submitting");
+    setErrorMessage("");
 
-    // Simulate form submission - replace with your actual form handling logic
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Validate environment variables
+      if (
+        !import.meta.env.VITE_EMAILJS_SERVICE_ID ||
+        !import.meta.env.VITE_EMAILJS_TEMPLATE_ID
+      ) {
+        throw new Error("Missing EmailJS configuration");
+      }
+
+      const templateParams = {
+        from_name: formState.name,
+        from_email: formState.email,
+        subject: formState.subject,
+        message: formState.message,
+        to_name: import.meta.env.VITE_RECIPIENT_NAME || "Recipient",
+      };
+
+      await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+        templateParams
+      );
+
       setStatus("success");
       setFormState({ name: "", email: "", subject: "", message: "" });
     } catch (error) {
+      console.error("Error sending email:", error);
       setStatus("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to send message"
+      );
     }
   };
 
@@ -126,6 +160,26 @@ const Contact: React.FC = () => {
 
             <div>
               <label
+                htmlFor="subject"
+                className="font-josefin block text-sm font-medium text-purple-500"
+              >
+                Subject
+              </label>
+              <input
+                type="text"
+                id="subject"
+                name="subject"
+                value={formState.subject}
+                onChange={handleChange}
+                className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       bg-white/50 backdrop-blur-xs
+                       focus:border-purple-500 focus:ring-purple-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label
                 htmlFor="message"
                 className="font-josefin block text-sm font-medium text-purple-500"
               >
@@ -170,7 +224,8 @@ const Contact: React.FC = () => {
             )}
             {status === "error" && (
               <p className="font-josefin text-red-600 text-center">
-                There was an error sending your message. Please try again.
+                {errorMessage ||
+                  "There was an error sending your message. Please try again."}
               </p>
             )}
           </form>
