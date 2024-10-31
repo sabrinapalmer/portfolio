@@ -6,7 +6,7 @@ import CoffeeTable from "../assets/art/coffeetable.png";
 import FilmLandscape1 from "../assets/art/film_landscape1.jpg";
 import FilmLandscape2 from "../assets/art/film_landscape2.jpeg";
 import FilmLandscape3 from "../assets/art/film_landscape3.jpeg";
-import FilmLandscape4 from "../assets/art/film_landscape4.jpg";
+import FilmLandscape4 from "../assets/art/film_landscape4.jpeg";
 import FilmGriffith from "../assets/art/film_griffith.jpeg";
 import FilmBuilding from "../assets/art/film_building.jpeg";
 import FilmFlowers from "../assets/art/film_flowers.jpg";
