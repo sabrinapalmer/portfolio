@@ -1,7 +1,9 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Palette, ChevronLeft, ChevronRight } from "lucide-react";
 import { pageTransition } from "../utils/animation";
+
+// Import images
 import CoffeeTable from "../assets/art/coffeetable.png";
 import FilmLandscape1 from "../assets/art/film_landscape1.jpg";
 import FilmLandscape2 from "../assets/art/film_landscape2.jpeg";
@@ -17,7 +19,10 @@ import FilmFire from "../assets/art/film_fire.jpg";
 import FilmMoirePattern from "../assets/art/film_moirepattern.jpg";
 import FilmRockBuilding from "../assets/art/film_rockbuilding.jpg";
 import FilmSmileTower from "../assets/art/film_smiletower.jpg";
-import FilmSunsetSticks from "../assets/art/film_sunsetsticks.jpg";
+import FilmSunsetSticks from "../assets/art/film_sunsetsticks.jpeg";
+
+// Lazy load the lightbox component
+const Lightbox = lazy(() => import("../components/ui/Lightbox"));
 
 type Medium =
   | "All"
@@ -34,42 +39,21 @@ interface Artwork {
   dateCreated: string;
 }
 
+// Complete artworks array
 const artworks: Artwork[] = [
   {
     title: "Sticks at Sunset, Moonrise",
     medium: "Film Photography",
     description: "Moon, sticks, and their shadows, captured at sunset on film",
     imageUrl: FilmSunsetSticks,
-    dateCreated: "2024-09-15",
-  },
-  {
-    title: "Smile Tower",
-    medium: "Film Photography",
-    description: "Water tower with a big smile, captured on film",
-    imageUrl: FilmSmileTower,
-    dateCreated: "2024-07-22",
+    dateCreated: "2024-01-20",
   },
   {
     title: "Rock Building",
     medium: "Film Photography",
     description: "Building build out of the rocks, captured on film",
     imageUrl: FilmRockBuilding,
-    dateCreated: "2024-05-10",
-  },
-  {
-    title: "Moiré Pattern",
-    medium: "Film Photography",
-    description: "Moiré Pattern occurring in a shadow, captured on film",
-    imageUrl: FilmMoirePattern,
-    dateCreated: "2024-03-18",
-  },
-  {
-    title: "Film Burn at Fire Station",
-    medium: "Film Photography",
-    description:
-      "Film Burn (first of the roll - https://www.instagram.com/f1rstoftheroll) at the Lincoln Fire Station - with a phone booth on the roof",
-    imageUrl: FilmFire,
-    dateCreated: "2024-1-15",
+    dateCreated: "2024-01-19",
   },
   {
     title: "Camel Rock Formation",
@@ -83,56 +67,43 @@ const artworks: Artwork[] = [
     medium: "Film Photography",
     description: "Calf and mother captured in the same pose",
     imageUrl: FilmCalfAndMom,
-    dateCreated: "2023-06-24",
+    dateCreated: "2024-01-16",
+  },
+  {
+    title: "Smile Tower",
+    medium: "Film Photography",
+    description: "Water tower with a big smile, captured on film",
+    imageUrl: FilmSmileTower,
+    dateCreated: "2024-01-15",
+  },
+  {
+    title: "Film Burn at Fire Station",
+    medium: "Film Photography",
+    description:
+      "Film Burn (first of the roll) at the Lincoln Fire Station - with a phone booth on the roof",
+    imageUrl: FilmFire,
+    dateCreated: "2024-01-15",
+  },
+  {
+    title: "Moiré Pattern",
+    medium: "Film Photography",
+    description: "Moiré Pattern occurring in a shadow, captured on film",
+    imageUrl: FilmMoirePattern,
+    dateCreated: "2023-08-18",
   },
   {
     title: "Baháʼí in the Fog",
     medium: "Film Photography",
     description: "Baháʼí on a foggy day, captured on film",
     imageUrl: FilmBhai,
-    dateCreated: "2023-04-12",
+    dateCreated: "2023-02-10",
   },
   {
-    title: "Landscape on Film",
-    medium: "Film Photography",
-    description: "Natural landscape study",
-    imageUrl: FilmLandscape1,
-    dateCreated: "2023-02-28",
-  },
-  {
-    title: "Landscape Series II",
-    medium: "Film Photography",
-    description: "Continuing exploration of natural landscapes",
-    imageUrl: FilmLandscape2,
-    dateCreated: "2022-11-15",
-  },
-  {
-    title: "Landscape Series III",
-    medium: "Film Photography",
-    description: "Third in the landscape series",
-    imageUrl: FilmLandscape3,
-    dateCreated: "2022-09-20",
-  },
-  {
-    title: "Landscape Series IV",
-    medium: "Film Photography",
-    description: "Fourth in the landscape series",
-    imageUrl: FilmLandscape4,
-    dateCreated: "2022-07-05",
-  },
-  {
-    title: "Griffith Observatory on Film",
-    medium: "Film Photography",
-    description: "Iconic Los Angeles landmark captured on film",
-    imageUrl: FilmGriffith,
-    dateCreated: "2022-04-18",
-  },
-  {
-    title: "Flowers on Film",
-    medium: "Film Photography",
-    description: "Bright flowers captured on film",
-    imageUrl: FilmFlowers,
-    dateCreated: "2018-08-30",
+    title: "Recycled Wood Coffee Table",
+    medium: "Wood",
+    description: "Coffee table made from old bed frame.",
+    imageUrl: CoffeeTable,
+    dateCreated: "2022-04-10",
   },
   {
     title: "Building on Film",
@@ -142,14 +113,53 @@ const artworks: Artwork[] = [
     dateCreated: "2021-03-15",
   },
   {
-    title: "Recycled Wood Coffee Table",
-    medium: "Wood",
-    description: "Coffee table made from old bed frame.",
-    imageUrl: CoffeeTable,
-    dateCreated: "2022-04-10",
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "Natural landscape study",
+    imageUrl: FilmLandscape1,
+    dateCreated: "2021-02-28",
   },
-];
+  {
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "Natural landscape study",
+    imageUrl: FilmLandscape2,
+    dateCreated: "2021-11-15",
+  },
+  {
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "Natural landscape study",
+    imageUrl: FilmLandscape3,
+    dateCreated: "2021-09-20",
+  },
+  {
+    title: "Landscape on Film",
+    medium: "Film Photography",
+    description: "Natural landscape study",
+    imageUrl: FilmLandscape4,
+    dateCreated: "2021-07-05",
+  },
+  {
+    title: "Flowers on Film",
+    medium: "Film Photography",
+    description: "Bright flowers captured on film",
+    imageUrl: FilmFlowers,
+    dateCreated: "2018-08-30",
+  },
+  {
+    title: "Griffith Observatory on Film",
+    medium: "Film Photography",
+    description: "Iconic Los Angeles landmark captured on film",
+    imageUrl: FilmGriffith,
+    dateCreated: "2017-04-18",
+  },
+].sort(
+  (a, b) =>
+    new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
+);
 
+// Rest of the component remains the same as in the previous optimization
 const FilterButton = React.memo(
   ({
     medium,
@@ -174,11 +184,49 @@ const FilterButton = React.memo(
 );
 
 FilterButton.displayName = "FilterButton";
+
+const ArtworkCard = React.memo(
+  ({
+    artwork,
+    index,
+    isVisible,
+    onClick,
+  }: {
+    artwork: Artwork;
+    index: number;
+    isVisible: boolean;
+    onClick: (index: number) => void;
+  }) => (
+    <div
+      onClick={() => isVisible && onClick(index)}
+      className={`
+      group relative aspect-square rounded-xl overflow-hidden backdrop-blur-xs
+      transition-opacity duration-300 transform
+      ${isVisible ? "opacity-100" : "hidden"}
+    `}
+    >
+      <img
+        src={artwork.imageUrl}
+        alt={artwork.title}
+        loading="lazy"
+        className="object-cover w-full h-full transition-all duration-300 group-hover:scale-105"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-purple-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+        <div className="font-josefin text-white">
+          <h3 className="font-semibold">{artwork.title}</h3>
+          <p className="text-sm text-purple-200">{artwork.medium}</p>
+        </div>
+      </div>
+    </div>
+  )
+);
+
+ArtworkCard.displayName = "ArtworkCard";
+
 const Art: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [currentFilter, setCurrentFilter] = useState<Medium>("All");
 
-  // Get only visible artworks for lightbox navigation
   const visibleArtworks = React.useMemo(
     () =>
       artworks.filter(
@@ -219,17 +267,39 @@ const Art: React.FC = () => {
     });
   }, [visibleArtworks]);
 
-  React.useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
+  const handleKeyPress = useCallback(
+    (e: KeyboardEvent) => {
       if (selectedImage === null) return;
       if (e.key === "ArrowLeft") handlePrevious();
       else if (e.key === "ArrowRight") handleNext();
       else if (e.key === "Escape") setSelectedImage(null);
-    };
+    },
+    [selectedImage, handlePrevious, handleNext]
+  );
 
+  React.useEffect(() => {
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [selectedImage, handlePrevious, handleNext]);
+  }, [handleKeyPress]);
+
+  const filterButtons = React.useMemo(
+    () =>
+      [
+        "All",
+        "Painting",
+        "Film Photography",
+        "Digital Photography",
+        "Wood",
+      ].map((medium) => (
+        <FilterButton
+          key={medium}
+          medium={medium as Medium}
+          currentFilter={currentFilter}
+          onClick={setCurrentFilter}
+        />
+      )),
+    [currentFilter]
+  );
 
   return (
     <motion.div {...pageTransition}>
@@ -240,140 +310,40 @@ const Art: React.FC = () => {
             <Palette className="text-pink-500 ml-2 mt-[-4px]" size={20} />
           </h2>
 
-          <div className="flex flex-wrap gap-2">
-            {[
-              "All",
-              "Painting",
-              "Film Photography",
-              "Digital Photography",
-              "Wood",
-            ].map((medium) => (
-              <FilterButton
-                key={medium}
-                medium={medium as Medium}
-                currentFilter={currentFilter}
-                onClick={setCurrentFilter}
-              />
-            ))}
-          </div>
+          <div className="flex flex-wrap gap-2">{filterButtons}</div>
         </div>
 
         <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {artworks.map((artwork, index) => {
-            const isVisible =
-              currentFilter === "All" || artwork.medium === currentFilter;
-
-            return (
-              <div
-                key={artwork.imageUrl}
-                onClick={() => isVisible && setSelectedImage(index)}
-                className={`
-                  group relative aspect-square rounded-xl overflow-hidden backdrop-blur-xs
-                  transition-opacity duration-300 transform
-                  ${isVisible ? "opacity-100" : "hidden"}
-                `}
-              >
-                <img
-                  src={artwork.imageUrl}
-                  alt={artwork.title}
-                  className="object-cover w-full h-full transition-all duration-300 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-purple-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                  <div className="font-josefin text-white">
-                    <h3 className="font-semibold">{artwork.title}</h3>
-                    <p className="text-sm text-purple-200">{artwork.medium}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {artworks.map((artwork, index) => (
+            <ArtworkCard
+              key={artwork.imageUrl}
+              artwork={artwork}
+              index={index}
+              isVisible={
+                currentFilter === "All" || artwork.medium === currentFilter
+              }
+              onClick={setSelectedImage}
+            />
+          ))}
         </div>
       </div>
 
       <AnimatePresence>
         {selectedImage !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
-            onClick={() => setSelectedImage(null)}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedImage(null);
-              }}
-              className="fixed top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-            >
-              <X size={24} />
-            </button>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePrevious();
-              }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors md:block hidden"
-            >
-              <ChevronLeft size={24} />
-            </button>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleNext();
-              }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors md:block hidden"
-            >
-              <ChevronRight size={24} />
-            </button>
-
-            <div className="w-full h-full flex flex-col items-center justify-center px-4">
-              <div className="max-w-4xl w-full h-full flex flex-col">
-                <div className="flex items-center justify-center h-full">
-                  <div
-                    className="relative h-full aspect-auto max-h-[80vh] max-w-[80vw]"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <motion.img
-                      key={selectedImage}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      src={artworks[selectedImage].imageUrl}
-                      alt={artworks[selectedImage].title}
-                      className="h-full w-auto max-h-full max-w-full object-contain"
-                      draggable={false}
-                    />
-                  </div>
-                </div>
-                <div
-                  className="font-josefin text-white mt-4 mb-8"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <h3 className="font-josefin text-xl font-semibold">
-                    {artworks[selectedImage].title}
-                  </h3>
-                  <p className="font-josefin text-purple-300 capitalize">
-                    {artworks[selectedImage].medium}
-                  </p>
-                  <p className="font-josefin mt-2 text-gray-300">
-                    {artworks[selectedImage].description}
-                  </p>
-                  <p className="font-josefin mt-2 text-gray-400 text-sm">
-                    {new Date(
-                      artworks[selectedImage].dateCreated
-                    ).toLocaleDateString("en-US", {
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </p>
-                </div>
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
+                <div className="text-white">Loading...</div>
               </div>
-            </div>
-          </motion.div>
+            }
+          >
+            <Lightbox
+              artwork={artworks[selectedImage]}
+              onClose={() => setSelectedImage(null)}
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
     </motion.div>
