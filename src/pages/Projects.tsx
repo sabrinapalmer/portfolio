@@ -7,13 +7,27 @@ import Stonemoth from "../assets/projects/Stonemoth.png";
 import Flawp from "../assets/projects/Flawp.png";
 import WaywardWarlock from "../assets/projects/WaywardWarlock.png";
 import SpotifyCustomizer from "../assets/projects/SpotifyCustomizer.png";
+import Portfolio from "../assets/projects/Portfolio.png";
 
 const formatDescription = (text: string) => {
-  // Replace **text** with <strong>text</strong>
   return text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 };
 
 const projects: Project[] = [
+  {
+    title: "Personal Portfolio",
+    description:
+      "A modern, responsive portfolio website built to showcase my projects and skills. Features smooth animations " +
+      "and a clean, minimalist design that adapts seamlessly across all devices.",
+    tags: ["React", "Tailwind CSS", "Vite", "Vercel", "TypeScript"],
+    type: "web",
+    image: Portfolio,
+    date: "2024-10-15",
+    links: {
+      demo: "https://sabrinapalmer.com",
+      github: "https://github.com/sabrinapalmer/portfolio",
+    },
+  },
   {
     title: "Stonemoth",
     description:
