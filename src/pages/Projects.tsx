@@ -59,7 +59,7 @@ const projects: Project[] = [
     image: SpotifyCustomizer,
     date: "2024-10-01",
     links: {
-      demo: "https://spotify-playlist-cover-photo.vercel.app/",
+      demo: "https://playlistcustomizer.sabrinapalmer.com/",
       github: "https://github.com/sabrinapalmer/spotify-playlist-analyzer",
     },
   },
