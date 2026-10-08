@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Activate a new service worker as soon as it installs. With the default
+      // ("prompt"), an outdated worker keeps answering every page, including
+      // /networth, until all tabs of the site are closed.
+      registerType: "autoUpdate",
       manifest: {
         name: "Sabrina Palmer Portfolio",
         short_name: "SP Portfolio",
