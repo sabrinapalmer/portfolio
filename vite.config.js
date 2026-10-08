@@ -25,6 +25,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        // /networth is a separate static page; keep the service worker from
+        // answering it with the portfolio shell or precaching it.
+        globIgnores: ["networth/**"],
+        navigateFallbackDenylist: [/^\/networth/],
       },
     }),
   ],
