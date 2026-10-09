@@ -639,78 +639,126 @@ function syncMeet() {
   document.querySelectorAll('[data-meet]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === meet[g.dataset.meet])));
   const me = meetMe(); $('meetMe').textContent = me ? me.label : 'Location is off';
 }
-async function travelTimes(src, targets, mode) {   // seconds from one point to many, by the given mode
-  const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
-  const d = await (await fetch(`${ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
-  if (!d.sources_to_targets) throw new Error(d.error || 'matrix');
-  return d.sources_to_targets[0].map(x => x.time);
+// A plain route between two points by one mode: total seconds and the line it follows
+async function quickRoute(a, b, mode) {
+  const body = { locations: [{ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon }], costing: COST[mode], units: 'miles' };
+  const d = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
+  if (!d.trip) throw new Error(d.error || 'route');
+  return { time: d.trip.summary.time, coords: decodePolyline(d.trip.legs[0].shape, 6) };
 }
-async function findMeet() {
-  const me = meetMe(), fr = meet.friend, msg = t => { $('meetMsg').textContent = t; }, out = $('meetResults');
-  out.innerHTML = '';
-  if (!me) { msg('Turn on location, or set a starting point on the main screen first.'); return; }
-  if (!fr) { msg("Search for your friend's location first."); return; }
-  msg('Working out the middle...');
+const SPEED = { auto: 12, rig: 12, bicycle: 4.3, pedestrian: 1.3 };   // metres per second, only for rough estimates
+const roughTime = (a, b, mode) => meters([a.lat, a.lon], [b.lat, b.lon]) * 1.3 / SPEED[mode];
+// Seconds from one point to many by the given mode. Tries one batch request, then single routes, then an estimate,
+// so a hiccup on the routing server never leaves a place without a time.
+async function travelTimes(src, targets, mode) {
+  let times = null;
   try {
-    // 1. The road route between you, used to place the meeting point along it
-    let line = [[me.lat, me.lon], [fr.lat, fr.lon]];
-    try {
-      const costing = meet.myMode === meet.friendMode ? COST[meet.myMode] : 'auto';
-      const body = { locations: [{ lat: me.lat, lon: me.lon }, { lat: fr.lat, lon: fr.lon }], costing, units: 'miles' };
-      line = decodePolyline((await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json()).trip.legs[0].shape, 6);
-    } catch (e) {}
-    const cum = [0]; for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + meters(line[i - 1], line[i]));
+    const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
+    const d = await (await fetch(`${ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
+    if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x.time);
+  } catch (e) {}
+  if (!times) times = targets.map(() => null);
+  let singles = 0;
+  for (let i = 0; i < targets.length; i++) {
+    if (times[i] != null) continue;
+    if (singles < 6) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
+    times[i] = roughTime(src, targets[i], mode); meet.rough = true;
+  }
+  return times;
+}
+async function firstMatch(q) {   // top search hit for text typed but not picked from the list
+  const c = map.getCenter(), ref = here || [c.lat, c.lng];
+  try {
+    const f = (await photon(`/api/?q=${encodeURIComponent(q)}&limit=1&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`)).features[0];
+    if (f) { const l = labelOf(f.properties); return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: l.sub ? l.main + ', ' + l.sub : l.main }; }
+  } catch (e) {}
+  try {
+    const x = (await nominatim(`/search?format=jsonv2&addressdetails=1&limit=1&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`))[0];
+    if (x) { const pl = nomiPlace(x); return { lat: pl.lat, lon: pl.lon, label: pl.sub ? pl.main + ', ' + pl.sub : pl.main }; }
+  } catch (e) {}
+  return null;
+}
+// Named places of one kind within r km of a point; main search server first, backup second
+async function placesNear(mid, r, kind) {
+  const WORD = { coffee: 'cafe', food: 'restaurant', drinks: 'bar', park: 'park', any: 'cafe' };
+  try {
+    const d = await photon(`/reverse?lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&radius=${r.toFixed(1)}&limit=20&lang=en${MEET_TAGS[kind].map(t => '&osm_tag=' + t).join('')}`);
+    return (d.features || []).filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub }));
+  } catch (e) {}
+  const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=20&bounded=1&viewbox=${boxAround(mid, r / 111)}&q=${WORD[kind]}`);
+  return d.filter(x => x.name).map(x => { const pl = nomiPlace(x); return { lat: pl.lat, lon: pl.lon, name: pl.main, kind: pl.kind, sub: pl.sub }; });
+}
+
+async function findMeet() {
+  if (meet.busy) return;
+  const msg = t => { $('meetMsg').textContent = t; }, out = $('meetResults'), btn = $('meetGo'), NAME = { auto: 'driving', bicycle: 'biking', pedestrian: 'walking' };
+  out.innerHTML = '';
+  const me = meetMe();
+  if (!me) { msg('Turn on location, or set a starting point on the main screen first.'); return; }
+  meet.busy = true; meet.rough = false; btn.textContent = 'Finding...';
+  let step = 'start';
+  try {
+    // 0. Friend typed but not picked from the list: take the top match
+    const typed = $('friend').value.trim();
+    if (typed && (!meet.friend || meet.friend.label !== typed)) { msg('Looking up "' + typed + '"...'); const hit = await firstMatch(typed); if (hit) meetPick(hit); else meet.friend = null; }
+    const fr = meet.friend;
+    if (!fr) { msg(typed ? 'Could not find "' + typed + '". Try a fuller address.' : "Enter your friend's location first."); return; }
+
+    // 1. The route between you by the faster of your two modes. The meeting point is placed along this line.
+    step = 'route'; msg('Getting the route between you...');
+    const fast = [meet.myMode, meet.friendMode].includes('auto') ? 'auto' : [meet.myMode, meet.friendMode].includes('bicycle') ? 'bicycle' : 'pedestrian';
+    let base;
+    try { base = await quickRoute(me, fr, fast); }
+    catch (e) { msg('Could not find a ' + NAME[fast] + ' route between you two. Check both locations.'); return; }
+    const line = base.coords, cum = [0];
+    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + meters(line[i - 1], line[i]));
     const span = cum[cum.length - 1], at = f => line[Math.max(0, cum.findIndex(d => d >= span * f))] || line[0];
-    // 2. Find where along that route your two travel times are equal, by timing each of you to points along it
-    let share = PACE[meet.myMode] / (PACE[meet.myMode] + PACE[meet.friendMode]);
-    try {
-      const fr2 = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95], pts2 = fr2.map(f => { const c = at(f); return { lat: c[0], lon: c[1] }; });
-      const [ta, tb] = await Promise.all([travelTimes(me, pts2, meet.myMode), travelTimes(fr, pts2, meet.friendMode)]);
-      const gap = i => ta[i] != null && tb[i] != null ? ta[i] - tb[i] : null;   // negative while you are still the closer one
-      let best = -1;
-      for (let i = 0; i < fr2.length; i++) if (gap(i) != null && (best < 0 || Math.abs(gap(i)) < Math.abs(gap(best)))) best = i;
-      if (best >= 0) {
-        share = fr2[best];
-        const n = gap(best) < 0 ? best + 1 : best - 1;   // slide toward the neighbour on the other side of even
-        if (n >= 0 && n < fr2.length && gap(n) != null && gap(n) * gap(best) < 0) share = fr2[best] + (fr2[n] - fr2[best]) * Math.abs(gap(best)) / (Math.abs(gap(best)) + Math.abs(gap(n)));
-      }
-    } catch (e) {}
-    // 3. Places of the chosen kind around that point
-    const mid = at(share), km = Math.min(5, Math.max(0.8, span * 0.08 / 1000));
-    const tags = MEET_TAGS[meet.kind].map(t => '&osm_tag=' + t).join('');
-    const WORD = { coffee: 'cafe', food: 'restaurant', drinks: 'bar', park: 'park', any: 'cafe' };
-    const around = async r => {
-      try {
-        const d = await photon(`/reverse?lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&radius=${r.toFixed(1)}&limit=20&lang=en${tags}`);
-        return (d.features || []).filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub }));
-      } catch (e) {   // main search server down: category search on the backup, boxed around the same point
-        const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=20&bounded=1&viewbox=${boxAround(mid, r / 111)}&q=${WORD[meet.kind]}`);
-        return d.filter(x => x.name).map(x => { const pl = nomiPlace(x); return { lat: pl.lat, lon: pl.lon, name: pl.main, kind: pl.kind, sub: pl.sub }; });
-      }
+
+    // 2. How long the whole trip takes each of you by your own mode. If you both set off at once, you meet
+    //    after the same time, which puts the meeting point at friend's time / (your time + friend's time) along the line.
+    const whole = async (from, to, mode) => {
+      if (mode === fast) return base.time;
+      msg('Checking the ' + NAME[mode] + ' trip...');
+      try { return (await quickRoute(from, to, mode)).time; } catch (e) { meet.rough = true; return roughTime(from, to, mode); }
     };
-    msg('Looking for places near the middle...');
-    let spots = await around(km);
-    if (spots.length < 3) { await pause(1200); const wider = await around(km * 3).catch(() => []); if (wider.length > spots.length) spots = wider; }
-    if (!spots.length) { msg('No places like that near the middle. Try "Anything".'); return; }
-    // 4. Real travel times for each of you to every place, then rank by fairness
-    msg('Checking travel times for you both...');
-    const [mine, theirs] = await Promise.all([travelTimes(me, spots, meet.myMode), travelTimes(fr, spots, meet.friendMode)]);
+    step = 'trips';
+    const myWhole = await whole(me, fr, meet.myMode), frWhole = await whole(fr, me, meet.friendMode);
+    const share = Math.min(0.97, Math.max(0.03, frWhole / (myWhole + frWhole))), mid = at(share);
+
+    // 3. Places around that point, widening the circle until there are a few to choose from
+    step = 'places'; msg('Looking for places near the middle...');
+    const km = Math.min(4, Math.max(0.8, span * 0.06 / 1000));
+    let spots = [], kind = meet.kind;
+    for (const r of [km, km * 3, km * 8]) {
+      const found = await placesNear(mid, r, kind).catch(() => []);
+      if (found.length > spots.length) spots = found;
+      if (spots.length >= 3) break;
+      await pause(1100);
+    }
+    if (!spots.length && kind !== 'any') { kind = 'any'; spots = await placesNear(mid, km * 8, kind).catch(() => []); }
+    if (!spots.length) { msg('No named places found near the middle of your trip. Try "Anything", or a different pair of locations.'); return; }
+
+    // 4. Check each place with each person's real trip, and rank by how even and how short the two trips are
+    step = 'times'; msg('Checking each place for you both...');
+    const mine = await travelTimes(me, spots, meet.myMode), theirs = await travelTimes(fr, spots, meet.friendMode);
     spots.forEach((p, i) => { p.a = mine[i]; p.b = theirs[i]; p.score = Math.max(p.a, p.b) + 0.5 * Math.abs(p.a - p.b); });
-    spots = spots.filter(p => p.a != null && p.b != null).sort((x, y) => x.score - y.score).slice(0, 6);
-    if (!spots.length) { msg('Could not work out travel times. Try again in a moment.'); return; }
-    msg('Fairest first. Tap a place for directions.');
+    spots = spots.sort((x, y) => x.score - y.score).slice(0, 6);
+    msg((kind !== meet.kind ? 'Nothing of that kind nearby, so here is anything close. ' : '') + 'Fairest first' + (meet.rough ? ' (some times are estimates)' : '') + '. Tap a place for directions.');
     spots.forEach(p => {
-      const li = el('li'), text = el('span', '', p.name), share = el('button', '', 'Share');
-      text.append(el('small', '', [p.kind, p.sub].filter(Boolean).join(' - ')), el('small', 'times', 'You ' + fmtTime(p.a) + ' - Friend ' + fmtTime(p.b)));
+      const li = el('li'), text = el('span', '', p.name), share2 = el('button', '', 'Share');
+      text.append(el('small', '', [p.kind, p.sub].filter(Boolean).join(' - ')), el('small', 'times', 'You ' + fmtTime(p.a) + ' ' + NAME[meet.myMode] + ' - Friend ' + fmtTime(p.b) + ' ' + NAME[meet.friendMode]));
       const dest = { lat: p.lat, lon: p.lon, name: p.name, label: p.sub ? p.name + ', ' + p.sub : p.name };
       text.onclick = () => { document.body.classList.remove('meet'); prefs.mode = meet.myMode; savePrefs(); syncPrefs(); setPoint('to', dest); };
-      share.onclick = async () => {   // a link that opens this map with the place as the friend's destination
+      share2.onclick = async () => {   // a link that opens this map with the place as the friend's destination
         const url = location.origin + location.pathname + '#to=' + p.lat.toFixed(5) + ',' + p.lon.toFixed(5) + '&mode=' + meet.friendMode;
         try { if (navigator.share) await navigator.share({ title: 'Meet at ' + p.name, text: 'Meet at ' + p.name + '?', url }); else { await navigator.clipboard.writeText(url); msg('Link copied. Send it to your friend.'); } } catch (e) {}
       };
-      li.append(text, share); out.appendChild(li);
+      li.append(text, share2); out.appendChild(li);
     });
-  } catch (e) { msg(/^search/.test(e.message) ? 'The place search is busy right now. Try again in a few seconds.' : 'Could not work out travel times for that pair. Try again in a moment.'); }
+    if (out.scrollIntoView) setTimeout(() => $('meetMsg').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } catch (e) {
+    msg('Stopped at the "' + step + '" step: ' + (e && e.message ? e.message : 'unknown error') + '. Try again in a moment.');
+  } finally { meet.busy = false; btn.textContent = 'Find a fair spot'; }
 }
 
 // ---------- Routing ----------
