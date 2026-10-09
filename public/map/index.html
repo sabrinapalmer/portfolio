@@ -21,9 +21,9 @@
     }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html, body { height:100%; margin:0; font:600 15px/1.35 Nunito, ui-rounded, "SF Pro Rounded", system-ui, sans-serif; color:var(--fg); background:var(--bg); }
-  #map { position:absolute; inset:0; z-index:0; background:var(--bg); }
-  .panel { position:absolute; left:10px; right:10px; z-index:1000; max-width:440px; background:var(--card); border-radius:22px; box-shadow:var(--shadow); }
+  html, body { height:100%; overflow:hidden; margin:0; font:600 15px/1.35 Nunito, ui-rounded, "SF Pro Rounded", system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  #map { position:fixed; inset:0; z-index:0; background:var(--bg); }
+  .panel { position:fixed; left:10px; right:10px; z-index:1000; max-width:440px; background:var(--card); border-radius:22px; box-shadow:var(--shadow); }
   #top { top:calc(10px + env(safe-area-inset-top)); padding:10px; }
   #bottom { bottom:calc(10px + env(safe-area-inset-bottom)); display:none; overflow:hidden; }
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; }
@@ -48,12 +48,16 @@
   #suggest { list-style:none; margin:0 0 8px; padding:4px; border-radius:16px; background:var(--bg); display:none; max-height:40vh; overflow:auto; }
   #suggest li { padding:9px 12px; border-radius:12px; cursor:pointer; }
   #suggest li:hover { background:var(--soft); }
+  #suggest li { display:flex; justify-content:space-between; gap:10px; align-items:center; }
   #suggest small { display:block; color:var(--muted); font-weight:500; }
+  #suggest em { flex:0 0 auto; font-style:normal; font-size:12px; color:var(--muted); }
   #status { flex:1; font-size:13px; color:var(--muted); min-height:1em; padding-left:6px; }
-  #routes { display:flex; gap:8px; padding:10px; overflow-x:auto; align-items:stretch; }
+  #routeRow { display:flex; gap:8px; padding:10px; align-items:stretch; }
+  #routes { flex:1; min-width:0; display:flex; gap:8px; overflow-x:auto; align-items:stretch; scrollbar-width:none; }
+  #routes::-webkit-scrollbar { display:none; }
   #routes button { flex:0 0 auto; text-align:left; border-radius:16px; font-size:16px; }
   #routes button small { display:block; font-size:12px; font-weight:600; opacity:.8; }
-  #routes button.go { margin-left:auto; padding:10px 22px; font-size:17px; font-weight:800; }
+  #go { flex:0 0 auto; padding:10px 22px; font-size:17px; font-weight:800; border-radius:16px; }
   #stepsHead { display:flex; justify-content:space-between; align-items:center; padding:0 14px 6px; font-size:13px; color:var(--muted); }
   #stepsHead button { padding:4px 10px; font-size:13px; }
   #steps { list-style:none; margin:0; padding:0 6px 6px; max-height:30vh; overflow:auto; }
@@ -123,7 +127,7 @@
 </div>
 
 <div id="bottom" class="panel">
-  <div id="routes"></div>
+  <div id="routeRow"><div id="routes"></div><button id="go" class="go">Start</button></div>
   <div id="stepsHead"><span id="stepsTitle">Directions</span><button id="toggleSteps" class="ghost">Hide</button></div>
   <ol id="steps"></ol>
 </div>
@@ -154,6 +158,7 @@ const pts = { from: null, to: null };      // {lat, lon, label}
 const markers = { from: null, to: null };
 let routes = [], lines = [], selected = 0, reqId = 0, mode = 'auto';
 let watchId = null, meDot = null, nav = null, wake = null, useBackup = false;
+let here = null, searchId = 0, searchCtl = null;   // here: last known [lat, lon] of the user
 
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 let muted = !!store('map.muted');
@@ -211,6 +216,7 @@ function meters(a, b) {   // haversine distance between [lat, lon] pairs
 }
 function pinIcon(which) { return L.divIcon({ className: '', html: '<div class="pin ' + which + '"></div>', iconSize: [26, 26], iconAnchor: [13, 31] }); }
 function showMe(ll) {
+  here = ll;
   if (!meDot) meDot = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: false, zIndexOffset: 1000 }).addTo(map);
   else meDot.setLatLng(ll);
 }
@@ -223,34 +229,49 @@ let debounce;
   el.addEventListener('input', () => {
     pts[which] = null;
     clearTimeout(debounce);
-    debounce = setTimeout(() => search(which, el.value.trim()), 300);
+    debounce = setTimeout(() => search(which, el.value.trim()), 150);
   });
 });
 
+// Two requests at once: places within about 25 miles of you (shown first, nearest on top), then anywhere.
 async function search(which, q) {
   const list = $('suggest');
-  if (q.length < 3) { list.style.display = 'none'; return; }
+  if (searchCtl) searchCtl.abort();
+  if (q.length < 2) { list.style.display = 'none'; return; }
   const m = q.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);   // raw "lat, lon"
   if (m) { list.style.display = 'none'; setPoint(which, { lat: +m[1], lon: +m[3], label: q }); return; }
-  const c = map.getCenter(), id = ++reqId;
-  try {
-    const r = await fetch(`${GEOCODER}/api/?q=${encodeURIComponent(q)}&limit=6&lang=en&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}`);
-    const data = await r.json();
-    if (id !== reqId) return;   // a newer search superseded this one
+  const c = map.getCenter(), ref = here || [c.lat, c.lng], id = ++searchId;
+  const ctl = searchCtl = new AbortController();
+  const base = `${GEOCODER}/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
+  const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
+  const get = url => fetch(url, { signal: ctl.signal }).then(r => r.json()).then(d => d.features || []).catch(() => null);
+  let near, far, pending = 2;
+
+  function paint() {
+    if (id !== searchId) return;
+    const dist = f => meters(ref, [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+    const key = f => f.properties.osm_type + f.properties.osm_id;
+    const first = (near || []).slice().sort((x, y) => dist(x) - dist(y)), seen = new Set(first.map(key));
+    const items = first.concat((far || []).filter(f => !seen.has(key(f)))).slice(0, 10);
     list.innerHTML = '';
-    (data.features || []).forEach(f => {
-      const { main, sub } = labelOf(f.properties), li = document.createElement('li');
-      li.textContent = main;
-      if (sub) { const s = document.createElement('small'); s.textContent = sub; li.appendChild(s); }
+    items.forEach(f => {
+      const { main, sub } = labelOf(f.properties), li = document.createElement('li'), text = document.createElement('span'), d = document.createElement('em');
+      text.textContent = main;
+      if (sub) { const sm = document.createElement('small'); sm.textContent = sub; text.appendChild(sm); }
+      d.textContent = fmtDist(dist(f) / 1609.34);
+      li.append(text, d);
       li.onclick = () => {
         list.style.display = 'none';
         setPoint(which, { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: sub ? main + ', ' + sub : main });
       };
       list.appendChild(li);
     });
-    list.style.display = list.children.length ? 'block' : 'none';
-    status(list.children.length ? '' : 'No matches for "' + q + '"');
-  } catch (e) { status('Search failed. Check connection.'); }
+    list.style.display = items.length ? 'block' : 'none';
+    if (items.length) status(pending ? 'Looking further...' : '');
+    else if (!pending) status(near === null && far === null ? 'Search failed. Check connection.' : 'No matches for "' + q + '"');
+  }
+  get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
+  get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
 }
 
 async function setPointFromLatLng(which, lat, lon) {
@@ -271,7 +292,21 @@ function setPoint(which, p) {
   $(which).value = p.label;
   if (markers[which]) markers[which].remove();
   markers[which] = L.marker([p.lat, p.lon], { icon: pinIcon(which) }).addTo(map);
-  if (pts.from && pts.to) route(); else map.setView([p.lat, p.lon], Math.max(map.getZoom(), 14));
+  if (pts.from && pts.to) { route(); return; }
+  map.setView([p.lat, p.lon], Math.max(map.getZoom(), 14));
+  if (which === 'to') startFromHere();
+}
+
+// With only a destination chosen, use the current location as the start
+function startFromHere() {
+  const use = () => { if (pts.to && !pts.from && here) setPoint('from', { lat: here[0], lon: here[1], label: 'My location' }); };
+  if (here) { use(); return; }
+  if (!navigator.geolocation) { status('Enter a starting point.'); return; }
+  status('Getting your location...');
+  navigator.geolocation.getCurrentPosition(
+    p => { status(''); showMe([p.coords.latitude, p.coords.longitude]); use(); },
+    () => status('Location is off. Enter a starting point, or allow location for this site.'),
+    { enableHighAccuracy: true, timeout: 10000 });
 }
 
 // ---------- Routing ----------
@@ -386,8 +421,6 @@ function draw(fit) {
     b.onclick = () => { selected = i; draw(true); };
     box.appendChild(b);
   });
-  const go = document.createElement('button'); go.className = 'go'; go.textContent = 'Start'; go.onclick = startNav;
-  box.appendChild(go);
 
   const ol = $('steps'); ol.innerHTML = '';
   routes[selected].steps.forEach(st => {
@@ -535,6 +568,7 @@ function onFix(p) {
   else if (toNext <= early && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = 1; say('In ' + spokenDist(toNext) + ', ' + phrase); }
 }
 
+$('go').onclick = startNav;
 $('endNav').onclick = endNav;
 $('recenter').onclick = () => { if (!nav) return; nav.follow = true; $('recenter').style.display = 'none'; if (meDot) map.setView(meDot.getLatLng(), 17); };
 $('mute').onclick = () => {
@@ -616,6 +650,11 @@ function writeHash() {
   const f = parse(h.get('from')), t = parse(h.get('to'));
   if (f) setPointFromLatLng('from', f[0], f[1]);
   if (t) setPointFromLatLng('to', t[0], t[1]);
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => {
+    showMe([p.coords.latitude, p.coords.longitude]);
+    if (!pts.from && !pts.to) map.setView(here, 14);
+    else if (pts.to && !pts.from) startFromHere();
+  }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
 })();
 </script>
 </body>
