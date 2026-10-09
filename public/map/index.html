@@ -419,9 +419,18 @@ async function onMapClick(e) {
 }
 
 // ---------- Places: search, saved, recent ----------
+// The free search server sometimes answers 503 or 429 when busy; wait briefly and try again
+async function photon(path, signal) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(GEOCODER + path, { signal });
+    if (r.ok) return r.json();
+    if (attempt >= 3 || (r.status !== 503 && r.status !== 429)) throw new Error('search ' + r.status);
+    await new Promise(done => setTimeout(done, 700 * (attempt + 1)));
+  }
+}
 async function reverseName(lat, lon) {
   try {
-    const f = (await (await fetch(`${GEOCODER}/reverse?lat=${lat}&lon=${lon}&lang=en`)).json()).features[0];
+    const f = (await photon(`/reverse?lat=${lat}&lon=${lon}&lang=en`)).features[0];
     if (!f) return null;
     const { main, sub } = labelOf(f.properties);
     return { main, label: sub ? main + ', ' + sub : main, street: f.properties.street || main };
@@ -501,9 +510,9 @@ async function search(which, q, now) {
   if (m) { list.style.display = 'none'; const p = { lat: +m[1], lon: +m[3], label: q }; if (which === 'friend') meetPick(p); else setPoint(which, p); return; }
   const c = map.getCenter(), ref = here || [c.lat, c.lng], id = ++searchId;
   const ctl = searchCtl = new AbortController();
-  const base = `${GEOCODER}/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
+  const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
-  const get = url => fetch(url, { signal: ctl.signal }).then(r => r.json()).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
+  const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q);
   let near, far, exact = [], pending = isAddress ? 3 : 2;
   const dist = p => meters(ref, [p.lat, p.lon]);
@@ -606,6 +615,7 @@ function syncMeet() {
 async function travelTimes(src, targets, mode) {   // seconds from one point to many, by the given mode
   const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
   const d = await (await fetch(`${ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
+  if (!d.sources_to_targets) throw new Error(d.error || 'matrix');
   return d.sources_to_targets[0].map(x => x.time);
 }
 async function findMeet() {
@@ -623,31 +633,34 @@ async function findMeet() {
       line = decodePolyline((await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json()).trip.legs[0].shape, 6);
     } catch (e) {}
     const cum = [0]; for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + meters(line[i - 1], line[i]));
-    const span = cum[cum.length - 1], km = Math.min(6, Math.max(0.8, span * 0.12 / 1000));
+    const span = cum[cum.length - 1], at = f => line[Math.max(0, cum.findIndex(d => d >= span * f))] || line[0];
+    // 2. Find where along that route your two travel times are equal, by timing each of you to points along it
+    let share = PACE[meet.myMode] / (PACE[meet.myMode] + PACE[meet.friendMode]);
+    try {
+      const fr2 = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95], pts2 = fr2.map(f => { const c = at(f); return { lat: c[0], lon: c[1] }; });
+      const [ta, tb] = await Promise.all([travelTimes(me, pts2, meet.myMode), travelTimes(fr, pts2, meet.friendMode)]);
+      const gap = i => ta[i] != null && tb[i] != null ? ta[i] - tb[i] : null;   // negative while you are still the closer one
+      let best = -1;
+      for (let i = 0; i < fr2.length; i++) if (gap(i) != null && (best < 0 || Math.abs(gap(i)) < Math.abs(gap(best)))) best = i;
+      if (best >= 0) {
+        share = fr2[best];
+        const n = gap(best) < 0 ? best + 1 : best - 1;   // slide toward the neighbour on the other side of even
+        if (n >= 0 && n < fr2.length && gap(n) != null && gap(n) * gap(best) < 0) share = fr2[best] + (fr2[n] - fr2[best]) * Math.abs(gap(best)) / (Math.abs(gap(best)) + Math.abs(gap(n)));
+      }
+    } catch (e) {}
+    // 3. Places of the chosen kind around that point
+    const mid = at(share), km = Math.min(5, Math.max(0.8, span * 0.08 / 1000));
     const tags = MEET_TAGS[meet.kind].map(t => '&osm_tag=' + t).join('');
-    const around = async (mid, r) => ((await (await fetch(`${GEOCODER}/reverse?lat=${mid[0]}&lon=${mid[1]}&radius=${r.toFixed(1)}&limit=20&lang=en${tags}`)).json()).features || [])
+    const around = async r => ((await photon(`/reverse?lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&radius=${r.toFixed(1)}&limit=20&lang=en${tags}`)).features || [])
       .filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub }));
-    // 2. Guess how far along you would meet from typical speeds, look for places there, measure real travel
-    //    times for you both, then move the guess toward whoever is travelling longer and look once more
-    let share = PACE[meet.myMode] / (PACE[meet.myMode] + PACE[meet.friendMode]), spots = [];
-    for (let pass = 0; pass < 2; pass++) {
-      const mid = line[cum.findIndex(d => d >= span * share)] || line[0];
-      let found = await around(mid, km);
-      if (found.length < 3) found = await around(mid, km * 3);
-      found = found.filter(p => !spots.some(o => o.name === p.name && meters([o.lat, o.lon], [p.lat, p.lon]) < 60));
-      if (!found.length) break;
-      msg('Checking travel times for you both...');
-      const [mine, theirs] = await Promise.all([travelTimes(me, found, meet.myMode), travelTimes(fr, found, meet.friendMode)]);
-      found.forEach((p, i) => { p.a = mine[i]; p.b = theirs[i]; p.score = Math.max(p.a, p.b) + 0.5 * Math.abs(p.a - p.b); });
-      spots = spots.concat(found.filter(p => p.a != null && p.b != null));
-      const ok = found.filter(p => p.a > 0 && p.b > 0);
-      if (!ok.length) break;
-      const a = ok.reduce((n, p) => n + p.a, 0) / ok.length, b2 = ok.reduce((n, p) => n + p.b, 0) / ok.length;
-      const better = (share / a) / (share / a + (1 - share) / b2);   // where your two real speeds would actually meet
-      if (Math.abs(better - share) < 0.06) break;
-      share = Math.min(0.95, Math.max(0.05, better));
-    }
+    msg('Looking for places near the middle...');
+    let spots = await around(km);
+    if (spots.length < 3) spots = await around(km * 3);
     if (!spots.length) { msg('No places like that near the middle. Try "Anything".'); return; }
+    // 4. Real travel times for each of you to every place, then rank by fairness
+    msg('Checking travel times for you both...');
+    const [mine, theirs] = await Promise.all([travelTimes(me, spots, meet.myMode), travelTimes(fr, spots, meet.friendMode)]);
+    spots.forEach((p, i) => { p.a = mine[i]; p.b = theirs[i]; p.score = Math.max(p.a, p.b) + 0.5 * Math.abs(p.a - p.b); });
     spots = spots.filter(p => p.a != null && p.b != null).sort((x, y) => x.score - y.score).slice(0, 6);
     if (!spots.length) { msg('Could not work out travel times. Try again in a moment.'); return; }
     msg('Fairest first. Tap a place for directions.');
@@ -662,7 +675,7 @@ async function findMeet() {
       };
       li.append(text, share); out.appendChild(li);
     });
-  } catch (e) { msg('Something went wrong finding a spot. Try again in a moment.'); }
+  } catch (e) { msg(/^search/.test(e.message) ? 'The place search is busy right now. Try again in a few seconds.' : 'Could not work out travel times for that pair. Try again in a moment.'); }
 }
 
 // ---------- Routing ----------
