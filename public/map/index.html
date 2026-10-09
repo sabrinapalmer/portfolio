@@ -595,7 +595,7 @@ async function addAvoid(lat, lon) {
 // ---------- Meet in the middle ----------
 const MEET_TAGS = { coffee: ['amenity:cafe'], food: ['amenity:restaurant', 'amenity:fast_food'], drinks: ['amenity:bar', 'amenity:pub'], park: ['leisure:park'],
   any: ['amenity:cafe', 'amenity:restaurant', 'amenity:bar', 'amenity:pub', 'amenity:ice_cream', 'leisure:park'] };
-const COST = { auto: 'auto', rig: 'auto', bicycle: 'bicycle', pedestrian: 'pedestrian' }, PACE = { auto: 1, bicycle: 0.33, pedestrian: 0.11 };
+const COST = { auto: 'auto', rig: 'auto', bicycle: 'bicycle', pedestrian: 'pedestrian' }, PACE = { auto: 1, bicycle: 0.5, pedestrian: 0.15 };
 const meet = { friend: null, myMode: 'auto', friendMode: 'auto', kind: 'coffee' };
 const meetMe = () => pts.from || (here ? { lat: here[0], lon: here[1], label: 'My location' } : null);
 function meetPick(p) { meet.friend = p; $('friend').value = p.label; $('meetMsg').textContent = ''; }
@@ -615,28 +615,39 @@ async function findMeet() {
   if (!fr) { msg("Search for your friend's location first."); return; }
   msg('Working out the middle...');
   try {
-    // 1. A first guess: the point along the road route where you would meet, given how fast each of you travels
-    const share = PACE[meet.myMode] / (PACE[meet.myMode] + PACE[meet.friendMode]);
-    let mid = [me.lat + (fr.lat - me.lat) * share, me.lon + (fr.lon - me.lon) * share], span = meters([me.lat, me.lon], [fr.lat, fr.lon]);
+    // 1. The road route between you, used to place the meeting point along it
+    let line = [[me.lat, me.lon], [fr.lat, fr.lon]];
     try {
       const costing = meet.myMode === meet.friendMode ? COST[meet.myMode] : 'auto';
       const body = { locations: [{ lat: me.lat, lon: me.lon }, { lat: fr.lat, lon: fr.lon }], costing, units: 'miles' };
-      const c = decodePolyline((await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json()).trip.legs[0].shape, 6);
-      const cum = [0]; for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + meters(c[i - 1], c[i]));
-      span = cum[cum.length - 1];
-      mid = c[cum.findIndex(d => d >= span * share)] || mid;
+      line = decodePolyline((await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json()).trip.legs[0].shape, 6);
     } catch (e) {}
-    // 2. Places of the chosen kind around that point
+    const cum = [0]; for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + meters(line[i - 1], line[i]));
+    const span = cum[cum.length - 1], km = Math.min(6, Math.max(0.8, span * 0.12 / 1000));
     const tags = MEET_TAGS[meet.kind].map(t => '&osm_tag=' + t).join('');
-    const around = async km => ((await (await fetch(`${GEOCODER}/reverse?lat=${mid[0]}&lon=${mid[1]}&radius=${km.toFixed(1)}&limit=20&lang=en${tags}`)).json()).features || [])
+    const around = async (mid, r) => ((await (await fetch(`${GEOCODER}/reverse?lat=${mid[0]}&lon=${mid[1]}&radius=${r.toFixed(1)}&limit=20&lang=en${tags}`)).json()).features || [])
       .filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub }));
-    let km = Math.min(6, Math.max(0.8, span * 0.12 / 1000)), spots = await around(km);
-    if (spots.length < 3) spots = await around(km * 3);
+    // 2. Guess how far along you would meet from typical speeds, look for places there, measure real travel
+    //    times for you both, then move the guess toward whoever is travelling longer and look once more
+    let share = PACE[meet.myMode] / (PACE[meet.myMode] + PACE[meet.friendMode]), spots = [];
+    for (let pass = 0; pass < 2; pass++) {
+      const mid = line[cum.findIndex(d => d >= span * share)] || line[0];
+      let found = await around(mid, km);
+      if (found.length < 3) found = await around(mid, km * 3);
+      found = found.filter(p => !spots.some(o => o.name === p.name && meters([o.lat, o.lon], [p.lat, p.lon]) < 60));
+      if (!found.length) break;
+      msg('Checking travel times for you both...');
+      const [mine, theirs] = await Promise.all([travelTimes(me, found, meet.myMode), travelTimes(fr, found, meet.friendMode)]);
+      found.forEach((p, i) => { p.a = mine[i]; p.b = theirs[i]; p.score = Math.max(p.a, p.b) + 0.5 * Math.abs(p.a - p.b); });
+      spots = spots.concat(found.filter(p => p.a != null && p.b != null));
+      const ok = found.filter(p => p.a > 0 && p.b > 0);
+      if (!ok.length) break;
+      const a = ok.reduce((n, p) => n + p.a, 0) / ok.length, b2 = ok.reduce((n, p) => n + p.b, 0) / ok.length;
+      const better = (share / a) / (share / a + (1 - share) / b2);   // where your two real speeds would actually meet
+      if (Math.abs(better - share) < 0.06) break;
+      share = Math.min(0.95, Math.max(0.05, better));
+    }
     if (!spots.length) { msg('No places like that near the middle. Try "Anything".'); return; }
-    // 3. Real travel times for each of you to every candidate, then rank by fairness
-    msg('Checking travel times for you both...');
-    const [mine, theirs] = await Promise.all([travelTimes(me, spots, meet.myMode), travelTimes(fr, spots, meet.friendMode)]);
-    spots.forEach((p, i) => { p.a = mine[i]; p.b = theirs[i]; p.score = Math.max(p.a, p.b) + 0.5 * Math.abs(p.a - p.b); });
     spots = spots.filter(p => p.a != null && p.b != null).sort((x, y) => x.score - y.score).slice(0, 6);
     if (!spots.length) { msg('Could not work out travel times. Try again in a moment.'); return; }
     msg('Fairest first. Tap a place for directions.');
