@@ -897,7 +897,7 @@ async function search(which, q, now) {
     let split = false;
     shown.forEach((p, i) => {
       if (cat && exactNear.length && i === exactNear.length) list.appendChild(el('li', 'head', 'Other matches'));
-      if (!cat && !split && p.d > NEARBY && i > 0) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
+      if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
       list.appendChild(suggestion(which, p.main, p.sub, fmtDist(p.d / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }));
     });
     list.style.display = shown.length ? 'block' : 'none';
