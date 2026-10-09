@@ -42,7 +42,10 @@
   input[type=text], input[type=number] { flex:1; min-width:0; font:inherit; font-size:16px; border:0; outline:0; background:transparent; color:var(--fg); }
   input::placeholder { color:var(--muted); }
   #fromRow, #modeRow { display:none; }
-  body.dest #fromRow, body.dest #modeRow { display:flex; }
+  body.plan #fromRow, body.dest #modeRow { display:flex; }
+  #planRow { margin-top:2px; }
+  #plan { padding:6px 10px; font-size:13px; }
+  body.plan #plan { color:var(--accent); }
   .seg { flex:1; display:flex; background:var(--bg); border-radius:999px; padding:3px; border:2px solid var(--line); }
   .seg button { flex:1; padding:7px 4px; background:transparent; color:var(--muted); }
   .seg button.on { background:var(--accent); color:var(--accent-ink); }
@@ -84,6 +87,22 @@
   #why .flags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   #why .flags span { font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--bg); border:1.5px solid var(--line); color:var(--muted); }
   #why .flags span.warn { color:var(--warn); border-color:var(--warn); }
+  #timing { margin:0 10px 8px; padding:8px 6px 8px 12px; border-radius:18px; background:var(--bg); }
+  #whenRow { display:flex; align-items:center; gap:6px; }
+  #when { flex:1; min-width:0; }
+  #timeEdit { padding:6px 10px; font-size:13px; color:var(--accent); }
+  #timing .trow { display:none; padding-right:6px; }
+  #timing.open .trow { display:flex; }
+  #when b { display:block; font-size:17px; font-weight:900; }
+  #when span { font-size:13px; color:var(--muted); }
+  #when .late { color:var(--warn); }
+  .trow { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  #tmode { flex:0 0 auto; background:var(--card); }
+  #tmode button { padding:6px 12px; font-size:13px; }
+  #arriveAt { flex:1; min-width:0; height:36px; padding:0 10px; border-radius:999px; border:2px solid var(--accent); background:var(--card); color:var(--fg); font:inherit; font-size:16px; }
+  #parkNote { flex:1; min-width:0; font-size:12px; color:var(--muted); }
+  #parkRow b { font-size:14px; min-width:48px; text-align:center; }
+  #parkRow button { width:32px; height:32px; background:var(--card); font-size:18px; line-height:1; }
   #stepsHead { padding:0 8px 8px; }
   #steps { list-style:none; margin:0; padding:0 6px 6px; max-height:30vh; overflow:auto; display:none; }
   #steps li { padding:9px 10px; border-radius:12px; display:flex; gap:10px; align-items:center; cursor:pointer; font-weight:600; }
@@ -161,6 +180,7 @@
   .pin { width:30px; height:30px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); background:var(--accent); border:3px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,.3); position:relative; }
   .pin.from { background:var(--start); }
   .pin::after { content:""; position:absolute; inset:6px; border-radius:50%; background:#fff; }
+  .opt { width:22px; height:22px; border-radius:50%; background:var(--accent); border:3px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.35); cursor:pointer; }
   .avoid { width:22px; height:22px; border-radius:50%; background:#fff; border:3px solid var(--warn); position:relative; box-shadow:0 2px 6px rgba(0,0,0,.25); }
   .avoid::after { content:""; position:absolute; left:2px; right:2px; top:7px; height:3px; background:var(--warn); transform:rotate(-45deg); border-radius:2px; }
   .me { width:20px; height:20px; border-radius:50%; background:var(--me); border:3px solid #fff; box-shadow:0 0 0 0 rgba(76,157,255,.6); animation:pulse 1.8s infinite; }
@@ -189,6 +209,7 @@
     <button id="swap" class="round" title="Swap start and destination" aria-label="Swap"><svg viewBox="0 0 24 24"><path d="M8 4v15M8 4L4 8M8 4l4 4M16 20V5M16 20l-4-4M16 20l4-4"/></svg></button>
   </div>
   <ul id="suggest"></ul>
+  <div class="row" id="planRow"><button id="plan" class="ghost">Plan a route from somewhere else</button></div>
   <div class="row" id="modeRow">
     <div class="seg" id="mode">
       <button data-mode="auto" class="on">Drive</button>
@@ -214,6 +235,11 @@
   </div>
   <div id="routeRow"><div id="routes"></div><button id="go" class="go">Start</button></div>
   <div id="why"></div>
+  <div id="timing">
+    <div id="whenRow"><div id="when"></div><button id="timeEdit" class="ghost">Arrive by...</button></div>
+    <div class="trow"><div class="seg" id="tmode"><button data-t="now" class="on">Leave now</button><button data-t="by">Arrive by</button></div><input id="arriveAt" type="time" aria-label="Arrive by"></div>
+    <div class="trow" id="parkRow"><span id="parkNote"></span><button id="parkLess" class="round" aria-label="Less parking time">&minus;</button><b id="parkMin"></b><button id="parkMore" class="round" aria-label="More parking time">+</button></div>
+  </div>
   <div id="stepsHead"><button id="toggleSteps" class="ghost">Show steps</button></div>
   <ol id="steps"></ol>
 </div>
@@ -298,6 +324,8 @@ const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null }, markers = { from: null, to: null };
 let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBackup = false;
+let planning = false;   // false: every route starts from where you are now; true: you chose a starting point
+const timing = { mode: 'now', at: '', key: '', parkAuto: null, parkUser: null, note: '' };
 let here = null, meMarker = null, nav = null, wake = null, avoidMarkers = [], map, mapReady;
 const savePrefs = () => store('map.prefs', prefs);
 
@@ -535,6 +563,7 @@ let debounce;
   input.addEventListener('keydown', e => {   // Enter looks up the exact address straight away, or takes the top result
     if (e.key !== 'Enter') return;
     const q = input.value.trim(), top = listFor(which).querySelector('li:not(.head)');
+    if (which === 'to' && categoryOf(q)) { input.blur(); return; }   // a kind of place: leave the options showing
     if (/^\d+\s+\S/.test(q) && !input._exact) { input._exact = q; clearTimeout(debounce); search(which, q, true); }
     else if (top) top.click();
   });
@@ -550,12 +579,67 @@ function suggestion(which, main, sub, right, p) {
 // With an empty box: your location, saved places and recent destinations
 function shortcuts(which) {
   const list = listFor(which); list.innerHTML = '';
+  if (which === 'to') clearPois();
   if (searchCtl) searchCtl.abort();
   searchId++;
   if (here && which === 'from') list.appendChild(suggestion(which, 'My location', null, '', { lat: here[0], lon: here[1], label: 'My location' }));
   const add = (title, arr) => { if (!arr.length) return; list.appendChild(el('li', 'head', title)); arr.forEach(p => list.appendChild(suggestion(which, p.name || p.label.split(',')[0], p.label, here ? fmtDist(meters(here, [p.lat, p.lon]) / 1609.34) : '', p))); };
   add('Saved', saved); add('Recent', recent);
   list.style.display = list.children.length ? 'block' : 'none';
+}
+
+// Searches for a kind of place ("coffee", "gas", "store") list the nearest ones and pin them on the map
+const CATS = [
+  [/^(coffee|coffee shops?|cafes?)$/, ['amenity:cafe'], 'cafe', 'Coffee'],
+  [/^(food|restaurants?|lunch|dinner|breakfast|places to eat|eat)$/, ['amenity:restaurant', 'amenity:fast_food'], 'restaurant', 'Food'],
+  [/^fast food$/, ['amenity:fast_food'], 'fast food', 'Fast food'],
+  [/^(bars?|pubs?|drinks|brewery|breweries)$/, ['amenity:bar', 'amenity:pub'], 'bar', 'Bars'],
+  [/^(gas|gas stations?|fuel|petrol)$/, ['amenity:fuel'], 'gas station', 'Gas'],
+  [/^(ev chargers?|chargers?|charging|charging stations?)$/, ['amenity:charging_station'], 'charging station', 'Chargers'],
+  [/^(grocery|groceries|grocery stores?|supermarkets?)$/, ['shop:supermarket', 'shop:greengrocer'], 'supermarket', 'Groceries'],
+  [/^(stores?|shops?|shopping)$/, ['shop'], 'shop', 'Stores'],
+  [/^(pharmacy|pharmacies|drug ?stores?)$/, ['amenity:pharmacy'], 'pharmacy', 'Pharmacies'],
+  [/^(banks?|atms?)$/, ['amenity:bank', 'amenity:atm'], 'bank', 'Banks and ATMs'],
+  [/^(hospitals?|er|emergency room|urgent care|clinics?)$/, ['amenity:hospital', 'amenity:clinic'], 'hospital', 'Hospitals and clinics'],
+  [/^(parks?|playgrounds?)$/, ['leisure:park', 'leisure:playground'], 'park', 'Parks'],
+  [/^(hotels?|motels?|lodging)$/, ['tourism:hotel', 'tourism:motel'], 'hotel', 'Hotels'],
+  [/^(parking|parking lots?|garages?|car parks?)$/, ['amenity:parking'], 'parking', 'Parking'],
+  [/^(restrooms?|bathrooms?|toilets?)$/, ['amenity:toilets'], 'toilets', 'Restrooms'],
+  [/^(bakery|bakeries)$/, ['shop:bakery'], 'bakery', 'Bakeries'],
+  [/^(hardware|hardware stores?)$/, ['shop:hardware', 'shop:doityourself'], 'hardware store', 'Hardware'],
+  [/^(campgrounds?|camping|camp ?sites?|rv parks?)$/, ['tourism:camp_site', 'tourism:caravan_site'], 'campground', 'Campgrounds'],
+  [/^(post office|mail)$/, ['amenity:post_office'], 'post office', 'Post offices'],
+  [/^(librar(y|ies))$/, ['amenity:library'], 'library', 'Libraries']
+];
+function categoryOf(q) {
+  const t = q.toLowerCase().replace(/\s+(near me|nearby|near here|around here)$/, '').trim();
+  const c = CATS.find(x => x[0].test(t));
+  return c ? { tags: c[1], word: c[2], title: c[3] } : null;
+}
+async function nearbyKind(ref, cat) {
+  const tags = cat.tags.map(t => '&osm_tag=' + t).join(''), at = `lat=${ref[0].toFixed(5)}&lon=${ref[1].toFixed(5)}`;
+  const named = d => (d.features || []).filter(f => f.properties.name).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }));
+  try {
+    let list = named(await photon(`/reverse?${at}&radius=5&limit=20&lang=en${tags}`));
+    if (list.length < 3) { await pause(400); const wide = named(await photon(`/reverse?${at}&radius=30&limit=20&lang=en${tags}`)); if (wide.length > list.length) list = wide; }
+    return list;
+  } catch (e) {}
+  try { return (await nominatim(`/search?format=jsonv2&addressdetails=1&limit=20&bounded=1&viewbox=${boxAround(ref, 0.08)}&q=${encodeURIComponent(cat.word)}`)).filter(x => x.name).map(nomiPlace); }
+  catch (e) { return []; }
+}
+let poiMarkers = [];
+function clearPois() { poiMarkers.forEach(m => m.remove()); poiMarkers = []; }
+function showPois(list) {
+  clearPois();
+  if (!map || !list.length || nav) return;
+  const b = new maplibregl.LngLatBounds(); if (here) b.extend([here[1], here[0]]);
+  list.slice(0, 12).forEach(p => {
+    const m = marker('opt', [p.lat, p.lon]), dot = m.getElement();
+    dot.title = p.main;
+    dot.onclick = e => { e.stopPropagation(); $('suggest').style.display = 'none'; $('to').blur(); setPoint('to', { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }); };
+    poiMarkers.push(m); b.extend([p.lon, p.lat]);
+  });
+  map.fitBounds(b, { padding: { top: Math.min(innerHeight * 0.55, $('top').offsetHeight + 30), bottom: 70, left: 40, right: 40 }, maxZoom: 15, duration: 600 });
 }
 
 // Exact street addresses. Photon is weak on US house numbers, so address-shaped queries also go to the
@@ -593,8 +677,8 @@ async function search(which, q, now) {
   const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
-  const isAddress = /^\d+\s+\S/.test(q);
-  let near, far, exact = [], pending = isAddress ? 3 : 2, backup = false;
+  const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null;
+  let near, far, exact = [], pending = 2 + (isAddress ? 1 : 0) + (cat ? 1 : 0), backup = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   function paint() {
     if (id !== searchId) return;
@@ -607,7 +691,11 @@ async function search(which, q, now) {
     const add = arr => (arr || []).forEach(p => { if (!items.some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)) items.push(p); });
     add(exact); add((near || []).slice().sort((x, y) => dist(x) - dist(y))); add(far);
     list.innerHTML = '';
-    items.slice(0, 10).forEach(p => list.appendChild(suggestion(which, p.main, p.sub, fmtDist(dist(p) / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main })));
+    if (cat && exact.length) list.appendChild(el('li', 'head', cat.title + ' near you'));
+    items.slice(0, cat ? 14 : 10).forEach((p, i) => {
+      if (cat && exact.length && i === exact.length && i < items.length) list.appendChild(el('li', 'head', 'Other matches'));
+      list.appendChild(suggestion(which, p.main, p.sub, fmtDist(dist(p) / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }));
+    });
     list.style.display = items.length ? 'block' : 'none';
     const say = which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
     if (items.length) say(pending ? 'Looking further...' : '');
@@ -616,6 +704,14 @@ async function search(which, q, now) {
   }
   get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
+  if (cat) setTimeout(() => {
+    if (id !== searchId) return;
+    nearbyKind(ref, cat).then(found => {
+      if (id !== searchId) return;
+      exact = found.sort((x, y) => dist(x) - dist(y)).filter((p, i, all) => !all.slice(0, i).some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)).slice(0, 10);
+      pending--; paint(); showPois(exact);
+    });
+  }, now ? 0 : 350);
   if (isAddress) setTimeout(() => {   // only once typing pauses, to go easy on these free services
     if (id !== searchId) { return; }
     Promise.all([censusLookup(q), nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { exact = a.concat(b); pending--; paint(); });
@@ -633,25 +729,37 @@ async function setPointFromLatLng(which, lat, lon) {
 }
 
 function setPoint(which, p) {
+  if (which === 'from' && !p.auto && !planning) setPlanning(true, true);   // a hand-picked start means you are planning
+  if (which === 'to' && !planning && pts.from) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }   // never reuse an old start
   pts[which] = p;
   $(which).value = p.label;
   if (markers[which]) { markers[which].remove(); markers[which] = null; }
-  mapReady.then(() => { if (pts[which] !== p) return; if (markers[which]) markers[which].remove(); markers[which] = marker('pin ' + which, [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); });
-  if (which === 'to') { document.body.classList.add('dest'); remember(p); }
+  if (!p.auto) mapReady.then(() => { if (pts[which] !== p) return; if (markers[which]) markers[which].remove(); markers[which] = marker('pin ' + which, [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); });
+  if (which === 'to') { document.body.classList.add('dest'); remember(p); clearPois(); }
   if (pts.from && pts.to) { route(); return; }
   mapReady.then(() => map.easeTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 14) }));
-  if (which === 'to') startFromHere();
+  if (which === 'to' && !planning) startFromHere();
 }
-// With only a destination chosen, use the current location as the start
+// Outside planning mode the start is always your current location, read fresh each time
 function startFromHere() {
-  const use = () => { if (pts.to && !pts.from && here) setPoint('from', { lat: here[0], lon: here[1], label: 'My location' }); };
+  const use = () => { if (pts.to && !pts.from && here && !planning) setPoint('from', { lat: here[0], lon: here[1], label: 'My location', auto: true }); };
   if (here) { use(); return; }
-  if (!navigator.geolocation) { status('Enter a starting point.'); return; }
+  if (!navigator.geolocation) { status('Location is not available. Use "Plan a route" to choose a start.'); return; }
   status('Getting your location...');
   navigator.geolocation.getCurrentPosition(
     p => { status(''); showMe([p.coords.latitude, p.coords.longitude]); use(); },
-    () => status('Location is off. Enter a starting point, or allow location for this site.'),
+    () => status('Location is off. Allow location for this site, or use "Plan a route" to choose a start.'),
     { enableHighAccuracy: true, timeout: 10000 });
+}
+function setPlanning(on, keep) {
+  planning = on;
+  document.body.classList.toggle('plan', on);
+  $('plan').textContent = on ? 'Start from my location instead' : 'Plan a route from somewhere else';
+  if (keep) return;
+  if (markers.from) { markers.from.remove(); markers.from = null; }
+  pts.from = null; $('from').value = '';
+  if (on) { status('Choose where the trip starts.'); $('from').focus(); }
+  else { status(''); if (pts.to) startFromHere(); }
 }
 
 function remember(p) {
@@ -691,7 +799,7 @@ const MEET_TAGS = { coffee: ['amenity:cafe'], food: ['amenity:restaurant', 'amen
   any: ['amenity:cafe', 'amenity:restaurant', 'amenity:bar', 'amenity:pub', 'amenity:ice_cream', 'leisure:park'] };
 const COST = { auto: 'auto', rig: 'auto', bicycle: 'bicycle', pedestrian: 'pedestrian' }, PACE = { auto: 1, bicycle: 0.5, pedestrian: 0.15 };
 const meet = { friend: null, myMode: 'auto', friendMode: 'auto', kind: 'coffee' };
-const meetMe = () => pts.from || (here ? { lat: here[0], lon: here[1], label: 'My location' } : null);
+const meetMe = () => (planning && pts.from) || (here ? { lat: here[0], lon: here[1], label: 'My location' } : pts.from);
 function meetPick(p) { meet.friend = p; $('friend').value = p.label; $('meetMsg').textContent = ''; }
 function syncMeet() {
   document.querySelectorAll('[data-meet]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === meet[g.dataset.meet])));
@@ -980,6 +1088,7 @@ function draw(fit) {
   $('destName').textContent = pts.to.name || pts.to.label.split(',')[0];
   syncSave();
   $('bottom').style.display = 'block';
+  drawTiming(); estimatePark(pts.to);
   layout();
   if (fit) {
     const b = new maplibregl.LngLatBounds(); rt.coords.forEach(c => b.extend([c[1], c[0]]));
@@ -987,6 +1096,63 @@ function draw(fit) {
     map.fitBounds(b, { padding: wide ? { top: 60, bottom: 60, left: 450, right: 60 } : { top: $('top').offsetHeight + 40, bottom: $('bottom').offsetHeight + 40, left: 36, right: 36 }, duration: 700, bearing: 0, pitch: 0 });
   }
 }
+// ---------- When to leave ----------
+// Parking time is a guess from what surrounds the destination: how busy the block is (count of shops, cafes and
+// similar within 300 m) and how far the nearest mapped car park is. It is shown as an estimate and can be adjusted.
+async function estimatePark(p) {
+  const key = p.lat.toFixed(4) + ',' + p.lon.toFixed(4);
+  if (timing.key === key) return;
+  Object.assign(timing, { key, parkAuto: null, parkUser: null, note: '' });
+  let busy = null, lot = null, lots = null;
+  try { busy = ((await photon(`/reverse?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&radius=0.3&limit=40&lang=en&osm_tag=amenity`)).features || []).length; } catch (e) {}
+  try {
+    const found = await nominatim(`/search?format=jsonv2&limit=20&bounded=1&viewbox=${boxAround([p.lat, p.lon], 0.004)}&q=parking`);
+    lots = found.length;
+    if (lots) lot = Math.min.apply(null, found.map(x => meters([p.lat, p.lon], [+x.lat, +x.lon])));
+  } catch (e) {}
+  if (timing.key !== key) return;
+  if (busy == null && lots == null) { timing.parkAuto = 5; timing.note = 'default, could not check the area'; }
+  else {
+    const level = busy != null ? (busy >= 30 ? 2 : busy >= 10 ? 1 : 0) : (lots >= 10 ? 2 : lots >= 3 ? 1 : 0), walk = lot != null ? lot * 1.3 / 80 : 0;
+    const mins = lot != null ? [2, 3, 5][level] + walk : [1, 5, 10][level];
+    timing.parkAuto = Math.max(1, Math.min(15, Math.round(mins)));
+    timing.note = ['quiet area', 'fairly busy area', 'busy area'][level] + (lot != null ? ', car park ' + fmtDist(lot / 1609.34) + ' away' : level ? ', street parking' : ', park at the door');
+  }
+  drawTiming();
+}
+function drawTiming() {
+  if (!routes.length || !pts.to || !routes[selected]) return;
+  const rt = routes[selected], driving = prefs.mode === 'auto' || prefs.mode === 'rig';
+  const park = driving ? (timing.parkUser != null ? timing.parkUser : timing.parkAuto != null ? timing.parkAuto : 5) : prefs.mode === 'bicycle' ? 1 : 0;
+  const total = rt.time + park * 60, now = Date.now(), clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  $('parkRow').style.display = driving ? 'flex' : 'none';
+  $('parkMin').textContent = park + ' min';
+  $('parkNote').textContent = 'Parking estimate: ' + (timing.parkUser != null ? 'set by you' : timing.parkAuto == null ? 'checking the area...' : timing.note);
+  document.querySelectorAll('#tmode button').forEach(b => b.classList.toggle('on', b.dataset.t === timing.mode));
+  $('arriveAt').style.display = timing.mode === 'by' ? '' : 'none';
+  const sum = fmtTime(rt.time) + (prefs.mode === 'pedestrian' ? ' walk' : prefs.mode === 'bicycle' ? ' ride' : ' drive') + (park ? ' + ' + park + ' min to park' + (prefs.mode === 'bicycle' ? ' and lock up' : '') : '');
+  const w = $('when'); w.innerHTML = '';
+  if (timing.mode === 'by' && timing.at) {
+    const hm = timing.at.split(':').map(Number), d = new Date(); d.setHours(hm[0], hm[1], 0, 0);
+    let target = d.getTime(); const tomorrow = target < now; if (tomorrow) target += 86400000;   // a time already past means tomorrow
+    const leave = target - total * 1000;
+    if (leave < now) { w.append(el('b', 'late', 'Leave now'), el('span', '', 'You would arrive about ' + clock(now + total * 1000) + ', ' + fmtTime((now - leave) / 1000) + ' late. ' + sum + '.')); }
+    else w.append(el('b', '', 'Leave by ' + clock(leave) + (tomorrow ? ' tomorrow' : '')), el('span', '', (leave - now < 12 * 3600000 ? 'In ' + fmtTime((leave - now) / 1000) + '. ' : '') + sum + ' to arrive by ' + clock(target) + '.'));
+  } else w.append(el('b', '', 'Arrive about ' + clock(now + total * 1000)), el('span', '', sum + '.'));
+  layout();
+}
+setInterval(() => { if ($('bottom').style.display === 'block' && !nav) drawTiming(); }, 30000);
+document.querySelectorAll('#tmode button').forEach(b => b.onclick = () => {
+  timing.mode = b.dataset.t;
+  if (timing.mode === 'by' && !timing.at) { const t = new Date(Math.ceil((Date.now() + 3600000) / 900000) * 900000); timing.at = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); $('arriveAt').value = timing.at; }
+  drawTiming();
+});
+$('arriveAt').oninput = () => { timing.at = $('arriveAt').value; drawTiming(); };
+const nudgePark = by => { const cur = timing.parkUser != null ? timing.parkUser : timing.parkAuto != null ? timing.parkAuto : 5; timing.parkUser = Math.max(0, Math.min(45, cur + by)); drawTiming(); };
+$('timeEdit').onclick = () => { const open = $('timing').classList.toggle('open'); $('timeEdit').textContent = open ? 'Done' : 'Arrive by...'; layout(); };
+$('parkLess').onclick = () => nudgePark(-1);
+$('parkMore').onclick = () => nudgePark(1);
+
 function layout() {   // keep the floating button and map credit clear of the route sheet
   const open = $('bottom').style.display === 'block' && innerWidth < 700;
   if (open) document.body.style.setProperty('--lift', ($('bottom').offsetHeight + 20) + 'px'); else document.body.style.removeProperty('--lift');
@@ -1062,7 +1228,7 @@ async function reroute(ll) {
   nav.busy = true; nav.lastReroute = Date.now();
   $('navArrow').innerHTML = ''; $('navText').textContent = 'Rerouting...'; $('navDist').textContent = ''; $('navThen').textContent = '';
   say('Rerouting.');
-  pts.from = { lat: ll[0], lon: ll[1], label: 'My location' };
+  pts.from = { lat: ll[0], lon: ll[1], label: 'My location', auto: true };
   $('from').value = 'My location';
   if (markers.from) { markers.from.remove(); markers.from = null; }
   const ok = await route(true);
@@ -1154,13 +1320,14 @@ $('save').onclick = () => {
 };
 function clearPoints() { ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
-  clearPoints(); routes = []; reqId++;
+  clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
   if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] });
   $('bottom').style.display = 'none'; $('suggest').style.display = 'none';
   document.body.classList.remove('dest'); layout();
   status(''); history.replaceState(null, '', location.pathname);
 }
 $('clear').onclick = clearAll;
+$('plan').onclick = () => setPlanning(!planning);
 $('swap').onclick = () => { const a = pts.from, b = pts.to; clearPoints(); if (b) setPoint('from', b); if (a) setPoint('to', a); };
 $('toggleSteps').onclick = () => {
   const show = $('steps').style.display !== 'block';
