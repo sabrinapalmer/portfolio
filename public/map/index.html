@@ -124,13 +124,16 @@
   #scrim { position:fixed; inset:0; z-index:19; background:rgba(40,20,30,.35); display:none; }
   .sheet { z-index:20; top:auto; bottom:0; left:0; right:0; max-width:none; width:auto; border-radius:28px 28px 0 0; padding:8px 16px calc(18px + env(safe-area-inset-bottom)); max-height:86vh; overflow:auto; display:none; }
   @media (min-width:700px) { .panel.sheet { left:50%; right:auto; width:460px; transform:translateX(-50%); bottom:16px; border-radius:28px; } }
-  body.prefs #scrim, body.prefs #prefs, body.meet #scrim, body.meet #meet, body.steps #scrim, body.steps #navSteps, body.menu #scrim, body.menu #navMenu, body.stops #scrim, body.stops #stops { display:block; }
+  body.prefs #scrim, body.prefs #prefs, body.meet #scrim, body.meet #meet, body.steps #scrim, body.steps #navSteps, body.menu #scrim, body.menu #navMenu, body.stops #scrim, body.stops #stops, body.loc #scrim, body.loc #locSheet { display:block; }
+  #locSteps { margin:6px 0 14px; padding-left:20px; font-size:14px; }
+  #locSteps li { margin-bottom:8px; }
   .sheet h2 { font-size:20px; font-weight:700; margin:10px 0 2px; display:flex; justify-content:space-between; align-items:center; }
   .sheet h3 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:18px 0 8px; }
   .sheet p { margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:500; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chips button { background:var(--bg); border:2px solid var(--line); color:var(--muted); padding:8px 14px; }
   .chips button.on { background:var(--soft); border-color:var(--accent); color:var(--fg); }
+  .chips button.go { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
   .rig { display:flex; gap:8px; }
   .rig label { flex:1; font-size:12px; color:var(--muted); }
   .rig .field { margin-top:4px; padding:0 12px; height:42px; }
@@ -373,6 +376,12 @@
   <h3>This trip</h3>
   <div class="chips"><button id="mOverview">Show whole route</button><button id="mRepeat">Repeat the instruction</button><button id="mOther">Avoid the road ahead</button><button id="mStop">Add a stop</button></div>
   <div id="menuMsg"></div>
+</div>
+<div id="locSheet" class="panel sheet">
+  <h2><span id="locTitle">Location is off</span> <button class="ghost" data-close>Close</button></h2>
+  <p>The map needs your location to start routes from where you are and to search nearby. It is only used on this device.</p>
+  <ol id="locSteps"></ol>
+  <div class="chips"><button id="locRetry" class="go">Try again</button><button id="locPlan">Choose a start instead</button></div>
 </div>
 <div id="stops" class="panel sheet">
   <h2>Add a stop <button class="go" data-close>Done</button></h2>
@@ -954,7 +963,7 @@ function startFromHere() {
   status('Getting your location...');
   navigator.geolocation.getCurrentPosition(
     p => { status(''); showMe([p.coords.latitude, p.coords.longitude]); use(); },
-    () => status('Location is off. Allow location for this site, or use "Plan a route" to choose a start.'),
+    e => { status('Location is off. Allow location for this site, or choose a start with the route button.'); if (e.code === 1) { locState = 'blocked'; locHelp(); } },
     { enableHighAccuracy: true, timeout: 10000 });
 }
 function setPlanning(on, keep) {
@@ -1568,8 +1577,12 @@ function drawStrip() {
   const t = Date.now() < creditUntil && !nav ? '\u00a9 OpenStreetMap contributors' : !navigator.onLine ? 'Offline: maps and search need a connection'
     : nav ? (nav.info || 'Starting...')
     : routes.length && pts.to ? stripRoute
-    : hereName ? 'Near ' + hereName : here ? 'Location found' : 'Waiting for your location...';
-  $('strip').textContent = t; $('strip').classList.toggle('warn', !navigator.onLine);
+    : hereName ? 'Near ' + hereName : here ? 'Location found'
+    : locState === 'blocked' ? 'Location is blocked for this site'
+    : locState === 'unsupported' ? 'This browser has no location'
+    : locState === 'searching' ? 'Still looking for your location...'
+    : locState === 'pending' ? 'No location yet: tap the target button for help' : 'Waiting for your location...';
+  $('strip').textContent = t; $('strip').classList.toggle('warn', !navigator.onLine || (!here && !nav && (locState === 'blocked' || locState === 'unsupported' || locState === 'pending')));
 }
 async function nameHere() {   // the street or place you are at, refreshed after moving a few blocks
   if (!here || nav || routes.length) return;
@@ -1581,7 +1594,7 @@ async function nameHere() {   // the street or place you are at, refreshed after
 addEventListener('online', drawStrip); addEventListener('offline', drawStrip);
 
 // ---------- During a trip: all turns, options, stops ----------
-function closeSheets() { document.body.classList.remove('prefs', 'meet', 'steps', 'menu', 'stops'); }
+function closeSheets() { document.body.classList.remove('prefs', 'meet', 'steps', 'menu', 'stops', 'loc'); }
 function drawNavSteps() {
   const ol = $('navStepList'); ol.innerHTML = '';
   if (!nav) return;
@@ -1735,8 +1748,50 @@ $('toggleSteps').onclick = () => {
 };
 $('locate').onclick = () => {
   if (here) { map.easeTo({ center: [here[1], here[0]], zoom: Math.max(map.getZoom(), 15) }); return; }
-  status(navigator.geolocation ? 'Location is off. Allow location for this site.' : 'Location is not available in this browser.');
+  startWatch(true); locHelp();   // asking again from a tap is what lets some browsers show their permission prompt
 };
+
+// ---------- Location: one watch for the whole session, with a clear explanation when it does not work ----------
+let watchId = null, locState = 'waiting', locFirst = true, locHelped = false;
+function startWatch(precise) {
+  if (!navigator.geolocation) { locState = 'unsupported'; drawStrip(); return; }
+  if (watchId != null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(p => {
+    locState = 'ok'; document.body.classList.remove('loc');
+    onFix(p);
+    if (!locFirst) return; locFirst = false;
+    if (!pts.from && !pts.to) map.jumpTo({ center: [here[1], here[0]], zoom: 14 });
+    else if (pts.to && !pts.from) startFromHere();
+    drawStrip();
+  }, e => {
+    if (e.code === 1) {   // blocked, either in the browser prompt or in the phone's settings
+      locState = 'blocked'; drawStrip();
+      if (nav) $('navText').textContent = 'Location is off. Allow location for this site to navigate.';
+      if (!locHelped && !here) { locHelped = true; locHelp(); }
+    } else if (!here) {   // no fix: try again without asking for GPS precision, which works indoors and on computers
+      locState = 'searching'; drawStrip();
+      if (precise) startWatch(false);
+    }
+  }, { enableHighAccuracy: precise, maximumAge: precise ? 1000 : 60000, timeout: precise ? 15000 : 30000 });
+  // No answer at all usually means the permission prompt is waiting, was dismissed, or never appeared
+  clearTimeout(startWatch.t); startWatch.t = setTimeout(() => { if (!here && locState === 'waiting') { locState = 'pending'; drawStrip(); } }, 12000);
+}
+// If the permission is changed in settings while the page is open, pick it up without a reload
+try { navigator.permissions.query({ name: 'geolocation' }).then(st => { st.onchange = () => { if (st.state !== 'denied') startWatch(true); }; }); } catch (e) {}
+function locHelp() {
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua), android = /Android/.test(ua), inApp = /FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|GSA\/|LinkedInApp/.test(ua);
+  const steps = locState === 'unsupported' ? ['This browser does not offer location. Open the map in Safari or Chrome.']
+    : ios ? ['Settings > Privacy & Security > Location Services: turn it on.', 'In that same list, open Safari Websites (or your browser) and choose "While Using the App", with Precise Location on.', 'Back here, tap the "aA" or page-menu button in the address bar > Website Settings > Location > Allow.', 'Then tap Try again.']
+    : android ? ['Turn on Location in your phone\'s quick settings.', 'Tap the icon at the left of the address bar > Permissions > Location > Allow.', 'Then tap Try again.']
+    : ['Click the icon at the left of the address bar > Location > Allow.', 'On a Mac, also check System Settings > Privacy & Security > Location Services is on for your browser.', 'Then click Try again.'];
+  if (inApp) steps.unshift('You are inside another app\'s built-in browser, which often blocks location. Use its menu to open this page in Safari or Chrome.');
+  $('locTitle').textContent = locState === 'blocked' ? 'Location is blocked' : locState === 'unsupported' ? 'No location here' : 'No location yet';
+  if (locState !== 'blocked' && locState !== 'unsupported') steps.unshift('If your browser is asking to use your location, choose Allow.');
+  const ol = $('locSteps'); ol.innerHTML = ''; steps.forEach(t => ol.appendChild(el('li', '', t)));
+  closeSheets(); document.body.classList.add('loc');
+}
+$('locRetry').onclick = () => { closeSheets(); status('Checking your location...'); startWatch(true); setTimeout(() => { if (here) status(''); else if (locState === 'blocked') status('Location is still blocked for this site.'); }, 4000); };
+$('locPlan').onclick = () => { closeSheets(); setPlanning(true); };
 document.addEventListener('pointerdown', e => { if (!$('top').contains(e.target)) $('suggest').style.display = 'none'; });
 ['from', 'to', 'friend'].forEach(w => $(w).addEventListener('input', () => { $(w)._exact = null; }));
 addEventListener('resize', layout);
@@ -1755,15 +1810,7 @@ function writeHash() {
   const f = parse(h.get('from')), t = parse(h.get('to'));
   if (f) setPointFromLatLng('from', f[0], f[1]);
   if (t) setPointFromLatLng('to', t[0], t[1]);
-  if (!navigator.geolocation) return;
-  let first = true;   // one location watch for the whole session: the blue dot, nearby search and navigation all use it
-  navigator.geolocation.watchPosition(p => {
-    onFix(p);
-    if (!first) return; first = false;
-    if (!pts.from && !pts.to) map.jumpTo({ center: [here[1], here[0]], zoom: 14 });
-    else if (pts.to && !pts.from) startFromHere();
-  }, e => { if (nav && e.code === 1) $('navText').textContent = 'Location is off. Allow location for this site to navigate.'; },
-  { enableHighAccuracy: true, maximumAge: 1000 });
+  startWatch(true);
 })();
 </script>
 </body>
