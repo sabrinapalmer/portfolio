@@ -75,6 +75,8 @@
   #recenter { display:none; }
 
   @media (max-width:520px) { .leaflet-control-zoom { display:none; } }
+  .tiles { filter:saturate(.8) sepia(.14) hue-rotate(-10deg) brightness(1.04); }
+  @media (prefers-color-scheme: dark) { .tiles { filter:invert(1) hue-rotate(180deg) saturate(.6) brightness(.85) contrast(.9); } }
   .leaflet-container { font:inherit; background:var(--bg); }
   .leaflet-control-attribution { font-size:10px; border-radius:10px 0 0 0; }
   .leaflet-bar { border:0 !important; box-shadow:var(--shadow) !important; border-radius:16px !important; overflow:hidden; }
@@ -141,12 +143,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 // ---------- Services (all built on OpenStreetMap data; swap these URLs to self-host or change provider) ----------
-const DARK      = matchMedia('(prefers-color-scheme: dark)').matches;
-const TILE_URL  = 'https://{s}.basemaps.cartocdn.com/' + (DARK ? 'dark_all' : 'rastertiles/voyager') + '/{z}/{x}/{y}{r}.png';
+const TILE_URL  = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';   // standard OpenStreetMap tiles, no key needed
 const GEOCODER  = 'https://photon.komoot.io';               // Photon: OSM-based search
 const ROUTER    = 'https://valhalla1.openstreetmap.de';     // Valhalla: OSM-based routing (FOSSGIS public server)
 const ROUTER2   = 'https://routing.openstreetmap.de';       // OSRM: backup routing, used when Valhalla refuses or is down
-const TILE_URL2 = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';   // backup map tiles
 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
@@ -162,14 +162,10 @@ let muted = !!store('map.muted');
 const saved = store('map.view');
 const map = L.map('map', { zoomControl: false }).setView(saved ? saved.c : [39.5, -98.35], saved ? saved.z : 4);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-let tileFails = 0;
-const tiles = L.tileLayer(TILE_URL, { maxZoom: 20, subdomains: 'abcd', attribution: OSM_ATTR + ' &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(map);
-tiles.on('tileerror', () => {   // if the styled tiles are unavailable, fall back to the standard OpenStreetMap tiles
-  if (++tileFails !== 4) return;
-  tiles.remove();
-  L.tileLayer(TILE_URL2, { maxZoom: 19, attribution: OSM_ATTR }).addTo(map);
-});
+L.tileLayer(TILE_URL, {
+  maxZoom: 19, className: 'tiles',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
 map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
 map.on('dragstart', () => { if (nav) { nav.follow = false; $('recenter').style.display = 'block'; } });
 
