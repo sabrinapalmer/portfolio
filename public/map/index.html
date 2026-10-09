@@ -145,13 +145,15 @@ const DARK      = matchMedia('(prefers-color-scheme: dark)').matches;
 const TILE_URL  = 'https://{s}.basemaps.cartocdn.com/' + (DARK ? 'dark_all' : 'rastertiles/voyager') + '/{z}/{x}/{y}{r}.png';
 const GEOCODER  = 'https://photon.komoot.io';               // Photon: OSM-based search
 const ROUTER    = 'https://valhalla1.openstreetmap.de';     // Valhalla: OSM-based routing (FOSSGIS public server)
+const ROUTER2   = 'https://routing.openstreetmap.de';       // OSRM: backup routing, used when Valhalla refuses or is down
+const TILE_URL2 = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';   // backup map tiles
 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
 const pts = { from: null, to: null };      // {lat, lon, label}
 const markers = { from: null, to: null };
 let routes = [], lines = [], selected = 0, reqId = 0, mode = 'auto';
-let watchId = null, meDot = null, nav = null, wake = null;
+let watchId = null, meDot = null, nav = null, wake = null, useBackup = false;
 
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 let muted = !!store('map.muted');
@@ -160,10 +162,14 @@ let muted = !!store('map.muted');
 const saved = store('map.view');
 const map = L.map('map', { zoomControl: false }).setView(saved ? saved.c : [39.5, -98.35], saved ? saved.z : 4);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-L.tileLayer(TILE_URL, {
-  maxZoom: 20, subdomains: 'abcd',
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a> | Photon | Valhalla'
-}).addTo(map);
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+let tileFails = 0;
+const tiles = L.tileLayer(TILE_URL, { maxZoom: 20, subdomains: 'abcd', attribution: OSM_ATTR + ' &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(map);
+tiles.on('tileerror', () => {   // if the styled tiles are unavailable, fall back to the standard OpenStreetMap tiles
+  if (++tileFails !== 4) return;
+  tiles.remove();
+  L.tileLayer(TILE_URL2, { maxZoom: 19, attribution: OSM_ATTR }).addTo(map);
+});
 map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
 map.on('dragstart', () => { if (nav) { nav.follow = false; $('recenter').style.display = 'block'; } });
 
@@ -273,8 +279,8 @@ function setPoint(which, p) {
 }
 
 // ---------- Routing ----------
-async function route(quiet) {
-  if (!pts.from || !pts.to) return false;
+// Both routers return the same shape: [{ time (s), dist (mi), coords [[lat, lon]], steps [{ instruction, begin_shape_index, end_shape_index, length (mi), time (s) }] }]
+async function valhallaRoutes(quiet) {
   const body = {
     locations: [{ lat: pts.from.lat, lon: pts.from.lon }, { lat: pts.to.lat, lon: pts.to.lon }],
     costing: mode, alternates: quiet ? 0 : 2, units: 'miles', language: 'en-US'
@@ -283,24 +289,81 @@ async function route(quiet) {
     use_highways: $('noHwy').checked ? 0 : 1,
     use_tolls: $('noToll').checked ? 0 : 0.5
   } };
+  const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`);
+  const data = await r.json();
+  if (!data.trip) { const e = new Error(data.error || data.message || 'No route found.'); e.noRoute = r.status === 400; throw e; }
+  return [data.trip].concat((data.alternates || []).map(a => a.trip)).map(t => ({
+    time: t.summary.time, dist: t.summary.length,
+    coords: decodePolyline(t.legs[0].shape, 6),
+    steps: t.legs[0].maneuvers
+  }));
+}
+
+function osrmText(st) {   // OSRM gives maneuver codes, not sentences
+  const m = st.maneuver, mod = m.modifier || '', name = st.name || st.ref || '', onto = name ? ' onto ' + name : '', on = name ? ' on ' + name : '';
+  const turn = mod === 'uturn' ? 'Make a U-turn' : mod === 'straight' ? 'Continue straight' : 'Turn ' + mod;
+  switch (m.type) {
+    case 'depart': { const d = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round((m.bearing_after || 0) / 45) % 8]; return 'Head ' + d + on + '.'; }
+    case 'arrive': return 'You have arrived at your destination.';
+    case 'new name': return 'Continue' + onto + '.';
+    case 'continue': return mod === 'straight' || !mod ? 'Continue' + on + '.' : turn + ' to stay' + on + '.';
+    case 'merge': return 'Merge' + onto + '.';
+    case 'on ramp': return 'Take the ramp' + (mod.includes('left') ? ' on the left' : mod.includes('right') ? ' on the right' : '') + (st.destinations ? ' toward ' + st.destinations.split(',')[0] : onto) + '.';
+    case 'off ramp': return 'Take the exit' + (mod.includes('left') ? ' on the left' : mod.includes('right') ? ' on the right' : '') + (st.destinations ? ' toward ' + st.destinations.split(',')[0] : onto) + '.';
+    case 'fork': return 'Keep ' + (mod.includes('left') ? 'left' : mod.includes('right') ? 'right' : 'straight') + ' at the fork' + onto + '.';
+    case 'end of road': return turn + ' at the end of the road' + onto + '.';
+    case 'roundabout': case 'rotary': return 'At the roundabout, take exit ' + (m.exit || 1) + onto + '.';
+    case 'exit roundabout': case 'exit rotary': return 'Exit the roundabout' + onto + '.';
+    case 'roundabout turn': return 'At the roundabout, ' + turn.toLowerCase() + onto + '.';
+    default: return turn + onto + '.';
+  }
+}
+
+async function osrmRoutes(quiet) {
+  const profile = { auto: 'car', bicycle: 'bike', pedestrian: 'foot' }[mode];
+  const base = `${ROUTER2}/routed-${profile}/route/v1/driving/${pts.from.lon},${pts.from.lat};${pts.to.lon},${pts.to.lat}?overview=false&steps=true&geometries=polyline6&alternatives=${quiet ? 'false' : 3}`;
+  const ex = mode === 'auto' ? [$('noHwy').checked && 'motorway', $('noToll').checked && 'toll'].filter(Boolean).join(',') : '';
+  let data = await (await fetch(base + (ex ? '&exclude=' + ex : ''))).json(), note = '';
+  if (data.code !== 'Ok' && ex) {   // this server may not support avoiding highways or tolls
+    data = await (await fetch(base)).json();
+    note = 'Backup router in use: highway and toll avoidance not applied.';
+  }
+  if (data.code !== 'Ok') throw new Error(data.message || 'No route found.');
+  const out = data.routes.map(rt => {
+    const coords = [], steps = [];
+    rt.legs[0].steps.forEach(st => {
+      const g = decodePolyline(st.geometry, 6);
+      if (coords.length) g.shift();   // each step starts where the previous one ended
+      const begin = Math.max(0, coords.length - 1);
+      g.forEach(c => coords.push(c));
+      const text = osrmText(st);
+      steps.push({ instruction: text, verbal_pre_transition_instruction: text, begin_shape_index: begin, end_shape_index: coords.length - 1, length: st.distance / 1609.34, time: st.duration });
+    });
+    return { time: rt.duration, dist: rt.distance / 1609.34, coords, steps };
+  });
+  out.note = note;
+  return out;
+}
+
+async function route(quiet) {
+  if (!pts.from || !pts.to) return false;
   if (!quiet) status('Finding routes...');
   const id = ++reqId;
-  try {
-    const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`);
-    const data = await r.json();
-    if (id !== reqId) return false;
-    if (!data.trip) { status(data.error || 'No route found.'); return false; }
-    routes = [data.trip].concat((data.alternates || []).map(a => a.trip)).map(t => ({
-      time: t.summary.time, dist: t.summary.length,
-      coords: decodePolyline(t.legs[0].shape, 6),
-      steps: t.legs[0].maneuvers
-    }));
-    selected = 0;
-    draw(!quiet);
-    status('');
-    writeHash();
-    return true;
-  } catch (e) { status('Routing failed. The public routing server may be busy; try again.'); return false; }
+  let found = null, why = '';
+  if (!useBackup) {
+    try { found = await valhallaRoutes(quiet); }
+    catch (e) { why = e.message; if (e.noRoute) { if (id === reqId) status(why); return false; } }
+  }
+  if (!found) {
+    try { found = await osrmRoutes(quiet); useBackup = true; }
+    catch (e) { if (id === reqId) status(e.message && !/fetch/i.test(e.message) ? e.message : 'Routing is unavailable right now. Try again in a moment.'); return false; }
+  }
+  if (id !== reqId) return false;
+  routes = found; selected = 0;
+  draw(!quiet);
+  status(found.note || '');
+  writeHash();
+  return true;
 }
 
 function draw(fit) {
