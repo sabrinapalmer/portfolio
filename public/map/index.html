@@ -419,24 +419,47 @@ async function onMapClick(e) {
 }
 
 // ---------- Places: search, saved, recent ----------
-// The free search server throttles bursts with a 503 or 429, and blocks callers that keep pushing.
-// So back off for a few seconds before the one or two retries, never hammer it.
+// Two free search servers. Photon is fast and good for search-as-you-type but its public server has outages,
+// so when it fails we stop calling it for two minutes and use Nominatim, which is slower and must be called
+// no more than once a second.
 const pause = ms => new Promise(done => setTimeout(done, ms));
-async function photon(path, signal, retries) {
-  for (let attempt = 0; ; attempt++) {
-    let r;
-    try { r = await fetch(GEOCODER + path, { signal }); } catch (e) { if (e.name === 'AbortError') throw e; throw new Error('search unreachable'); }
-    if (r.ok) return r.json();
-    if (attempt >= (retries == null ? 1 : retries) || (r.status !== 503 && r.status !== 429)) throw new Error('search ' + r.status);
-    await pause(2500 * (attempt + 1));
-  }
+let photonDownUntil = 0, nomiLast = 0, nomiChain = Promise.resolve();
+async function photon(path, signal) {
+  if (Date.now() < photonDownUntil) throw new Error('search down');
+  let r;
+  try { r = await fetch(GEOCODER + path, { signal }); } catch (e) { if (e.name === 'AbortError') throw e; photonDownUntil = Date.now() + 120000; throw new Error('search unreachable'); }
+  if (r.ok) return r.json();
+  if (r.status >= 500 || r.status === 429) photonDownUntil = Date.now() + 120000;
+  throw new Error('search ' + r.status);
 }
+function nominatim(path, signal) {   // queued: one request at a time, at least 1.1 s apart
+  const run = async () => {
+    if (signal && signal.aborted) throw new Error('search aborted');
+    const wait = nomiLast + 1100 - Date.now(); if (wait > 0) await pause(wait);
+    nomiLast = Date.now();
+    const r = await fetch('https://nominatim.openstreetmap.org' + path, { signal });
+    if (!r.ok) throw new Error('search ' + r.status);
+    return r.json();
+  };
+  const p = nomiChain.then(run, run); nomiChain = p.catch(() => {}); return p;
+}
+function nomiPlace(x) {
+  const a = x.address || {}, road = [a.house_number, a.road].filter(Boolean).join(' '), main = x.name || road || (x.display_name || '').split(',')[0];
+  return { lat: +x.lat, lon: +x.lon, main, sub: [x.name && road, a.city || a.town || a.village || a.municipality, a.state].filter(Boolean).join(', '), kind: (x.type || '').replace(/_/g, ' '), street: a.road || main };
+}
+const boxAround = (c, dLat) => { const dLon = dLat / Math.cos(c[0] * Math.PI / 180); return [c[1] - dLon, c[0] + dLat, c[1] + dLon, c[0] - dLat].map(n => n.toFixed(4)).join(','); };
 async function reverseName(lat, lon) {
   try {
     const f = (await photon(`/reverse?lat=${lat}&lon=${lon}&lang=en`)).features[0];
     if (!f) return null;
     const { main, sub } = labelOf(f.properties);
     return { main, label: sub ? main + ', ' + sub : main, street: f.properties.street || main };
+  } catch (e) {}
+  try {
+    const x = await nominatim(`/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=${lat}&lon=${lon}`);
+    if (!x || x.error) return null;
+    const pl = nomiPlace(x);
+    return { main: pl.main, label: pl.sub ? pl.main + ', ' + pl.sub : pl.main, street: pl.street };
   } catch (e) { return null; }
 }
 
@@ -495,12 +518,8 @@ function censusLookup(q) {
 }
 async function nominatimLookup(q, ref, signal) {
   try {
-    const box = [ref[1] - 1.5, ref[0] + 1.5, ref[1] + 1.5, ref[0] - 1.5].map(n => n.toFixed(3)).join(',');
-    const d = await (await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=3&viewbox=${box}&q=${encodeURIComponent(q)}`, { signal })).json();
-    return d.filter(x => x.address && x.address.house_number).map(x => {
-      const a = x.address;
-      return { lat: +x.lat, lon: +x.lon, main: a.house_number + ' ' + (a.road || ''), sub: [a.city || a.town || a.village || a.municipality, a.state, a.postcode].filter(Boolean).join(', ') };
-    });
+    const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=3&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, signal);
+    return d.filter(x => x.address && x.address.house_number).map(nomiPlace);
   } catch (e) { return []; }
 }
 
@@ -515,12 +534,17 @@ async function search(which, q, now) {
   const ctl = searchCtl = new AbortController();
   const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
-  const get = url => photon(url, ctl.signal, 0).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
+  const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q);
-  let near, far, exact = [], pending = isAddress ? 3 : 2;
+  let near, far, exact = [], pending = isAddress ? 3 : 2, backup = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   function paint() {
     if (id !== searchId) return;
+    if (near === null && far === null && !backup) {   // main search server is down: ask the backup once
+      backup = true; pending++;
+      nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
+        .then(d => { far = d.map(nomiPlace); }, () => {}).then(() => { pending--; paint(); });
+    }
     const items = [];
     const add = arr => (arr || []).forEach(p => { if (!items.some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)) items.push(p); });
     add(exact); add((near || []).slice().sort((x, y) => dist(x) - dist(y))); add(far);
@@ -654,20 +678,19 @@ async function findMeet() {
     // 3. Places of the chosen kind around that point
     const mid = at(share), km = Math.min(5, Math.max(0.8, span * 0.08 / 1000));
     const tags = MEET_TAGS[meet.kind].map(t => '&osm_tag=' + t).join('');
-    const WORD = { coffee: 'coffee', food: 'restaurant', drinks: 'bar', park: 'park', any: 'cafe' };
+    const WORD = { coffee: 'cafe', food: 'restaurant', drinks: 'bar', park: 'park', any: 'cafe' };
     const around = async r => {
-      let d;
-      try { d = await photon(`/reverse?lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&radius=${r.toFixed(1)}&limit=20&lang=en${tags}`, null, 2); }
-      catch (e) {   // nearby lookup refused: fall back to a keyword search boxed around the same point
-        await pause(1500);
-        const dy = r / 111, dx = dy / Math.cos(mid[0] * Math.PI / 180);
-        d = await photon(`/api/?q=${WORD[meet.kind]}&limit=20&lang=en&lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&bbox=${(mid[1] - dx).toFixed(4)},${(mid[0] - dy).toFixed(4)},${(mid[1] + dx).toFixed(4)},${(mid[0] + dy).toFixed(4)}${tags}`, null, 1);
+      try {
+        const d = await photon(`/reverse?lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&radius=${r.toFixed(1)}&limit=20&lang=en${tags}`);
+        return (d.features || []).filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub }));
+      } catch (e) {   // main search server down: category search on the backup, boxed around the same point
+        const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=20&bounded=1&viewbox=${boxAround(mid, r / 111)}&q=${WORD[meet.kind]}`);
+        return d.filter(x => x.name).map(x => { const pl = nomiPlace(x); return { lat: pl.lat, lon: pl.lon, name: pl.main, kind: pl.kind, sub: pl.sub }; });
       }
-      return (d.features || []).filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub }));
     };
     msg('Looking for places near the middle...');
     let spots = await around(km);
-    if (spots.length < 3) { await pause(1500); const wider = await around(km * 3).catch(() => []); if (wider.length > spots.length) spots = wider; }
+    if (spots.length < 3) { await pause(1200); const wider = await around(km * 3).catch(() => []); if (wider.length > spots.length) spots = wider; }
     if (!spots.length) { msg('No places like that near the middle. Try "Anything".'); return; }
     // 4. Real travel times for each of you to every place, then rank by fairness
     msg('Checking travel times for you both...');
