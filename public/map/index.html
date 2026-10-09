@@ -738,12 +738,14 @@ async function findMeet() {
     if (!spots.length && kind !== 'any') { kind = 'any'; spots = await placesNear(mid, km * 8, kind).catch(() => []); }
     if (!spots.length) { msg('No named places found near the middle of your trip. Try "Anything", or a different pair of locations.'); return; }
 
+    spots = spots.filter((p, i) => !spots.slice(0, i).some(o => o.name === p.name && meters([o.lat, o.lon], [p.lat, p.lon]) < 150));   // same place listed twice
     // 4. Check each place with each person's real trip, and rank by how even and how short the two trips are
     step = 'times'; msg('Checking each place for you both...');
     const mine = await travelTimes(me, spots, meet.myMode), theirs = await travelTimes(fr, spots, meet.friendMode);
     spots.forEach((p, i) => { p.a = mine[i]; p.b = theirs[i]; p.score = Math.max(p.a, p.b) + 0.5 * Math.abs(p.a - p.b); });
     spots = spots.sort((x, y) => x.score - y.score).slice(0, 6);
-    msg((kind !== meet.kind ? 'Nothing of that kind nearby, so here is anything close. ' : '') + 'Fairest first' + (meet.rough ? ' (some times are estimates)' : '') + '. Tap a place for directions.');
+    const uneven = Math.abs(spots[0].a - spots[0].b) > 0.4 * Math.max(spots[0].a, spots[0].b) && Math.max(spots[0].a, spots[0].b) > 900;
+    msg((kind !== meet.kind ? 'Nothing of that kind nearby, so here is anything close. ' : '') + (uneven ? 'There is nothing near the even point between you, so these are the closest options. ' : '') + 'Fairest first' + (meet.rough ? ' (some times are estimates)' : '') + '. Tap a place for directions.');
     spots.forEach(p => {
       const li = el('li'), text = el('span', '', p.name), share2 = el('button', '', 'Share');
       text.append(el('small', '', [p.kind, p.sub].filter(Boolean).join(' - ')), el('small', 'times', 'You ' + fmtTime(p.a) + ' ' + NAME[meet.myMode] + ' - Friend ' + fmtTime(p.b) + ' ' + NAME[meet.friendMode]));
