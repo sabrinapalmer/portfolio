@@ -25,7 +25,7 @@
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { height:100%; margin:0; overflow:hidden; font:500 15px/1.35 var(--font, system-ui), system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
-  #map { position:fixed; inset:0; background:var(--bg); }
+  #map { position:fixed; inset:0; background:var(--bg); -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; display:block; }
   .panel { position:fixed; left:10px; right:10px; z-index:10; max-width:440px; background:var(--card); border-radius:24px; box-shadow:var(--shadow); }
   @media (min-width:700px) { .panel { left:16px; right:auto; width:400px; } }
@@ -294,15 +294,25 @@
     <button data-pref="noToll">Tolls</button>
     <button data-pref="noFerry">Ferries</button>
     <button data-pref="noUnpaved">Unpaved roads</button>
+    <button data-pref="noAlleys">Alleys and service roads</button>
+    <button data-pref="noBorders">Border crossings</button>
   </div>
   <h3>Route style</h3>
   <div class="chips">
     <button data-pref="simple">Fewer turns, even if a bit slower</button>
+    <button data-pref="shortest">Shortest distance, not fastest</button>
+    <button data-pref="relaxed">Relaxed pace, under 55 mph</button>
+    <button data-pref="showAll">Show every alternative</button>
+  </div>
+  <h3>Biking</h3>
+  <div class="chips">
+    <button data-pref="bikeFlat">Avoid hills</button>
+    <button data-pref="bikePaths">Prefer bike paths and quiet streets</button>
   </div>
   <h3>Voice directions</h3>
   <div class="chips" data-set="voice"><button data-v="all">Everything</button><button data-v="turns">Turns only</button><button data-v="off">Off</button></div>
   <h3>Spots I avoid</h3>
-  <p>Tap the map and choose "Avoid this spot", even during a trip. Tap a marker on the map to stop avoiding it.</p>
+  <p>Press and hold a spot on the map and choose "Avoid this spot", even during a trip. Tap its marker to stop avoiding it.</p>
   <ul class="list" id="avoidList"></ul>
   <h3>My rig (used in Rig mode)</h3>
   <p>For a camper, trailer or tall vehicle. Routes avoid roads and bridges posted below these limits.</p>
@@ -612,10 +622,11 @@ mapReady = (async () => {
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
   map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
   map.on('dragstart', () => { if (nav) { nav.follow = false; document.body.classList.add('free'); } });
-  map.on('click', onMapClick);
+  map.on('click', onMapClick); watchHolds();
   await new Promise(r => map.once('load', r));
   addRouteLayers();
   drawAvoid();
+  setTimeout(tipOnce, 7500);
 })();
 
 function marker(cls, ll, opts) { return new maplibregl.Marker(Object.assign({ element: el('div', cls) }, opts)).setLngLat([ll[1], ll[0]]).addTo(map); }
@@ -636,31 +647,45 @@ function drawAvoid() {
     const m = marker('avoid', [a.lat, a.lon]);
     m.getElement().onclick = e => {   // tap an avoided spot to stop avoiding it
       e.stopPropagation();
-      const div = el('div', 'pop'), pop = new maplibregl.Popup({ closeButton: false, maxWidth: '220px', offset: 14 }), b = el('button', 'go', 'Stop avoiding this spot');
-      b.onclick = () => { pop.remove(); avoid = avoid.filter(x => x !== a); store('map.avoid', avoid); drawAvoid(); drawLists(); if (nav) renav('Rerouting.'); else route(); };
-      div.append(el('small', '', a.label), b); pop.setLngLat([a.lon, a.lat]).setDOMContent(div).addTo(map);
+      const div = el('div', 'pop'), b = el('button', 'go', 'Stop avoiding this spot');
+      b.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } avoid = avoid.filter(x => x !== a); store('map.avoid', avoid); drawAvoid(); drawLists(); if (nav) renav('Rerouting.'); else route(); };
+      div.append(el('small', '', a.label), b); openPop([a.lon, a.lat], div, { offset: 14 });
     };
     return m;
   }) : [];
 }
 
-async function onMapClick(e) {
-  if (nav) {   // during a trip the only map action is to avoid a spot
-    const div = el('div', 'pop'), pop = new maplibregl.Popup({ closeButton: false, maxWidth: '220px' }), b = el('button', 'go', 'Avoid this spot');
-    b.onclick = () => { pop.remove(); addAvoid(e.lngLat.lat, e.lngLat.lng); };
-    div.appendChild(b); pop.setLngLat(e.lngLat).setDOMContent(div).addTo(map);
-    setTimeout(() => pop.remove(), 6000);
-    return;
-  }
+// A tap only picks another route line or closes the little menu. Pressing and holding a spot opens the menu.
+let mapPop = null, mapPopAt = 0;
+function openPop(lngLat, div, opts) {
+  if (mapPop) mapPop.remove();
+  mapPop = new maplibregl.Popup(Object.assign({ closeButton: false, closeOnClick: false, maxWidth: '220px' }, opts)).setLngLat(lngLat).setDOMContent(div).addTo(map);
+  mapPopAt = Date.now();
+  return mapPop;
+}
+function onMapClick(e) {
+  if (mapPop && Date.now() - mapPopAt > 500) { mapPop.remove(); mapPop = null; return; }
+  if (nav || !routes.length) return;
   const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['alt'] });
-  if (hit.length) { selected = hit[0].properties.i; draw(false); return; }
-  const lat = e.lngLat.lat, lon = e.lngLat.lng, div = el('div', 'pop'), pop = new maplibregl.Popup({ closeButton: false, maxWidth: '220px' });
-  [['Go here', 'go', () => setPointFromLatLng('to', lat, lon)],
-   ['Start here', '', () => setPointFromLatLng('from', lat, lon)],
-   ['Avoid this spot', '', () => addAvoid(lat, lon)]].forEach(([txt, cls, fn]) => {
-    const b = el('button', cls, txt); b.onclick = () => { pop.remove(); fn(); }; div.appendChild(b);
-  });
-  pop.setLngLat(e.lngLat).setDOMContent(div).addTo(map);
+  if (hit.length) { selected = hit[0].properties.i; draw(false); }
+}
+function mapMenu(lngLat) {
+  const lat = lngLat.lat, lon = lngLat.lng, div = el('div', 'pop');
+  const items = nav ? [['Avoid this spot', 'go', () => addAvoid(lat, lon)]]   // during a trip the only map action is to avoid a spot
+    : [['Go here', 'go', () => setPointFromLatLng('to', lat, lon)], ['Start here', '', () => setPointFromLatLng('from', lat, lon)], ['Avoid this spot', '', () => addAvoid(lat, lon)]];
+  items.forEach(([txt, cls, fn]) => { const b = el('button', cls, txt); b.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } fn(); }; div.appendChild(b); });
+  openPop(lngLat, div);
+}
+function watchHolds() {
+  let timer = null, at = null;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  const begin = e => { cancel(); at = e.point; const ll = e.lngLat; timer = setTimeout(() => { timer = null; try { if (navigator.vibrate) navigator.vibrate(12); } catch (x) {} mapMenu(ll); }, 520); };
+  const moved = e => { if (timer && (Math.abs(e.point.x - at.x) > 8 || Math.abs(e.point.y - at.y) > 8)) cancel(); };
+  map.on('touchstart', e => { if (e.originalEvent.touches.length === 1) begin(e); else cancel(); });
+  map.on('touchmove', moved); map.on('mousemove', moved);
+  map.on('mousedown', e => { if (e.originalEvent.button === 0) begin(e); });
+  ['touchend', 'touchcancel', 'mouseup', 'dragstart', 'zoomstart'].forEach(ev => map.on(ev, cancel));
+  map.on('contextmenu', e => { e.preventDefault(); cancel(); mapMenu(e.lngLat); });   // right-click on a computer
 }
 
 // ---------- Places: search, saved, recent ----------
@@ -709,6 +734,17 @@ async function reverseName(lat, lon) {
 }
 
 const listFor = which => $(which === 'friend' ? 'meetSuggest' : 'suggest');
+const NEARBY = 80000;   // metres: what counts as "near you" for ordering results and for Enter
+let lastSearch = null, enterFor = null;
+function settleEnter() {   // called when Enter was pressed and whenever results change
+  const s = lastSearch;
+  if (!enterFor || !s || s.q !== enterFor.q || s.which !== enterFor.which) return;
+  if (s.pending) return;   // wait for every source so the nearest match wins
+  const say = s.which === 'friend' ? t => { $('meetMsg').textContent = t; } : status, hit = s.items.find(p => p.d <= NEARBY);
+  enterFor = null;
+  if (hit) { listFor(s.which).style.display = 'none'; $(s.which).blur(); const pt = { lat: hit.lat, lon: hit.lon, label: hit.sub ? hit.main + ', ' + hit.sub : hit.main, name: hit.main }; if (s.which === 'friend') meetPick(pt); else setPoint(s.which, pt); }
+  else if (s.items.length) say('Nothing nearby matches "' + s.q + '". These are further away; tap one if it is right.');
+}
 let debounce;
 ['from', 'to', 'friend'].forEach(which => {
   const input = $(which);
@@ -719,12 +755,14 @@ let debounce;
     if (!q) { shortcuts(which); return; }
     debounce = setTimeout(() => search(which, q), 150);
   });
-  input.addEventListener('keydown', e => {   // Enter looks up the exact address straight away, or takes the top result
+  input.addEventListener('keydown', e => {   // Enter takes the best nearby match; it never jumps to a far-away place
     if (e.key !== 'Enter') return;
-    const q = input.value.trim(), top = listFor(which).querySelector('li:not(.head)');
+    const q = input.value.trim();
+    if (!q) return;
     if (which === 'to' && categoryOf(q)) { input.blur(); return; }   // a kind of place: leave the options showing
-    if (/^\d+\s+\S/.test(q) && !input._exact) { input._exact = q; clearTimeout(debounce); search(which, q, true); }
-    else if (top) top.click();
+    clearTimeout(debounce);
+    enterFor = { which, q };
+    if (!lastSearch || lastSearch.q !== q || lastSearch.which !== which) search(which, q, true); else settleEnter();
   });
 });
 
@@ -817,10 +855,10 @@ function censusLookup(q) {
     document.head.appendChild(tag);
   });
 }
-async function nominatimLookup(q, ref, signal) {
+async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
   try {
-    const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=3&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, signal);
-    return d.filter(x => x.address && x.address.house_number).map(nomiPlace);
+    const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=5&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, signal);
+    return d.map(nomiPlace);
   } catch (e) { return []; }
 }
 
@@ -836,30 +874,38 @@ async function search(which, q, now) {
   const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
-  const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null;
-  let near, far, exact = [], pending = 2 + (isAddress ? 1 : 0) + (cat ? 1 : 0), backup = false;
+  const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
+  let near, far, exact = [], pending = 2 + (cat || deeper ? 1 : 0), backup = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   function paint() {
     if (id !== searchId) return;
-    if (near === null && far === null && !backup) {   // main search server is down: ask the backup once
+    if (near === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
       backup = true; pending++;
       nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
         .then(d => { far = d.map(nomiPlace); }, () => {}).then(() => { pending--; paint(); });
     }
-    const items = [];
+    // Order: exact matches near you, other places near you (nearest first), then anything further away
+    const items = [], byDist = (x, y) => dist(x) - dist(y);
     const add = arr => (arr || []).forEach(p => { if (!items.some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)) items.push(p); });
-    add(exact); add((near || []).slice().sort((x, y) => dist(x) - dist(y))); add(far);
+    const exactNear = exact.filter(p => dist(p) <= NEARBY).sort(byDist);
+    add(exactNear); add((near || []).slice().sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); add(far);
+    items.forEach(p => { p.d = dist(p); });
+    const shown = items.slice(0, cat ? 14 : 10);
+    lastSearch = { which, q, items: shown, pending };
     list.innerHTML = '';
-    if (cat && exact.length) list.appendChild(el('li', 'head', cat.title + ' near you'));
-    items.slice(0, cat ? 14 : 10).forEach((p, i) => {
-      if (cat && exact.length && i === exact.length && i < items.length) list.appendChild(el('li', 'head', 'Other matches'));
-      list.appendChild(suggestion(which, p.main, p.sub, fmtDist(dist(p) / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }));
+    if (cat && exactNear.length) list.appendChild(el('li', 'head', cat.title + ' near you'));
+    let split = false;
+    shown.forEach((p, i) => {
+      if (cat && exactNear.length && i === exactNear.length) list.appendChild(el('li', 'head', 'Other matches'));
+      if (!cat && !split && p.d > NEARBY && i > 0) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
+      list.appendChild(suggestion(which, p.main, p.sub, fmtDist(p.d / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }));
     });
-    list.style.display = items.length ? 'block' : 'none';
+    list.style.display = shown.length ? 'block' : 'none';
     const say = which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
-    if (items.length) say(pending ? 'Looking further...' : '');
-    else if (!pending) say(near === null && far === null ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
+    if (shown.length) say(pending ? 'Looking further...' : '');
+    else if (!pending) say(near === null && far === null && !exact.length ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
     else say('Searching...');
+    settleEnter();
   }
   get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
@@ -871,10 +917,11 @@ async function search(which, q, now) {
       pending--; paint(); showPois(exact);
     });
   }, now ? 0 : 350);
-  if (isAddress) setTimeout(() => {   // only once typing pauses, to go easy on these free services
-    if (id !== searchId) { return; }
-    Promise.all([censusLookup(q), nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { exact = a.concat(b); pending--; paint(); });
-  }, now ? 0 : 650);
+  // Addresses and street names: asked as you type, once typing pauses for a moment (these free servers are rate limited)
+  if (deeper) setTimeout(() => {
+    if (id !== searchId) return;
+    Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
+  }, now ? 0 : 450);
 }
 
 async function setPointFromLatLng(which, lat, lon) {
@@ -951,6 +998,10 @@ async function addAvoid(lat, lon) {
   else if (!(await route())) status('Got it. Routes will avoid that spot. Tap its marker to undo.');
   const n = await reverseName(lat, lon);
   if (n) { a.label = n.street; store('map.avoid', avoid); drawLists(); }
+}
+function tipOnce() {   // one-time hint, since press-and-hold is not discoverable
+  if (store('map.tipHold')) return;
+  store('map.tipHold', 1); status('Tip: press and hold the map to go to a spot or avoid it.');
 }
 
 // ---------- Meet in the middle ----------
@@ -1092,21 +1143,28 @@ async function findMeet() {
 // Both routers are normalised to: { time (s), dist (mi), coords [[lat, lon]], steps [{ instruction, say, begin, end, length (mi), time (s), angle, kind, left, highway, toll, rough, ferry }] }
 const V_ANGLE = { 9: 45, 10: 90, 11: 135, 12: 180, 13: -180, 14: -135, 15: -90, 16: -45, 18: 30, 19: -30, 20: 30, 21: -30, 23: 30, 24: -30, 37: 20, 38: -20 };
 async function valhallaRoutes(quiet) {
-  const veh = { use_highways: prefs.noHwy ? 0 : 1, use_tolls: prefs.noToll ? 0 : 0.5, use_ferry: prefs.noFerry ? 0 : 0.5, exclude_unpaved: !!prefs.noUnpaved, maneuver_penalty: prefs.simple ? 40 : 5 };
+  const veh = { use_highways: prefs.noHwy ? 0 : 1, use_tolls: prefs.noToll ? 0 : 0.5, use_ferry: prefs.noFerry ? 0 : 0.5, exclude_unpaved: !!prefs.noUnpaved, maneuver_penalty: prefs.simple ? 40 : 5,
+    service_penalty: prefs.noAlleys ? 120 : 15, country_crossing_penalty: prefs.noBorders ? 3600 : 0, shortest: !!prefs.shortest };
+  if (prefs.relaxed) veh.top_speed = 89;   // km/h
   const costing = { auto: 'auto', rig: 'truck', bicycle: 'bicycle', pedestrian: 'pedestrian' }[prefs.mode];
   const opt = costing === 'auto' ? veh
     : costing === 'truck' ? Object.assign(veh, { height: +(prefs.rig.h * 0.3048).toFixed(2), length: +(prefs.rig.l * 0.3048).toFixed(2), weight: +(prefs.rig.w * 0.907).toFixed(2) })
-    : costing === 'bicycle' ? { use_ferry: veh.use_ferry, avoid_bad_surfaces: prefs.noUnpaved ? 1 : 0.25 }
-    : { use_ferry: veh.use_ferry };
+    : costing === 'bicycle' ? { use_ferry: veh.use_ferry, avoid_bad_surfaces: prefs.noUnpaved ? 1 : 0.25, use_hills: prefs.bikeFlat ? 0.05 : 0.5, use_roads: prefs.bikePaths ? 0.1 : 0.5, shortest: !!prefs.shortest }
+    : { use_ferry: veh.use_ferry, shortest: !!prefs.shortest };
   const body = {
     locations: [pts.from, pts.via, pts.to].filter(Boolean).map(q => ({ lat: q.lat, lon: q.lon })),
     costing, costing_options: { [costing]: opt }, alternates: quiet || pts.via ? 0 : 2, units: 'miles', language: 'en-US'
   };
+  // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
+  // misses the spot whenever the tap lands a few metres off the road or on the other side of a divided road.
   const skip = avoid.concat(tempAvoid ? [tempAvoid] : []);
-  if (skip.length) body.exclude_locations = skip.map(a => ({ lat: a.lat, lon: a.lon }));
-  const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`);
-  const data = await r.json();
+  const circle = a => { const out = []; for (let k = 0; k <= 10; k++) { const t = k / 10 * 2 * Math.PI; out.push([a.lon + 60 / 111320 / Math.cos(a.lat * Math.PI / 180) * Math.cos(t), a.lat + 60 / 111320 * Math.sin(t)]); } return out; };
+  if (skip.length) body.exclude_polygons = skip.map(circle);
+  const ask = async () => { const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()]; };
+  let [r, data] = await ask(), stuck = false;
+  if (!data.trip && skip.length) { delete body.exclude_polygons; [r, data] = await ask(); stuck = !!data.trip; }   // no way around: route through and say so
   if (!data.trip) { const e = new Error(data.error || data.message || 'No route found.'); e.noRoute = r.status === 400; throw e; }
+  valhallaRoutes.stuck = stuck;
   return [data.trip].concat((data.alternates || []).map(a => a.trip)).map(t => {
     let coords = []; const steps = [];
     t.legs.forEach((leg, li) => {   // a trip with a stop comes back as two legs; join them into one line and one list of steps
@@ -1165,7 +1223,7 @@ async function osrmRoutes(quiet) {
     }));
     return { time: rt.duration, dist: rt.distance / 1609.34, coords, steps, basic: true };
   });
-  const lost = [prefs.mode === 'rig' && 'rig limits', (prefs.noHwy || prefs.noToll || prefs.noFerry || prefs.noUnpaved) && 'your avoid settings', avoid.length && 'avoided spots'].filter(Boolean);
+  const lost = [prefs.mode === 'rig' && 'rig limits', (prefs.noHwy || prefs.noToll || prefs.noFerry || prefs.noUnpaved || prefs.noAlleys || prefs.noBorders || prefs.shortest || prefs.relaxed) && 'your route settings', avoid.length && 'avoided spots'].filter(Boolean);
   out.note = lost.length ? 'Backup router in use: ' + lost.join(', ') + ' not applied.' : '';
   return out;
 }
@@ -1185,15 +1243,39 @@ async function route(quiet) {
   }
   if (id !== reqId) return false;
   found.forEach(describe);
+  if (!prefs.showAll) { const note = found.note; found = sensible(found); found.note = note; }
   routes = found; selected = 0;
   await mapReady;
   draw(!quiet);
-  status(found.note || '');
+  status(found.note || (valhallaRoutes.stuck && !useBackup ? 'There is no way around a spot you avoid, so this route goes through it.' : ''));
   writeHash();
   return true;
 }
 
 // ---------- Explaining routes ----------
+// Drop alternatives that are not worth offering: much slower than the quickest, or nearly the same roads as one already kept.
+function cellsOf(rt) {   // the route as a set of roughly 150 m grid squares, sampled every 120 m
+  if (rt._cells) return rt._cells;
+  const set = new Set(), c = rt.coords, key = q => Math.round(q[0] / 0.0014) + ',' + Math.round(q[1] / 0.0019);
+  for (let i = 1; i < c.length; i++) { const n = Math.max(1, Math.ceil(meters(c[i - 1], c[i]) / 120)); for (let k = 0; k <= n; k++) set.add(key([c[i - 1][0] + (c[i][0] - c[i - 1][0]) * k / n, c[i - 1][1] + (c[i][1] - c[i - 1][1]) * k / n])); }
+  return (rt._cells = set);
+}
+function sameRoads(a, b) {   // share of a's squares that b also passes through, counting neighbouring squares so a road on a grid edge still matches
+  const A = cellsOf(a), B = cellsOf(b); let n = 0;
+  A.forEach(k => { const [i, j] = k.split(',').map(Number); for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (B.has((i + di) + ',' + (j + dj))) { n++; return; } });
+  return n / Math.max(1, A.size);
+}
+function sensible(list) {
+  if (list.length < 2) return list;
+  const quickest = Math.min.apply(null, list.map(r => r.time)), tolled = list.some(r => r.time === quickest && r.toll), kept = [list[0]];
+  list.slice(1).forEach(r => {
+    const slower = r.time - quickest;
+    const worth = slower <= Math.max(90, quickest * 0.2) || (tolled && !r.toll && slower <= quickest * 0.5);   // within 20%, or a toll-free way within 50%
+    if (worth && !kept.some(k => sameRoads(r, k) > 0.8)) kept.push(r);
+  });
+  return kept;
+}
+
 function describe(rt) {
   rt.turns = rt.steps.filter(s => s.kind === 'turn' || s.kind === 'roundabout').length;
   const sum = k => rt.steps.reduce((n, s) => n + (s[k] ? s.length : 0), 0);
@@ -1244,7 +1326,8 @@ function draw(fit) {
   if (rt.ferry) flags.appendChild(el('span', 'warn', 'Uses a ferry'));
   if (rt.unpaved >= 0.1) flags.appendChild(el('span', 'warn', fmtDist(rt.unpaved) + ' unpaved'));
   if (prefs.mode === 'rig' && !rt.basic) flags.appendChild(el('span', '', 'Checked for ' + prefs.rig.h + ' ft tall, ' + prefs.rig.w + ' tons'));
-  if (avoid.length && !rt.basic) flags.appendChild(el('span', '', 'Skips ' + avoid.length + (avoid.length === 1 ? ' avoided spot' : ' avoided spots')));
+  if (avoid.length && !rt.basic && !valhallaRoutes.stuck) flags.appendChild(el('span', '', 'Skips ' + avoid.length + (avoid.length === 1 ? ' avoided spot' : ' avoided spots')));
+  if (avoid.length && (rt.basic || valhallaRoutes.stuck)) flags.appendChild(el('span', 'warn', 'Avoided spots not applied'));
   if (flags.children.length) w.appendChild(flags);
 
   const ol = $('steps'); ol.innerHTML = '';
