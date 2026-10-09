@@ -6,7 +6,8 @@
 <meta name="theme-color" id="themeColor" content="#fffaf6">
 <title>Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
 <style>
   :root {
@@ -20,12 +21,12 @@
     --start:#5fd6b2; --me:#77b8ff; --warn:#f5b860; --shadow:0 8px 26px rgba(0,0,0,.5);
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html, body { height:100%; margin:0; overflow:hidden; font:600 15px/1.35 Nunito, ui-rounded, "SF Pro Rounded", system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  html, body { height:100%; margin:0; overflow:hidden; font:500 15.5px/1.35 Fredoka, ui-rounded, "SF Pro Rounded", system-ui, sans-serif; letter-spacing:.01em; color:var(--fg); background:var(--bg); }
   #map { position:fixed; inset:0; background:var(--bg); }
   svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; display:block; }
   .panel { position:fixed; left:10px; right:10px; z-index:10; max-width:440px; background:var(--card); border-radius:24px; box-shadow:var(--shadow); }
   @media (min-width:700px) { .panel { left:16px; right:auto; width:400px; } }
-  button { font:inherit; font-weight:800; padding:10px 14px; border:0; border-radius:999px; background:var(--soft); color:var(--fg); cursor:pointer; white-space:nowrap; transition:transform .1s; }
+  button { font:inherit; font-weight:600; padding:10px 14px; border:0; border-radius:999px; background:var(--soft); color:var(--fg); cursor:pointer; white-space:nowrap; transition:transform .1s; }
   button:active { transform:scale(.94); }
   button.go { background:var(--accent); color:var(--accent-ink); }
   button.ghost { background:transparent; color:var(--muted); }
@@ -72,17 +73,17 @@
   /* Route sheet */
   #bottom { bottom:calc(10px + env(safe-area-inset-bottom)); display:none; overflow:hidden; }
   #destHead { display:flex; align-items:center; gap:6px; padding:12px 8px 0 16px; }
-  #destName { flex:1; min-width:0; font-size:17px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #destName { flex:1; min-width:0; font-size:17px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #save.on { color:var(--accent); } #save.on svg { fill:currentColor; }
   #routeRow { display:flex; gap:8px; padding:10px; align-items:stretch; }
   #routes { flex:1; min-width:0; display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }
   #routes::-webkit-scrollbar { display:none; }
   #routes button { flex:0 0 auto; text-align:left; border-radius:18px; padding:9px 14px; background:var(--bg); border:2px solid var(--line); }
   #routes button.on { background:var(--soft); border-color:var(--accent); }
-  #routes b { display:block; font-size:19px; font-weight:900; }
+  #routes b { display:block; font-size:19px; font-weight:700; }
   #routes span { display:block; font-size:12px; color:var(--muted); font-weight:700; }
   #routes span.tag { color:var(--accent); }
-  #go { flex:0 0 auto; padding:10px 24px; font-size:18px; font-weight:900; border-radius:18px; }
+  #go { flex:0 0 auto; padding:10px 24px; font-size:18px; font-weight:700; border-radius:18px; }
   #why { padding:0 16px 10px; font-size:14px; }
   #why .flags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   #why .flags span { font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--bg); border:1.5px solid var(--line); color:var(--muted); }
@@ -93,7 +94,7 @@
   #timeEdit { padding:6px 10px; font-size:13px; color:var(--accent); }
   #timing .trow { display:none; padding-right:6px; }
   #timing.open .trow { display:flex; }
-  #when b { display:block; font-size:17px; font-weight:900; }
+  #when b { display:block; font-size:17px; font-weight:700; }
   #when span { font-size:13px; color:var(--muted); }
   #when .late { color:var(--warn); }
   .trow { display:flex; align-items:center; gap:8px; margin-top:8px; }
@@ -116,7 +117,7 @@
   .sheet { z-index:20; top:auto; bottom:0; left:0; right:0; max-width:none; width:auto; border-radius:28px 28px 0 0; padding:8px 16px calc(18px + env(safe-area-inset-bottom)); max-height:86vh; overflow:auto; display:none; }
   @media (min-width:700px) { .panel.sheet { left:50%; right:auto; width:460px; transform:translateX(-50%); bottom:16px; border-radius:28px; } }
   body.prefs #scrim, body.prefs #prefs, body.meet #scrim, body.meet #meet { display:block; }
-  .sheet h2 { font-size:20px; font-weight:900; margin:10px 0 2px; display:flex; justify-content:space-between; align-items:center; }
+  .sheet h2 { font-size:20px; font-weight:700; margin:10px 0 2px; display:flex; justify-content:space-between; align-items:center; }
   .sheet h3 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:18px 0 8px; }
   .sheet p { margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:500; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -132,11 +133,12 @@
   #themes { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
   #themes button { padding:6px 6px 8px; border-radius:16px; background:var(--bg); border:2px solid var(--line); color:var(--muted); font-size:13px; white-space:normal; }
   #themes button.on { border-color:var(--accent); color:var(--fg); }
+  #themes button::after { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--dot); margin-left:6px; vertical-align:middle; }
   #themes i { display:block; height:44px; border-radius:11px; margin-bottom:6px; position:relative; overflow:hidden; }
   #themes i::before, #themes i::after { content:""; position:absolute; }
   #themes i::before { left:-10%; right:-10%; top:55%; height:7px; background:var(--r1); transform:rotate(-12deg); box-shadow:0 0 0 1.5px var(--rc); }
   #themes i::after { top:-10%; bottom:-10%; left:62%; width:4px; background:var(--r2); transform:rotate(18deg); box-shadow:0 0 0 1px var(--rc); }
-  .sheet a { color:var(--accent); font-weight:800; text-decoration:none; }
+  .sheet a { color:var(--accent); font-weight:600; text-decoration:none; }
 
   #meet .who { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
   #meet .who b { flex:1; font-size:14px; }
@@ -150,7 +152,7 @@
   #meetResults { list-style:none; margin:10px 0 0; padding:0; }
   #meetResults li { background:var(--bg); margin-bottom:6px; cursor:default; }
   #meetResults li > span { flex:1; min-width:0; cursor:pointer; }
-  #meetResults .times { color:var(--accent); font-weight:800; font-size:13px; }
+  #meetResults .times { color:var(--accent); font-weight:600; font-size:13px; }
   #meetResults button { padding:7px 12px; font-size:13px; }
   #meetGo { width:100%; margin-top:14px; padding:13px; font-size:17px; }
   #meetMsg { font-size:13px; color:var(--muted); margin-top:10px; }
@@ -160,18 +162,18 @@
   body.nav #top, body.nav #bottom, body.nav #fabs { display:none !important; }
   body.nav #nav { display:flex; gap:14px; align-items:center; top:calc(10px + env(safe-area-inset-top)); padding:14px 18px; background:var(--accent); color:var(--accent-ink); }
   #navArrow svg { width:54px; height:54px; stroke-width:3.4; }
-  #navDist { font-size:30px; font-weight:900; line-height:1.05; }
-  #navText { font-size:18px; font-weight:800; }
+  #navDist { font-size:30px; font-weight:700; line-height:1.05; }
+  #navText { font-size:18px; font-weight:600; }
   #navThen { font-size:13px; opacity:.88; margin-top:4px; }
   body.nav #navbar { display:flex; bottom:calc(10px + env(safe-area-inset-bottom)); padding:10px 10px 10px 18px; align-items:center; gap:8px; }
   #navEta { flex:1; }
-  #navEta b { display:block; font-size:23px; font-weight:900; }
+  #navEta b { display:block; font-size:23px; font-weight:700; }
   #navEta span { font-size:13px; color:var(--muted); }
   body.nav.free #recenter { display:block; position:fixed; z-index:10; left:50%; transform:translateX(-50%); bottom:calc(96px + env(safe-area-inset-bottom)); box-shadow:var(--shadow); }
   #arrived { z-index:20; top:50%; transform:translateY(-50%); padding:26px 20px; text-align:center; overflow:hidden; }
   @media (min-width:700px) { #arrived { left:50%; transform:translate(-50%,-50%); } }
   body.arrived #arrived { display:block; }
-  #arrived b { display:block; font-size:28px; font-weight:900; }
+  #arrived b { display:block; font-size:28px; font-weight:700; }
   #arrived p { margin:6px 0 16px; color:var(--muted); }
   #arrived i { position:absolute; top:-12px; width:9px; height:14px; border-radius:3px; animation:fall 2.4s linear infinite; }
   @keyframes fall { to { transform:translateY(260px) rotate(540deg); opacity:.2; } }
@@ -379,18 +381,41 @@ const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9
 // ---------- Map ----------
 // Colour themes. Each recolours the same base map: land, water, parks, buildings, the road hierarchy and labels.
 const THEMES = {
-  blossom:  { label: 'Blossom', ui: 'light', bg: '#fdf3e7', land2: '#f6e8d8', water: '#a5d6f0', park: '#bfe6b8', building: '#ecdaca', bldLine: '#d9c2ae', casing: '#cdb5a4',
+  blossom:  { label: 'Blossom', ui: 'light', accent: '#ff6f91', soft: '#ffe9ee', bg: '#fdf3e7', land2: '#f6e8d8', water: '#a5d6f0', park: '#bfe6b8', building: '#ecdaca', bldLine: '#d9c2ae', casing: '#cdb5a4',
               minor: '#ffffff', mid: '#fff0b8', major: '#ffd27a', motorway: '#ffa97d', path: '#e0c9b8', rail: '#c7b6ab', text: '#33262f', textRoad: '#5a4652', halo: '#fffaf4', boundary: '#c59db0' },
-  garden:   { label: 'Garden', ui: 'light', bg: '#f3f7ea', land2: '#e8efdc', water: '#97cfe6', park: '#aedd9e', building: '#e1e2d2', bldLine: '#c8cab6', casing: '#b3bba1',
+  sorbet:   { label: 'Sorbet', ui: 'light', accent: '#ff5c8a', soft: '#ffe1ea', bg: '#fff0f3', land2: '#ffe4ea', water: '#b3e4f6', park: '#c4efd0', building: '#ffd6e0', bldLine: '#f5bccd', casing: '#e7a3bc',
+              minor: '#ffffff', mid: '#ffe9a8', major: '#ffc978', motorway: '#ff9aa2', path: '#f3c6d6', rail: '#dcb3c6', text: '#4a2a3c', textRoad: '#6a4459', halo: '#fff7f9', boundary: '#d68fb0' },
+  lavender: { label: 'Lavender', ui: 'light', accent: '#8b6cf0', soft: '#ebe4ff', bg: '#f4f0ff', land2: '#ebe5fb', water: '#a6d2f7', park: '#c2e8cd', building: '#e0d6f7', bldLine: '#cbbcee', casing: '#b6a4e0',
+              minor: '#ffffff', mid: '#fde7b3', major: '#f9c98a', motorway: '#f29bc0', path: '#d4c8ee', rail: '#bfb3da', text: '#2e2550', textRoad: '#4b4070', halo: '#faf8ff', boundary: '#a58fd6' },
+  candy:    { label: 'Candy', ui: 'light', accent: '#c044e8', soft: '#f4dcff', bg: '#fdf6ff', land2: '#f6e9ff', water: '#7fd8ff', park: '#a4efbd', building: '#f1d8ff', bldLine: '#e0bbf5', casing: '#c796e6',
+              minor: '#ffffff', mid: '#fff07a', major: '#ffc24a', motorway: '#ff5fa2', path: '#e6c9f5', rail: '#cfb0e0', text: '#3a1a55', textRoad: '#56307a', halo: '#ffffff', boundary: '#b77fe0' },
+  sunset:   { label: 'Sunset', ui: 'light', accent: '#ff6b4a', soft: '#ffe3d6', bg: '#fff1e3', land2: '#ffe6d0', water: '#9bc7ee', park: '#cde2a4', building: '#ffd7b9', bldLine: '#f2bf9b', casing: '#e2a585',
+              minor: '#fffaf5', mid: '#ffe08f', major: '#ffb86b', motorway: '#ff7f6e', path: '#f0c7a8', rail: '#d6ad94', text: '#4a2618', textRoad: '#6b3d2a', halo: '#fff8f0', boundary: '#d98b6a' },
+  ocean:    { label: 'Ocean', ui: 'light', accent: '#12a5a0', soft: '#d9f3f0', bg: '#eef8f7', land2: '#e0f1ef', water: '#7bc9e0', park: '#a6dfbe', building: '#d3e9e5', bldLine: '#b6d5d1', casing: '#98c1bd',
+              minor: '#ffffff', mid: '#fff0b5', major: '#ffd27a', motorway: '#ff9f7a', path: '#c6dedb', rail: '#a9c7c4', text: '#123a40', textRoad: '#2c5258', halo: '#f7fcfb', boundary: '#6fb1b0' },
+  garden:   { label: 'Garden', ui: 'light', accent: '#3fa66b', soft: '#e0f3e6', bg: '#f3f7ea', land2: '#e8efdc', water: '#97cfe6', park: '#aedd9e', building: '#e1e2d2', bldLine: '#c8cab6', casing: '#b3bba1',
               minor: '#ffffff', mid: '#fdeeb0', major: '#f8cb6a', motorway: '#f19a66', path: '#d3d8c0', rail: '#b9bfa9', text: '#1f2e24', textRoad: '#3d4a3c', halo: '#fbfdf6', boundary: '#8fa787' },
-  classic:  { label: 'Classic', ui: 'light', stock: true, bg: '#f8f4f0', water: '#a0c8f0', park: '#d8e8c8', minor: '#ffffff', major: '#ffeeaa', casing: '#cfcdca' },
-  contrast: { label: 'High contrast', ui: 'light', bg: '#ffffff', land2: '#f1f1f1', water: '#78c1ee', park: '#a3da94', building: '#dcdcdc', bldLine: '#b5b5b5', casing: '#5f5f5f',
+  retro:    { label: 'Retro', ui: 'light', accent: '#d9603b', soft: '#f6dfd0', bg: '#f5ecd7', land2: '#ecdfc3', water: '#8cbab9', park: '#b5c888', building: '#e2d1b0', bldLine: '#ccb78f', casing: '#b69c74',
+              minor: '#fffaf0', mid: '#f2d384', major: '#e9b44c', motorway: '#d9603b', path: '#d6c4a0', rail: '#b5a383', text: '#3b2f20', textRoad: '#574733', halo: '#fbf5e6', boundary: '#a88c5f' },
+  ink:      { label: 'Paper and ink', ui: 'light', accent: '#2f4b7c', soft: '#e3e9f3', bg: '#faf7f0', land2: '#f1ede2', water: '#c5d6e3', park: '#dde6cc', building: '#e6e0d2', bldLine: '#cfc7b5', casing: '#8c8576',
+              minor: '#ffffff', mid: '#ffffff', major: '#f2e3b8', motorway: '#e9c98a', path: '#cfc8b8', rail: '#a39c8d', text: '#1d1b17', textRoad: '#3a362e', halo: '#fdfbf6', boundary: '#9b9383' },
+  classic:  { label: 'Classic', ui: 'light', stock: true, accent: '#2f7de1', soft: '#e3eefc', bg: '#f8f4f0', water: '#a0c8f0', park: '#d8e8c8', minor: '#ffffff', major: '#ffeeaa', casing: '#cfcdca' },
+  contrast: { label: 'High contrast', ui: 'light', accent: '#d81b60', soft: '#ffe0eb', bg: '#ffffff', land2: '#f1f1f1', water: '#78c1ee', park: '#a3da94', building: '#dcdcdc', bldLine: '#b5b5b5', casing: '#5f5f5f',
               minor: '#ffffff', mid: '#ffe270', major: '#ffc02e', motorway: '#ff8433', path: '#b0b0b0', rail: '#8c8c8c', text: '#000000', textRoad: '#151515', halo: '#ffffff', boundary: '#6f6f6f' },
-  night:    { label: 'Night', ui: 'dark', bg: '#2b2842', land2: '#322f4c', water: '#1a4a73', park: '#2e5c45', building: '#3d3959', bldLine: '#4d486e', casing: '#191727',
-              minor: '#6a6491', mid: '#8a83b5', major: '#b3abdf', motorway: '#ffae70', path: '#4f4a70', rail: '#5c577f', text: '#f6f0ff', textRoad: '#ddd5f2', halo: '#191727', boundary: '#9486b8' }
+  night:    { label: 'Night', ui: 'dark', accent: '#ff8fab', ink: '#2a1820', soft: '#44313c', bg: '#2b2842', land2: '#322f4c', water: '#1a4a73', park: '#2e5c45', building: '#3d3959', bldLine: '#4d486e', casing: '#191727',
+              minor: '#6a6491', mid: '#8a83b5', major: '#b3abdf', motorway: '#ffae70', path: '#4f4a70', rail: '#5c577f', text: '#f6f0ff', textRoad: '#ddd5f2', halo: '#191727', boundary: '#9486b8' },
+  neon:     { label: 'Neon', ui: 'dark', accent: '#ff5fd2', ink: '#2a0a26', soft: '#3d2148', bg: '#14122b', land2: '#1a1838', water: '#0b3d6b', park: '#124a3a', building: '#221f47', bldLine: '#2f2b5e', casing: '#0a0918',
+              minor: '#4b4690', mid: '#6f66d6', major: '#ff5fd2', motorway: '#29e0ff', path: '#35316a', rail: '#45408a', text: '#ffffff', textRoad: '#d9d4ff', halo: '#0a0918', boundary: '#8a7cff' },
+  forest:   { label: 'Forest night', ui: 'dark', accent: '#8fd18a', ink: '#14301a', soft: '#2f4435', bg: '#1f2a24', land2: '#24312a', water: '#1c4a5a', park: '#2f5a3a', building: '#2c3a32', bldLine: '#3a4b41', casing: '#121a15',
+              minor: '#5a6e60', mid: '#7d927f', major: '#b5c9a8', motorway: '#f2b866', path: '#3d4d43', rail: '#4a5c50', text: '#f1f7ec', textRoad: '#d3dfcd', halo: '#121a15', boundary: '#86a08a' }
 };
 const theme = () => THEMES[prefs.theme] || THEMES.blossom;
-document.documentElement.dataset.ui = theme().ui;
+function applyUi() {   // buttons and highlights take the theme's accent colour
+  const t = theme(), root = document.documentElement;
+  root.dataset.ui = t.ui;
+  root.style.setProperty('--accent', t.accent); root.style.setProperty('--soft', t.soft); root.style.setProperty('--accent-ink', t.ink || '#ffffff');
+}
+applyUi();
 function restyle(style, t) {
   const grow = (v, k) => typeof v === 'number' ? v * k
     : v && v.stops ? Object.assign({}, v, { stops: v.stops.map(([z, s]) => [z, typeof s === 'number' ? s * k : s]) })
@@ -442,7 +467,7 @@ function addRouteLayers() {
 }
 async function setTheme(name) {
   prefs.theme = name; savePrefs(); drawThemes();
-  document.documentElement.dataset.ui = theme().ui;
+  applyUi();
   $('themeColor').content = theme().ui === 'dark' ? '#221d27' : '#fffaf6';
   await mapReady;
   let style; try { style = await themedStyle(); } catch (e) { return; }
@@ -454,7 +479,8 @@ function drawThemes() {
   const box = $('themes'); box.innerHTML = '';
   Object.keys(THEMES).forEach(k => {
     const t = THEMES[k], b = el('button', k === prefs.theme ? 'on' : ''), sw = el('i');
-    sw.style.cssText = `background:linear-gradient(135deg, ${t.bg} 0 58%, ${t.park} 58% 78%, ${t.water} 78%);--r1:${t.major};--r2:${t.minor};--rc:${t.casing}`;
+    sw.style.cssText = `background:linear-gradient(135deg, ${t.bg} 0 58%, ${t.park} 58% 78%, ${t.water} 78%);--r1:${t.major};--r2:${t.motorway || t.minor};--rc:${t.casing}`;
+    b.style.setProperty('--dot', t.accent);
     b.append(sw, document.createTextNode(t.label)); b.onclick = () => setTheme(k); box.appendChild(b);
   });
 }
