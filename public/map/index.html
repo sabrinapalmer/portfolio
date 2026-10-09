@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#fffaf6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#221d27" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" id="themeColor" content="#fffaf6">
 <title>Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap">
@@ -15,12 +14,10 @@
     --accent:#ff6f91; --accent-ink:#ffffff; --soft:#ffe9ee; --alt:#b9aec2;
     --start:#3fc49c; --me:#4c9dff; --warn:#f2a341; --shadow:0 8px 26px rgba(120,70,90,.2);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#221d27; --card:#2c2532; --fg:#f7eef5; --muted:#b0a1b4; --line:#40364a;
-      --accent:#ff8fab; --accent-ink:#2a1820; --soft:#44313c; --alt:#8b7f93;
-      --start:#5fd6b2; --me:#77b8ff; --warn:#f5b860; --shadow:0 8px 26px rgba(0,0,0,.5);
-    }
+  :root[data-ui="dark"] {
+    --bg:#221d27; --card:#2c2532; --fg:#f7eef5; --muted:#b0a1b4; --line:#40364a;
+    --accent:#ff8fab; --accent-ink:#2a1820; --soft:#44313c; --alt:#8b7f93;
+    --start:#5fd6b2; --me:#77b8ff; --warn:#f5b860; --shadow:0 8px 26px rgba(0,0,0,.5);
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { height:100%; margin:0; overflow:hidden; font:600 15px/1.35 Nunito, ui-rounded, "SF Pro Rounded", system-ui, sans-serif; color:var(--fg); background:var(--bg); }
@@ -113,6 +110,13 @@
   .list li { display:flex; align-items:center; gap:8px; padding:6px 4px 6px 12px; border-radius:14px; background:var(--bg); margin-bottom:6px; }
   .list li span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .list li button { padding:6px 12px; font-size:13px; }
+  #themes { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
+  #themes button { padding:6px 6px 8px; border-radius:16px; background:var(--bg); border:2px solid var(--line); color:var(--muted); font-size:13px; white-space:normal; }
+  #themes button.on { border-color:var(--accent); color:var(--fg); }
+  #themes i { display:block; height:44px; border-radius:11px; margin-bottom:6px; position:relative; overflow:hidden; }
+  #themes i::before, #themes i::after { content:""; position:absolute; }
+  #themes i::before { left:-10%; right:-10%; top:55%; height:7px; background:var(--r1); transform:rotate(-12deg); box-shadow:0 0 0 1.5px var(--rc); }
+  #themes i::after { top:-10%; bottom:-10%; left:62%; width:4px; background:var(--r2); transform:rotate(18deg); box-shadow:0 0 0 1px var(--rc); }
   .sheet a { color:var(--accent); font-weight:800; text-decoration:none; }
 
   #meet .who { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
@@ -218,6 +222,8 @@
 <div id="prefs" class="panel sheet">
   <h2>Preferences <button id="closePrefs" class="go">Done</button></h2>
   <p>These stick. Every route follows them until you change them.</p>
+  <h3>Map colours</h3>
+  <div id="themes"></div>
   <h3>Always avoid</h3>
   <div class="chips">
     <button data-pref="noHwy">Highways</button>
@@ -280,8 +286,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script>
 // ---------- Services (all built on OpenStreetMap data, none need a key; swap these to self-host) ----------
-const DARK     = matchMedia('(prefers-color-scheme: dark)').matches;
-const STYLE    = 'https://tiles.openfreemap.org/styles/' + (DARK ? 'dark' : 'bright');   // OpenFreeMap vector tiles
+const STYLE    = 'https://tiles.openfreemap.org/styles/bright';   // OpenFreeMap vector tiles; recoloured per theme below
 const GEOCODER = 'https://photon.komoot.io';             // Photon search
 const ROUTER   = 'https://valhalla1.openstreetmap.de';   // Valhalla routing (FOSSGIS)
 const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing (FOSSGIS)
@@ -289,7 +294,7 @@ const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, muted: false, rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, muted: false, theme: 'blossom', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null }, markers = { from: null, to: null };
 let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBackup = false;
@@ -344,33 +349,91 @@ const ICON_SOUND = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9
 const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9l5 6M22 9l-5 6"/></svg>';
 
 // ---------- Map ----------
-// Recolour the stock style: warmer land, softer water and parks, larger and crisper labels
-function restyle(style) {
+// Colour themes. Each recolours the same base map: land, water, parks, buildings, the road hierarchy and labels.
+const THEMES = {
+  blossom:  { label: 'Blossom', ui: 'light', bg: '#fdf3e7', land2: '#f6e8d8', water: '#a5d6f0', park: '#bfe6b8', building: '#ecdaca', bldLine: '#d9c2ae', casing: '#cdb5a4',
+              minor: '#ffffff', mid: '#fff0b8', major: '#ffd27a', motorway: '#ffa97d', path: '#e0c9b8', rail: '#c7b6ab', text: '#33262f', textRoad: '#5a4652', halo: '#fffaf4', boundary: '#c59db0' },
+  garden:   { label: 'Garden', ui: 'light', bg: '#f3f7ea', land2: '#e8efdc', water: '#97cfe6', park: '#aedd9e', building: '#e1e2d2', bldLine: '#c8cab6', casing: '#b3bba1',
+              minor: '#ffffff', mid: '#fdeeb0', major: '#f8cb6a', motorway: '#f19a66', path: '#d3d8c0', rail: '#b9bfa9', text: '#1f2e24', textRoad: '#3d4a3c', halo: '#fbfdf6', boundary: '#8fa787' },
+  classic:  { label: 'Classic', ui: 'light', stock: true, bg: '#f8f4f0', water: '#a0c8f0', park: '#d8e8c8', minor: '#ffffff', major: '#ffeeaa', casing: '#cfcdca' },
+  contrast: { label: 'High contrast', ui: 'light', bg: '#ffffff', land2: '#f1f1f1', water: '#78c1ee', park: '#a3da94', building: '#dcdcdc', bldLine: '#b5b5b5', casing: '#5f5f5f',
+              minor: '#ffffff', mid: '#ffe270', major: '#ffc02e', motorway: '#ff8433', path: '#b0b0b0', rail: '#8c8c8c', text: '#000000', textRoad: '#151515', halo: '#ffffff', boundary: '#6f6f6f' },
+  night:    { label: 'Night', ui: 'dark', bg: '#2b2842', land2: '#322f4c', water: '#1a4a73', park: '#2e5c45', building: '#3d3959', bldLine: '#4d486e', casing: '#191727',
+              minor: '#6a6491', mid: '#8a83b5', major: '#b3abdf', motorway: '#ffae70', path: '#4f4a70', rail: '#5c577f', text: '#f6f0ff', textRoad: '#ddd5f2', halo: '#191727', boundary: '#9486b8' }
+};
+const theme = () => THEMES[prefs.theme] || THEMES.blossom;
+document.documentElement.dataset.ui = theme().ui;
+function restyle(style, t) {
   const grow = (v, k) => typeof v === 'number' ? v * k
     : v && v.stops ? Object.assign({}, v, { stops: v.stops.map(([z, s]) => [z, typeof s === 'number' ? s * k : s]) })
     : Array.isArray(v) && (v[0] === 'interpolate' || v[0] === 'step') ? v.map((x, i) => typeof x === 'number' && i % 2 === 0 && i >= (v[0] === 'step' ? 2 : 4) ? x * k : x)
     : v;
   for (const l of style.layers) {
-    const sl = l['source-layer'], p = l.paint || (l.paint = {});
-    if (l.type === 'background') p['background-color'] = DARK ? '#262029' : '#fdf5ec';
-    else if (l.type === 'fill' && sl === 'water') p['fill-color'] = DARK ? '#16293f' : '#b5e0f3';
-    else if (l.type === 'line' && sl === 'waterway') p['line-color'] = DARK ? '#16293f' : '#b5e0f3';
-    else if (l.type === 'fill' && (sl === 'park' || (sl === 'landcover' && /wood|grass/.test(l.id)))) { p['fill-color'] = DARK ? '#22382d' : '#cdeec8'; delete p['fill-pattern']; }
-    else if (l.type === 'fill' && sl === 'landuse' && /residential|suburb/.test(l.id) && !DARK) p['fill-color'] = '#faefe3';
-    else if (l.type === 'fill' && sl === 'building' && !DARK) { p['fill-color'] = '#f1e2d4'; p['fill-outline-color'] = '#e6d3c2'; }
+    const sl = l['source-layer'], id = l.id, p = l.paint || (l.paint = {});
+    if (!t.stock) {
+      if (l.type === 'background') p['background-color'] = t.bg;
+      else if (l.type === 'raster') l.layout = Object.assign(l.layout || {}, { visibility: 'none' });   // shaded relief only suits the stock colours
+      else if (l.type === 'fill') {
+        delete p['fill-pattern'];
+        if (sl === 'water') p['fill-color'] = t.water;
+        else if (sl === 'park' || (sl === 'landcover' && /wood|grass|park/.test(id))) p['fill-color'] = t.park;
+        else if (sl === 'building') { p['fill-color'] = t.building; p['fill-outline-color'] = t.bldLine; }
+        else if (sl === 'transportation' || sl === 'aeroway') p['fill-color'] = t.minor;
+        else p['fill-color'] = t.land2;
+      } else if (l.type === 'fill-extrusion') p['fill-extrusion-color'] = t.building;
+      else if (l.type === 'line') {
+        p['line-color'] = sl === 'waterway' ? t.water
+          : sl !== 'transportation' && sl !== 'aeroway' ? t.boundary
+          : /casing/.test(id) ? t.casing : /rail|transit/.test(id) ? t.rail : /motorway/.test(id) ? t.motorway : /trunk|primary/.test(id) ? t.major
+          : /secondary|tertiary/.test(id) ? t.mid : /path|pedestrian|track|ferry|pier/.test(id) ? t.path : t.minor;
+      }
+    }
     if (l.type === 'symbol' && l.layout && l.layout['text-field']) {
       if (l.layout['text-size'] != null) l.layout['text-size'] = grow(l.layout['text-size'], 1.18);
-      p['text-halo-color'] = DARK ? '#262029' : '#fffaf4';
-      p['text-halo-width'] = 1.6;
-      if (DARK) p['text-color'] = sl === 'transportation_name' ? '#cfc3d3' : '#efe6f0';
+      if (!t.stock && !l.layout['icon-text-fit'] && !/shield/.test(id)) {   // road-number shields keep their own colours
+        p['text-color'] = sl === 'transportation_name' ? t.textRoad : t.text;
+        p['text-halo-color'] = t.halo; p['text-halo-width'] = 1.8; delete p['text-halo-blur'];
+      }
     }
   }
   return style;
 }
+let rawStyle = null;
+async function themedStyle() {
+  if (!rawStyle) rawStyle = await (await fetch(STYLE)).text();
+  return restyle(JSON.parse(rawStyle), theme());
+}
+function addRouteLayers() {
+  if (map.getSource('routes')) return;
+  const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
+  map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
+  line('alt', false, { 'line-color': css('--alt'), 'line-width': 6, 'line-opacity': .9 });
+  line('casing', true, { 'line-color': '#ffffff', 'line-width': 11 });
+  line('sel', true, { 'line-color': css('--accent'), 'line-width': 6.5 });
+}
+async function setTheme(name) {
+  prefs.theme = name; savePrefs(); drawThemes();
+  document.documentElement.dataset.ui = theme().ui;
+  $('themeColor').content = theme().ui === 'dark' ? '#221d27' : '#fffaf6';
+  await mapReady;
+  let style; try { style = await themedStyle(); } catch (e) { return; }
+  const again = () => { if (!map.isStyleLoaded()) { setTimeout(again, 80); return; } addRouteLayers(); if (routes.length) draw(false); };   // a new style drops the route layers
+  map.setStyle(style, { diff: false });
+  setTimeout(again, 80);
+}
+function drawThemes() {
+  const box = $('themes'); box.innerHTML = '';
+  Object.keys(THEMES).forEach(k => {
+    const t = THEMES[k], b = el('button', k === prefs.theme ? 'on' : ''), sw = el('i');
+    sw.style.cssText = `background:linear-gradient(135deg, ${t.bg} 0 58%, ${t.park} 58% 78%, ${t.water} 78%);--r1:${t.major};--r2:${t.minor};--rc:${t.casing}`;
+    b.append(sw, document.createTextNode(t.label)); b.onclick = () => setTheme(k); box.appendChild(b);
+  });
+}
 
 mapReady = (async () => {
   let style = STYLE;
-  try { style = restyle(await (await fetch(STYLE)).json()); } catch (e) {}
+  try { style = await themedStyle(); } catch (e) {}
   const v = store('map.view');
   map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false });
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
@@ -379,12 +442,7 @@ mapReady = (async () => {
   map.on('dragstart', () => { if (nav) { nav.follow = false; document.body.classList.add('free'); } });
   map.on('click', onMapClick);
   await new Promise(r => map.once('load', r));
-  const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
-  map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
-  line('alt', false, { 'line-color': css('--alt'), 'line-width': 6, 'line-opacity': .85 });
-  line('casing', true, { 'line-color': '#ffffff', 'line-width': 11 });
-  line('sel', true, { 'line-color': css('--accent'), 'line-width': 6.5 });
+  addRouteLayers();
   drawAvoid();
 })();
 
@@ -1079,7 +1137,7 @@ document.querySelectorAll('#mode button').forEach(b => b.onclick = () => { prefs
 document.querySelectorAll('[data-pref]').forEach(b => b.onclick = () => { prefs[b.dataset.pref] = !prefs[b.dataset.pref]; savePrefs(); syncPrefs(); if (b.dataset.pref !== 'muted') route(); });
 [['rigH', 'h'], ['rigL', 'l'], ['rigW', 'w']].forEach(([id, k]) => $(id).onchange = () => { const v = parseFloat($(id).value); if (v > 0) { prefs.rig[k] = v; savePrefs(); if (prefs.mode === 'rig') route(); } });
 $('openPrefs').onclick = () => {
-  drawLists();
+  drawLists(); drawThemes();
   if (map) { const c = map.getCenter(); $('report').href = `https://www.openstreetmap.org/note/new#map=${Math.max(15, Math.round(map.getZoom()))}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`; }
   document.body.classList.add('prefs');
 };
