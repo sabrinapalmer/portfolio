@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root { --bg:#fff; --fg:#111; --muted:#666; --line:#ddd; --accent:#1a5fd0; --alt:#8a8f98; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17181a; --fg:#eee; --muted:#9a9ea6; --line:#33363b; --accent:#5b9bff; --alt:#777c85; }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; font:15px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
+  #map { position:absolute; inset:0; z-index:0; }
+  .panel { position:absolute; left:8px; right:8px; z-index:1000; background:var(--bg); border:1px solid var(--line); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.18); }
+  #top { top:8px; padding:8px; max-width:460px; }
+  #bottom { bottom:8px; max-width:460px; display:none; }
+  .row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+  .row:last-child { margin-bottom:0; }
+  input[type=text], select { flex:1; min-width:0; font:inherit; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); }
+  button { font:inherit; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); cursor:pointer; white-space:nowrap; }
+  button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  label.chk { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--muted); white-space:nowrap; }
+  #suggest { list-style:none; margin:0 0 6px; padding:0; border:1px solid var(--line); border-radius:8px; display:none; max-height:40vh; overflow:auto; }
+  #suggest li { padding:9px 10px; border-bottom:1px solid var(--line); cursor:pointer; }
+  #suggest li:last-child { border-bottom:0; }
+  #suggest small { display:block; color:var(--muted); }
+  #status { font-size:13px; color:var(--muted); min-height:1em; }
+  #routes { display:flex; gap:6px; padding:8px; overflow-x:auto; border-bottom:1px solid var(--line); }
+  #routes button { flex:0 0 auto; text-align:left; }
+  #routes button small { display:block; opacity:.8; }
+  #stepsHead { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; font-size:13px; color:var(--muted); }
+  #stepsHead button { padding:4px 8px; font-size:13px; }
+  #steps { list-style:none; margin:0; padding:0; max-height:32vh; overflow:auto; }
+  #steps li { padding:9px 10px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; cursor:pointer; }
+  #steps li span:last-child { color:var(--muted); white-space:nowrap; font-size:13px; }
+  .leaflet-control-attribution { font-size:10px; }
+  .pop button { display:block; width:100%; margin-top:4px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="top" class="panel">
+  <div class="row">
+    <input id="from" type="text" placeholder="From" autocomplete="off">
+    <button id="here" title="Use my current location">Here</button>
+  </div>
+  <div class="row">
+    <input id="to" type="text" placeholder="To" autocomplete="off">
+    <button id="swap" title="Swap start and destination">Swap</button>
+  </div>
+  <ul id="suggest"></ul>
+  <div class="row">
+    <select id="mode">
+      <option value="auto">Drive</option>
+      <option value="bicycle">Bike</option>
+      <option value="pedestrian">Walk</option>
+    </select>
+    <label class="chk"><input id="noHwy" type="checkbox">No highways</label>
+    <label class="chk"><input id="noToll" type="checkbox">No tolls</label>
+  </div>
+  <div class="row">
+    <span id="status" style="flex:1"></span>
+    <button id="follow">Follow me</button>
+    <button id="clear">Clear</button>
+  </div>
+</div>
+
+<div id="bottom" class="panel">
+  <div id="routes"></div>
+  <div id="stepsHead"><span id="stepsTitle">Directions</span><button id="toggleSteps">Hide</button></div>
+  <ol id="steps"></ol>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---------- Services (all open data; swap these URLs to self-host or change provider) ----------
+const TILE_URL  = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const GEOCODER  = 'https://photon.komoot.io';               // Photon: OSM-based search
+const ROUTER    = 'https://valhalla1.openstreetmap.de';     // Valhalla: OSM-based routing (FOSSGIS public server)
+
+// ---------- State ----------
+const $ = id => document.getElementById(id);
+const pts = { from: null, to: null };      // {lat, lon, label}
+const markers = { from: null, to: null };
+let routes = [], lines = [], selected = 0, activeField = null, reqId = 0;
+let watchId = null, meDot = null;
+
+function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
+
+// ---------- Map ----------
+const saved = store('map.view');
+const map = L.map('map', { zoomControl: false }).setView(saved ? saved.c : [39.5, -98.35], saved ? saved.z : 4);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+L.tileLayer(TILE_URL, {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Search: Photon | Routing: Valhalla'
+}).addTo(map);
+map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
+
+map.on('click', e => {
+  const div = document.createElement('div'); div.className = 'pop';
+  [['Directions from here', 'from'], ['Directions to here', 'to']].forEach(([txt, which]) => {
+    const b = document.createElement('button'); b.textContent = txt;
+    b.onclick = () => { map.closePopup(); setPointFromLatLng(which, e.latlng.lat, e.latlng.lng); };
+    div.appendChild(b);
+  });
+  L.popup().setLatLng(e.latlng).setContent(div).openOn(map);
+});
+
+// ---------- Helpers ----------
+function status(msg) { $('status').textContent = msg || ''; }
+function fmtDist(mi) { return mi < 0.1 ? Math.round(mi * 5280 / 10) * 10 + ' ft' : (mi < 10 ? mi.toFixed(1) : Math.round(mi)) + ' mi'; }
+function fmtTime(s) { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
+function labelOf(p) {
+  const main = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || p.city || 'Unnamed place';
+  const street = p.name && p.street ? [p.housenumber, p.street].filter(Boolean).join(' ') : null;
+  const sub = [street, p.city !== main ? p.city : null, p.state, p.country !== 'United States' ? p.country : null].filter(Boolean).join(', ');
+  return { main, sub };
+}
+function decodePolyline(str, precision) {
+  let i = 0, lat = 0, lng = 0; const out = [], f = Math.pow(10, precision || 6);
+  while (i < str.length) {
+    let b, shift = 0, result = 0;
+    do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    out.push([lat / f, lng / f]);
+  }
+  return out;
+}
+
+// ---------- Search ----------
+let debounce;
+['from', 'to'].forEach(which => {
+  const el = $(which);
+  el.addEventListener('focus', () => { activeField = which; el.select(); });
+  el.addEventListener('input', () => {
+    pts[which] = null;
+    clearTimeout(debounce);
+    debounce = setTimeout(() => search(which, el.value.trim()), 300);
+  });
+});
+
+async function search(which, q) {
+  const list = $('suggest');
+  if (q.length < 3) { list.style.display = 'none'; return; }
+  // Accept raw "lat, lon" input
+  const m = q.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);
+  if (m) { list.style.display = 'none'; setPoint(which, { lat: +m[1], lon: +m[3], label: q }); return; }
+  const c = map.getCenter(), id = ++reqId;
+  try {
+    const r = await fetch(`${GEOCODER}/api/?q=${encodeURIComponent(q)}&limit=6&lang=en&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}`);
+    const data = await r.json();
+    if (id !== reqId) return;   // a newer search superseded this one
+    list.innerHTML = '';
+    (data.features || []).forEach(f => {
+      const { main, sub } = labelOf(f.properties), li = document.createElement('li');
+      li.textContent = main;
+      if (sub) { const s = document.createElement('small'); s.textContent = sub; li.appendChild(s); }
+      li.onclick = () => {
+        list.style.display = 'none';
+        setPoint(which, { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: sub ? main + ', ' + sub : main });
+      };
+      list.appendChild(li);
+    });
+    list.style.display = list.children.length ? 'block' : 'none';
+    if (!list.children.length) status('No matches for "' + q + '"');
+  } catch (e) { status('Search failed. Check connection.'); }
+}
+
+async function setPointFromLatLng(which, lat, lon) {
+  setPoint(which, { lat, lon, label: lat.toFixed(5) + ', ' + lon.toFixed(5) });
+  try {   // replace the coordinates with a readable name if one exists
+    const r = await fetch(`${GEOCODER}/reverse?lat=${lat}&lon=${lon}&lang=en`);
+    const f = (await r.json()).features[0];
+    if (f && pts[which] && pts[which].lat === lat) {
+      const { main, sub } = labelOf(f.properties);
+      pts[which].label = sub ? main + ', ' + sub : main;
+      $(which).value = pts[which].label;
+    }
+  } catch (e) {}
+}
+
+function setPoint(which, p) {
+  pts[which] = p;
+  $(which).value = p.label;
+  if (markers[which]) markers[which].remove();
+  markers[which] = L.circleMarker([p.lat, p.lon], {
+    radius: 8, weight: 3, color: '#fff', fillOpacity: 1, fillColor: which === 'from' ? '#2e9d4f' : '#d0352b'
+  }).addTo(map).bindTooltip(which === 'from' ? 'Start' : 'Destination');
+  if (pts.from && pts.to) route(); else map.setView([p.lat, p.lon], Math.max(map.getZoom(), 14));
+}
+
+// ---------- Routing ----------
+async function route() {
+  if (!pts.from || !pts.to) return;
+  const mode = $('mode').value, body = {
+    locations: [{ lat: pts.from.lat, lon: pts.from.lon }, { lat: pts.to.lat, lon: pts.to.lon }],
+    costing: mode, alternates: 2, units: 'miles', language: 'en-US'
+  };
+  if (mode === 'auto') body.costing_options = { auto: {
+    use_highways: $('noHwy').checked ? 0 : 1,
+    use_tolls: $('noToll').checked ? 0 : 0.5
+  } };
+  status('Finding routes...');
+  const id = ++reqId;
+  try {
+    const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`);
+    const data = await r.json();
+    if (id !== reqId) return;
+    if (!data.trip) { status(data.error || 'No route found.'); return; }
+    routes = [data.trip].concat((data.alternates || []).map(a => a.trip)).map(t => ({
+      time: t.summary.time, dist: t.summary.length,
+      coords: decodePolyline(t.legs[0].shape, 6),
+      steps: t.legs[0].maneuvers
+    }));
+    selected = 0;
+    draw(true);
+    status('');
+    writeHash();
+  } catch (e) { status('Routing failed. The public routing server may be busy; try again.'); }
+}
+
+function draw(fit) {
+  lines.forEach(l => l.remove()); lines = [];
+  const css = getComputedStyle(document.documentElement);
+  routes.forEach((rt, i) => {   // draw unselected first so the selected line sits on top
+    if (i === selected) return;
+    lines.push(L.polyline(rt.coords, { color: css.getPropertyValue('--alt').trim(), weight: 5, opacity: .8 })
+      .on('click', ev => { L.DomEvent.stopPropagation(ev); selected = i; draw(false); }).addTo(map));
+  });
+  const sel = L.polyline(routes[selected].coords, { color: css.getPropertyValue('--accent').trim(), weight: 6 }).addTo(map);
+  lines.push(sel);
+  if (fit) map.fitBounds(sel.getBounds(), { paddingTopLeft: [20, 230], paddingBottomRight: [20, 120] });
+
+  const fastest = Math.min.apply(null, routes.map(r => r.time));
+  const box = $('routes'); box.innerHTML = '';
+  routes.forEach((rt, i) => {
+    const b = document.createElement('button'), s = document.createElement('small');
+    b.textContent = fmtTime(rt.time);
+    s.textContent = fmtDist(rt.dist) + (rt.time === fastest ? ' - fastest' : ' - +' + fmtTime(rt.time - fastest));
+    b.appendChild(s);
+    if (i === selected) b.className = 'on';
+    b.onclick = () => { selected = i; draw(true); };
+    box.appendChild(b);
+  });
+
+  const ol = $('steps'); ol.innerHTML = '';
+  routes[selected].steps.forEach(st => {
+    const li = document.createElement('li'), a = document.createElement('span'), d = document.createElement('span');
+    a.textContent = st.instruction; d.textContent = st.length ? fmtDist(st.length) : '';
+    li.append(a, d);
+    li.onclick = () => map.setView(routes[selected].coords[st.begin_shape_index], 17);
+    ol.appendChild(li);
+  });
+  $('stepsTitle').textContent = routes[selected].steps.length + ' steps';
+  $('bottom').style.display = 'block';
+}
+
+// ---------- Controls ----------
+$('mode').onchange = () => { $('noHwy').disabled = $('noToll').disabled = $('mode').value !== 'auto'; saveOpts(); route(); };
+$('noHwy').onchange = $('noToll').onchange = () => { saveOpts(); route(); };
+function saveOpts() { store('map.opts', { mode: $('mode').value, noHwy: $('noHwy').checked, noToll: $('noToll').checked }); }
+
+$('swap').onclick = () => {
+  const a = pts.from, b = pts.to;
+  ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; });
+  if (b) setPoint('from', b);
+  if (a) setPoint('to', a);
+};
+
+$('clear').onclick = () => {
+  ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; });
+  lines.forEach(l => l.remove()); lines = []; routes = [];
+  $('bottom').style.display = 'none'; $('suggest').style.display = 'none';
+  status(''); history.replaceState(null, '', location.pathname);
+};
+
+$('toggleSteps').onclick = () => {
+  const hidden = $('steps').style.display === 'none';
+  $('steps').style.display = hidden ? '' : 'none';
+  $('toggleSteps').textContent = hidden ? 'Hide' : 'Show';
+};
+
+$('here').onclick = () => {
+  if (!navigator.geolocation) { status('Location is not available in this browser.'); return; }
+  status('Getting your location...');
+  navigator.geolocation.getCurrentPosition(
+    p => { status(''); setPoint('from', { lat: p.coords.latitude, lon: p.coords.longitude, label: 'My location' }); },
+    () => status('Location permission denied or unavailable.'),
+    { enableHighAccuracy: true, timeout: 10000 });
+};
+
+$('follow').onclick = () => {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId); watchId = null;
+    if (meDot) { meDot.remove(); meDot = null; }
+    $('follow').className = ''; return;
+  }
+  if (!navigator.geolocation) { status('Location is not available in this browser.'); return; }
+  $('follow').className = 'on';
+  watchId = navigator.geolocation.watchPosition(p => {
+    const ll = [p.coords.latitude, p.coords.longitude];
+    if (!meDot) meDot = L.circleMarker(ll, { radius: 7, weight: 3, color: '#fff', fillColor: '#1a73e8', fillOpacity: 1 }).addTo(map);
+    else meDot.setLatLng(ll);
+    map.setView(ll, Math.max(map.getZoom(), 16));
+  }, () => { status('Location permission denied or unavailable.'); $('follow').className = ''; watchId = null; },
+  { enableHighAccuracy: true, maximumAge: 2000 });
+};
+
+// ---------- Shareable link: route lives in the URL hash (never sent to a server) ----------
+function writeHash() {
+  const f = pts.from, t = pts.to;
+  history.replaceState(null, '', '#from=' + f.lat.toFixed(5) + ',' + f.lon.toFixed(5) + '&to=' + t.lat.toFixed(5) + ',' + t.lon.toFixed(5) + '&mode=' + $('mode').value);
+}
+(function init() {
+  const o = store('map.opts');
+  if (o) { $('mode').value = o.mode || 'auto'; $('noHwy').checked = !!o.noHwy; $('noToll').checked = !!o.noToll; }
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('mode')) $('mode').value = h.get('mode');
+  $('noHwy').disabled = $('noToll').disabled = $('mode').value !== 'auto';
+  const parse = s => { const p = (s || '').split(',').map(Number); return p.length === 2 && p.every(isFinite) ? p : null; };
+  const f = parse(h.get('from')), t = parse(h.get('to'));
+  if (f) setPointFromLatLng('from', f[0], f[1]);
+  if (t) setPointFromLatLng('to', t[0], t[1]);
+})();
+</script>
+</body>
+</html>
