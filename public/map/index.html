@@ -155,7 +155,7 @@
 
   #meet .who { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
   #meet .who b { flex:1; font-size:14px; }
-  #meet .who .field { order:3; flex:1 0 100%; height:44px; }
+  #meet .field { height:44px; margin-bottom:10px; } #meetOpts { margin-bottom:10px; } #meetOpts .chips { margin-bottom:10px; } #meetMe { color:var(--muted); font-size:12px; }
   #meetMe { order:3; flex:1 0 100%; color:var(--muted); padding-left:4px; }
   #meet .who .seg { flex:0 0 auto; } #meet .who .seg button { padding:6px 9px; font-size:13px; }
   #meetSuggest { list-style:none; margin:0 0 8px; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:30vh; overflow:auto; }
@@ -340,9 +340,9 @@
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
   <h3>Live traffic (optional)</h3>
-  <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, your trip's start and end are sent to TomTom to get traffic.</p>
+  <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, driving routes come from TomTom and steer around jams, and your trip's start and end are sent to TomTom. Walking and biking are unchanged.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="ttKey" type="text" placeholder="TomTom key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="ttSave">Save</button></div>
-  <div class="chips" style="margin-top:8px"><button data-traffic="trafficLayer">Show traffic on the map</button></div>
+  <div class="chips" style="margin-top:8px"><button data-traffic="trafficRoute">Route around traffic</button><button data-traffic="trafficLayer">Show traffic on the map</button></div>
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
   <p>No ads, no sponsored places, no account. Your places and settings stay on this device. Maps and roads come from OpenStreetMap, which anyone can correct.</p>
@@ -352,19 +352,18 @@
 
 <div id="meet" class="panel sheet">
   <h2>Meet in the middle <button id="closeMeet" class="ghost">Close</button></h2>
-  <p>Finds places that take you both about the same time to reach.</p>
-  <h3>Who</h3>
-  <div class="who"><b>You</b><span id="meetMe"></span>
-    <div class="seg" data-meet="myMode"><button data-v="auto">Drive</button><button data-v="bicycle">Bike</button><button data-v="pedestrian">Walk</button></div></div>
-  <div class="who"><b>Friend</b><div class="field"><input id="friend" type="text" placeholder="Where are they?" autocomplete="off" enterkeyhint="search"></div>
-    <div class="seg" data-meet="friendMode"><button data-v="auto">Drive</button><button data-v="bicycle">Bike</button><button data-v="pedestrian">Walk</button></div></div>
+  <div class="field"><input id="friend" type="text" placeholder="Where is your friend?" autocomplete="off" enterkeyhint="search"></div>
   <ul id="meetSuggest"></ul>
-  <h3>For</h3>
-  <div class="chips" data-meet="kind">
-    <button data-v="coffee">Coffee</button><button data-v="food">Food</button><button data-v="drinks">Drinks</button><button data-v="park">A park</button><button data-v="any">Anything</button>
+  <div class="who"><b>They will</b><div class="seg" data-meet="friendMode"><button data-v="auto">Drive</button><button data-v="bicycle">Bike</button><button data-v="pedestrian">Walk</button></div></div>
+  <div class="who"><button id="meetGo" class="go" style="flex:1">Find a spot</button><button id="meetMore" class="ghost">Options</button></div>
+  <div id="meetOpts" hidden>
+    <div class="who"><b>You will</b><div class="seg" data-meet="myMode"><button data-v="auto">Drive</button><button data-v="bicycle">Bike</button><button data-v="pedestrian">Walk</button></div></div>
+    <div class="chips" data-meet="kind">
+      <button data-v="any">Anything</button><button data-v="coffee">Coffee</button><button data-v="food">Food</button><button data-v="drinks">Drinks</button><button data-v="park">A park</button>
+    </div>
+    <div class="field"><input id="meetName" type="text" placeholder="Or a place name, like Starbucks" autocomplete="off" enterkeyhint="search"></div>
+    <small id="meetMe"></small>
   </div>
-  <div class="field"><input id="meetName" type="text" placeholder="Or a place name, like Starbucks" autocomplete="off" enterkeyhint="search"></div>
-  <button id="meetGo" class="go">Find a fair spot</button>
   <div id="meetMsg"></div>
   <ul id="meetResults"></ul>
 </div>
@@ -427,7 +426,7 @@ const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', trafficLayer: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null, via: null }, markers = { from: null, to: null, via: null };   // via: one optional stop on the way
 let tempAvoid = null;   // a point to route around for this trip only
@@ -1043,12 +1042,12 @@ function tipOnce() {   // one-time hint, since press-and-hold is not discoverabl
 const MEET_TAGS = { coffee: ['amenity:cafe'], food: ['amenity:restaurant', 'amenity:fast_food'], drinks: ['amenity:bar', 'amenity:pub'], park: ['leisure:park'],
   any: ['amenity:cafe', 'amenity:restaurant', 'amenity:bar', 'amenity:pub', 'amenity:ice_cream', 'leisure:park'] };
 const COST = { auto: 'auto', rig: 'auto', bicycle: 'bicycle', pedestrian: 'pedestrian' }, PACE = { auto: 1, bicycle: 0.5, pedestrian: 0.15 };
-const meet = { friend: null, myMode: 'auto', friendMode: 'auto', kind: 'coffee' };
+const meet = { friend: null, myMode: 'auto', friendMode: 'auto', kind: 'any' };
 const meetMe = () => (planning && pts.from) || (here ? { lat: here[0], lon: here[1], label: 'My location' } : pts.from);
 function meetPick(p) { meet.friend = p; $('friend').value = p.label; $('meetMsg').textContent = ''; }
 function syncMeet() {
   document.querySelectorAll('[data-meet]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === meet[g.dataset.meet])));
-  const me = meetMe(); $('meetMe').textContent = me ? me.label : 'Location is off';
+  const me = meetMe(); $('meetMe').textContent = me ? 'Starting from ' + me.label : 'Your location is off';
 }
 // A plain route between two points by one mode: total seconds and the line it follows
 async function quickRoute(a, b, mode) {
@@ -1174,7 +1173,7 @@ async function findMeet() {
     if (out.scrollIntoView) setTimeout(() => $('meetMsg').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   } catch (e) {
     msg('Stopped at the "' + step + '" step: ' + (e && e.message ? e.message : 'unknown error') + '. Try again in a moment.');
-  } finally { meet.busy = false; btn.textContent = 'Find a fair spot'; }
+  } finally { meet.busy = false; btn.textContent = 'Find a spot'; }
 }
 
 // ---------- Routing ----------
@@ -1244,6 +1243,61 @@ function osrmText(st) {   // OSRM gives maneuver codes, not sentences
     default: return turn + onto + '.';
   }
 }
+// Driving routes that account for live traffic, used when a TomTom key is saved. Same output shape as the other routers.
+const T_ANGLE = { TURN_LEFT: -90, TURN_RIGHT: 90, SHARP_LEFT: -135, SHARP_RIGHT: 135, BEAR_LEFT: -45, BEAR_RIGHT: 45, KEEP_LEFT: -30, KEEP_RIGHT: 30, MAKE_UTURN: 180, MOTORWAY_EXIT_LEFT: -30, MOTORWAY_EXIT_RIGHT: 30, TAKE_EXIT: 30, WAYPOINT_LEFT: 0, WAYPOINT_RIGHT: 0 };
+function tomtomShort(m) {
+  const k = m.maneuver || '';
+  if (/^ARRIVE/.test(k)) return 'You have arrived.';
+  if (/^WAYPOINT/.test(k)) return 'Arrive at your stop.';
+  if (/^ROUNDABOUT/.test(k)) return 'Take the roundabout' + (m.roundaboutExitNumber ? ', exit ' + m.roundaboutExitNumber : '') + '.';
+  const w = { TURN_LEFT: 'Turn left', TURN_RIGHT: 'Turn right', SHARP_LEFT: 'Sharp left', SHARP_RIGHT: 'Sharp right', BEAR_LEFT: 'Bear left', BEAR_RIGHT: 'Bear right', KEEP_LEFT: 'Keep left', KEEP_RIGHT: 'Keep right', MAKE_UTURN: 'Make a U-turn',
+    MOTORWAY_EXIT_LEFT: 'Take the exit on the left', MOTORWAY_EXIT_RIGHT: 'Take the exit on the right', TAKE_EXIT: 'Take the exit', STRAIGHT: 'Continue straight' }[k];
+  return w ? w + '.' : m.message || 'Continue.';
+}
+async function tomtomRoutes(quiet) {
+  const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
+  const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry',
+    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2), 'key=' + encodeURIComponent(prefs.ttKey)];
+  if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
+  if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
+  if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + q.join('&');
+  const skip = avoid.concat(tempAvoid ? [tempAvoid] : []).slice(0, 10);
+  const box = a => { const dLat = 60 / 111320, dLon = dLat / Math.cos(a.lat * Math.PI / 180); return { southWestCorner: { latitude: a.lat - dLat, longitude: a.lon - dLon }, northEastCorner: { latitude: a.lat + dLat, longitude: a.lon + dLon } }; };
+  const ask = around => around ? fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avoidAreas: { rectangles: skip.map(box) } }) }) : fetch(url);
+  let r = await ask(skip.length > 0), stuck = false;
+  if (!r.ok && skip.length && r.status === 400) { r = await ask(false); stuck = r.ok; }   // no way around: route through and say so
+  if (!r.ok) { const e = new Error('TomTom ' + r.status); e.status = r.status; throw e; }
+  const data = await r.json();
+  if (!data.routes || !data.routes.length) throw new Error('TomTom returned no route');
+  const out = data.routes.map(t => {
+    let coords = [];
+    t.legs.forEach(leg => { const c = leg.points.map(p => [p.latitude, p.longitude]); if (coords.length && c.length && meters(coords[coords.length - 1], c[0]) < 1) c.shift(); coords = coords.concat(c); });
+    const ins = (t.guidance || {}).instructions || [], secs = t.sections || [], inSec = (i, type) => secs.some(x => x.sectionType === type && i >= x.startPointIndex && i < x.endPointIndex);
+    const idx = m => {   // where on the line this instruction happens
+      const p = [m.point.latitude, m.point.longitude];
+      if (m.pointIndex != null && coords[m.pointIndex] && meters(coords[m.pointIndex], p) < 30) return m.pointIndex;
+      let best = Infinity, bi = 0; coords.forEach((c, i) => { const d = meters(c, p); if (d < best) { best = d; bi = i; } }); return bi;
+    };
+    const at = ins.map(idx);
+    const steps = ins.map((m, i) => {
+      const k = m.maneuver || '', nx = ins[i + 1], arriving = /^ARRIVE/.test(k), stop = /^WAYPOINT/.test(k);
+      const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : m.message || tomtomShort(m);
+      return { instruction: text, say: text, short: stop ? 'Arrive at your stop.' : tomtomShort(m), multi: false,
+        sign: [m.exitNumber && 'Exit ' + m.exitNumber, m.signpostText && 'toward ' + m.signpostText].filter(Boolean).join(', '),
+        begin: at[i], end: nx ? at[i + 1] : at[i], length: nx ? (nx.routeOffsetInMeters - m.routeOffsetInMeters) / 1609.34 : 0, time: nx ? nx.travelTimeInSeconds - m.travelTimeInSeconds : 0,
+        road: m.street || (m.roadNumbers || [])[0] || '', angle: T_ANGLE[k] || 0, left: /^(TURN_LEFT|SHARP_LEFT|MAKE_UTURN)$/.test(k),
+        kind: stop ? 'stop' : arriving ? 'arrive' : /^ROUNDABOUT/.test(k) ? 'roundabout' : /^(TURN_|SHARP_|MAKE_UTURN)/.test(k) ? 'turn' : 'other',
+        highway: inSec(at[i], 'MOTORWAY'), toll: inSec(at[i], 'TOLL_ROAD'), rough: false, ferry: inSec(at[i], 'FERRY') };
+    });
+    if (!steps.length) throw new Error('TomTom returned no directions');
+    const sm = t.summary, delay = Math.max(0, sm.noTrafficTravelTimeInSeconds != null ? sm.travelTimeInSeconds - sm.noTrafficTravelTimeInSeconds : sm.trafficDelayInSeconds || 0);
+    return { time: sm.travelTimeInSeconds, dist: sm.lengthInMeters / 1609.34, coords, steps, live: true, delay };
+  });
+  const lost = [prefs.simple && 'fewer turns', prefs.noAlleys && 'avoid alleys'].filter(Boolean);
+  out.note = stuck ? 'There is no way around a spot you avoid, so this route goes through it.' : lost.length ? 'Traffic routing does not support: ' + lost.join(', ') + '.' : '';
+  return out;
+}
 async function osrmRoutes(quiet) {
   const profile = { auto: 'car', rig: 'car', bicycle: 'bike', pedestrian: 'foot' }[prefs.mode];
   const url = `${ROUTER2}/routed-${profile}/route/v1/driving/${[pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lon + ',' + q.lat).join(';')}?overview=false&steps=true&geometries=polyline6&alternatives=${quiet ? 'false' : 3}`;
@@ -1273,7 +1327,11 @@ async function route(quiet) {
   if (!quiet) status('Finding routes...');
   const id = ++reqId;
   let found = null;
-  if (!useBackup) {
+  if (prefs.ttKey && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
+    try { found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.'; }
+    catch (e) { $('ttMsg').textContent = e.status === 403 || e.status === 401 ? 'TomTom did not accept that key. Using routes without traffic.' : 'Traffic routing failed (' + e.message + '). Using routes without traffic.'; }
+  }
+  if (!found && !useBackup) {
     try { found = await valhallaRoutes(quiet); }
     catch (e) { if (e.noRoute) { if (id === reqId) status(e.message); return false; } }
   }
@@ -1288,7 +1346,7 @@ async function route(quiet) {
   await mapReady;
   draw(!quiet);
   loadTraffic();
-  status(found.note || (valhallaRoutes.stuck && !useBackup ? 'There is no way around a spot you avoid, so this route goes through it.' : ''));
+  status(found.note || (valhallaRoutes.stuck && !useBackup && !found[0].live ? 'There is no way around a spot you avoid, so this route goes through it.' : ''));
   writeHash();
   return true;
 }
@@ -1417,14 +1475,14 @@ function drawTiming() {
   if (!routes.length || !pts.to || !routes[selected]) return;
   const rt = routes[selected], driving = prefs.mode === 'auto' || prefs.mode === 'rig';
   const park = driving ? (timing.parkUser != null ? timing.parkUser : timing.parkAuto != null ? timing.parkAuto : 5) : prefs.mode === 'bicycle' ? 1 : 0;
-  const jam = traffic && driving ? traffic.delay : 0;   // extra minutes from live traffic, when a key is set
+  const jam = rt.live ? 0 : traffic && driving ? traffic.delay : 0;   // extra minutes from live traffic, when a key is set
   const total = rt.time + jam + park * 60, now = Date.now(), clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   $('parkRow').style.display = driving ? 'flex' : 'none';
   $('parkMin').textContent = park + ' min';
   $('parkNote').textContent = 'Parking estimate: ' + (timing.parkUser != null ? 'set by you' : timing.parkAuto == null ? 'checking the area...' : timing.note);
   document.querySelectorAll('#tmode button').forEach(b => b.classList.toggle('on', b.dataset.t === timing.mode));
   $('arriveAt').style.display = timing.mode === 'by' ? '' : 'none';
-  const sum = fmtTime(rt.time) + (prefs.mode === 'pedestrian' ? ' walk' : prefs.mode === 'bicycle' ? ' ride' : ' drive') + (jam >= 60 ? ' + ' + fmtTime(jam) + ' traffic' : traffic && driving ? ' (traffic is clear)' : '') + (park ? ' + ' + park + ' min to park' + (prefs.mode === 'bicycle' ? ' and lock up' : '') : '');
+  const sum = fmtTime(rt.time) + (prefs.mode === 'pedestrian' ? ' walk' : prefs.mode === 'bicycle' ? ' ride' : ' drive') + (rt.live ? (rt.delay >= 60 ? ' (includes ' + fmtTime(rt.delay) + ' of traffic)' : ' (traffic is clear)') : jam >= 60 ? ' + ' + fmtTime(jam) + ' traffic' : traffic && driving ? ' (traffic is clear)' : '') + (park ? ' + ' + park + ' min to park' + (prefs.mode === 'bicycle' ? ' and lock up' : '') : '');
   const w = $('when'); w.innerHTML = '';
   if (timing.mode === 'by' && timing.at) {
     const hm = timing.at.split(':').map(Number), d = new Date(); d.setHours(hm[0], hm[1], 0, 0);
@@ -1481,7 +1539,7 @@ function loadNavRoute() {   // (re)build the progress tables for the current rou
 function startNav() {
   if (!routes.length) return;
   if (!navigator.geolocation) { status('Location is not available in this browser.'); return; }
-  nav = { follow: true, lastReroute: 0, busy: false, zoom: 16.5 };
+  nav = { follow: true, lastReroute: 0, lastTraffic: Date.now(), busy: false, zoom: 16.5 };
   loadNavRoute();
   document.body.classList.add('nav'); document.body.classList.remove('free');
   $('navArrow').innerHTML = ''; $('navDist').textContent = ''; $('navText').textContent = 'Finding your location...'; $('navThen').textContent = '';
@@ -1527,10 +1585,16 @@ function snap(ll) {
   return s;
 }
 // Route again from where you are now, keeping navigation running
-async function renav(sayIt) {
+// While navigating on a traffic-aware route, ask again every 5 minutes. Same roads: only the arrival time updates. Different roads: switch and say so.
+async function trafficCheck() {
+  const old = nav.rt; nav.lastTraffic = Date.now();
+  const ok = await renav('', true);
+  if (ok && nav && routes[0] && routes[0].live && sameRoads(routes[0], old) < 0.8) say('Traffic has changed. Taking a faster route.');
+}
+async function renav(sayIt, silent) {
   if (!nav || !here) return false;
-  nav.busy = true; nav.lastReroute = Date.now();
-  $('navArrow').innerHTML = ''; $('navText').textContent = 'Rerouting...'; $('navDist').textContent = ''; $('navThen').textContent = '';
+  nav.busy = true; nav.lastReroute = Date.now(); nav.lastTraffic = Date.now();
+  if (!silent) { $('navArrow').innerHTML = ''; $('navText').textContent = 'Rerouting...'; $('navDist').textContent = ''; $('navThen').textContent = ''; }
   if (sayIt) say(sayIt);
   pts.from = { lat: here[0], lon: here[1], label: 'My location', auto: true };
   $('from').value = 'My location';
@@ -1552,6 +1616,7 @@ function onFix(p) {
   showMe(ll, head);
   if (nav.follow) map.easeTo({ center: [ll[1], ll[0]], zoom: nav.zoom, bearing: prefs.northUp ? 0 : head, pitch: prefs.northUp ? 0 : 50, padding: { top: prefs.northUp ? 150 : 280, bottom: 70, left: 0, right: 0 }, duration: 900, easing: t => t });
   if (nav.busy) return;
+  if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
   if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting
     if (++nav.off >= 3 && Date.now() - nav.lastReroute > 8000) renav('Rerouting.');
     return;
@@ -1676,7 +1741,7 @@ let trafficFor = '', traffic = null;   // traffic: { delay (s), total (s) } for 
 async function loadTraffic() {
   traffic = null;
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (!prefs.ttKey || !driving || !pts.from || !pts.to) { trafficFor = ''; return; }
+  if (!prefs.ttKey || !driving || !pts.from || !pts.to || (routes[0] && routes[0].live)) { trafficFor = ''; return; }
   const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':'), key = locs + prefs.mode;
   trafficFor = key;
   try {
@@ -1872,7 +1937,7 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
 });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
 document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
-document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); });
+document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
 $('ttSave').onclick = () => { prefs.ttKey = $('ttKey').value.trim(); savePrefs(); $('ttMsg').textContent = prefs.ttKey ? 'Key saved. Traffic shows on your next route.' : 'Key removed. Traffic is off.'; addTraffic(); if (routes.length) loadTraffic().then(drawTiming); };
 const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
 document.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prefs[b.dataset.map] = !prefs[b.dataset.map]; mapPrefChanged(b.dataset.map); });
@@ -1886,6 +1951,7 @@ $('openPrefs').onclick = () => {
 $('closePrefs').onclick = $('closeMeet').onclick = $('scrim').onclick = closeSheets;
 $('openMeet').onclick = () => { syncMeet(); document.body.classList.add('meet'); };
 $('meetGo').onclick = findMeet;
+$('meetMore').onclick = () => { const o = $('meetOpts'); o.hidden = !o.hidden; $('meetMore').textContent = o.hidden ? 'Options' : 'Fewer options'; };
 document.querySelectorAll('[data-meet] button').forEach(b => b.onclick = () => { meet[b.parentElement.dataset.meet] = b.dataset.v; syncMeet(); });
 
 $('save').onclick = () => {
