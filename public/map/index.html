@@ -177,7 +177,11 @@
   #navArrow svg { width:54px; height:54px; stroke-width:3.4; }
   #navDist { font-size:30px; font-weight:700; line-height:1.05; }
   #navText { font-size:18px; font-weight:600; }
-  #navThen { font-size:13px; opacity:.88; margin-top:4px; }
+  #navThen, #navMore { font-size:13px; opacity:.88; margin-top:4px; }
+  #navMore:empty, #navThen:empty, #navLanes:empty { display:none; }
+  #navLanes { display:flex; gap:4px; margin-top:6px; }
+  #navLanes span { min-width:26px; padding:1px 5px; text-align:center; border-radius:7px; font-size:16px; line-height:22px; border:1.500px solid currentColor; opacity:.4; }
+  #navLanes span.ok { opacity:1; background:var(--accent-ink); color:var(--accent); border-color:var(--accent-ink); }
   #navProg { position:absolute; left:0; bottom:0; height:4px; width:0; background:var(--accent-ink); opacity:.55; transition:width .8s linear; }
   body.nav #navbar { display:flex; bottom:calc(14px + env(safe-area-inset-bottom)); padding:10px 10px 10px 18px; align-items:center; gap:6px; }
   #navbar button { padding:10px 12px; }
@@ -313,7 +317,11 @@
     <button data-pref="bikePaths">Prefer bike paths and quiet streets</button>
   </div>
   <h3>Voice directions</h3>
-  <div class="chips" data-set="voice"><button data-v="all">Everything</button><button data-v="turns">Turns only</button><button data-v="off">Off</button></div>
+  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>On-screen directions</h3>
+  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>Extra guidance</h3>
+  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button></div>
   <h3>Spots I avoid</h3>
   <p>Press and hold a spot on the map and choose "Avoid this spot", even during a trip. Tap its marker to stop avoiding it.</p>
   <ul class="list" id="avoidList"></ul>
@@ -326,9 +334,14 @@
   </div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
+  <h3>Live traffic (optional)</h3>
+  <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, your trip's start and end are sent to TomTom to get traffic.</p>
+  <div class="rig"><div class="field" style="flex:1"><input id="ttKey" type="text" placeholder="TomTom key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="ttSave">Save</button></div>
+  <div class="chips" style="margin-top:8px"><button data-traffic="trafficLayer">Show traffic on the map</button></div>
+  <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
   <p>No ads, no sponsored places, no account. Your places and settings stay on this device. Maps and roads come from OpenStreetMap, which anyone can correct.</p>
-  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search by Photon and Nominatim, routing by Valhalla and OSRM.</p>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search by Photon and Nominatim, routing by Valhalla and OSRM. Traffic, when you add a key, &copy; TomTom.</p>
   <p><a id="report" target="_blank" rel="noopener">Report a map problem here</a></p>
 </div>
 
@@ -352,7 +365,7 @@
 
 <div id="nav" class="panel">
   <div id="navArrow"></div>
-  <div><div id="navDist"></div><div id="navText">Finding your location...</div><div id="navThen"></div></div>
+  <div style="min-width:0"><div id="navDist"></div><div id="navText">Finding your location...</div><div id="navLanes"></div><div id="navMore"></div><div id="navThen"></div></div>
   <i id="navProg"></i>
 </div>
 <button id="recenter" class="go">Recenter</button>
@@ -370,7 +383,11 @@
 <div id="navMenu" class="panel sheet">
   <h2>Trip options <button class="go" data-close>Done</button></h2>
   <h3>Voice directions</h3>
-  <div class="chips" data-set="voice"><button data-v="all">Everything</button><button data-v="turns">Turns only</button><button data-v="off">Off</button></div>
+  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>On-screen directions</h3>
+  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>Extra guidance</h3>
+  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button></div>
   <h3>Map view</h3>
   <div class="chips" data-set="northUp"><button data-v="false">Faces my direction</button><button data-v="true">North up</button></div>
   <h3>This trip</h3>
@@ -403,7 +420,7 @@ const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'all', northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', trafficLayer: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null, via: null }, markers = { from: null, to: null, via: null };   // via: one optional stop on the way
 let tempAvoid = null;   // a point to route around for this trip only
@@ -411,7 +428,8 @@ let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBac
 let planning = false;   // false: every route starts from where you are now; true: you chose a starting point
 const timing = { mode: 'now', at: '', key: '', parkAuto: null, parkUser: null, note: '' };
 let here = null, meMarker = null, nav = null, wake = null, avoidMarkers = [], map, mapReady;
-if (prefs.muted) { prefs.voice = 'off'; delete prefs.muted; }   // older saved setting
+if (prefs.muted) { prefs.voice = 'off'; delete prefs.muted; }   // older saved settings
+if (prefs.voice === 'all') prefs.voice = 'detailed'; if (prefs.voice === 'turns') prefs.voice = 'standard';
 const savePrefs = () => store('map.prefs', prefs);
 
 // ---------- Helpers ----------
@@ -581,13 +599,14 @@ async function themedStyle() {
   return restyle(JSON.parse(rawStyle), theme());
 }
 function addRouteLayers() {
-  if (map.getSource('routes')) return;
+  if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
   map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
   line('alt', false, { 'line-color': css('--alt'), 'line-width': 6, 'line-opacity': .9 });
   line('casing', true, { 'line-color': '#ffffff', 'line-width': 11 });
   line('sel', true, { 'line-color': css('--accent'), 'line-width': 6.5 });
+  addTraffic();
 }
 let shownTheme = '';
 async function refreshStyle() {   // rebuild the map style from the current theme and map preferences
@@ -1183,7 +1202,9 @@ async function valhallaRoutes(quiet) {
       leg.maneuvers.forEach(m => {
         const arriving = m.type >= 4 && m.type <= 6, stop = arriving && !last;
         const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : m.instruction;
-        steps.push({ instruction: text, say: stop ? text : m.verbal_pre_transition_instruction || m.instruction,
+        const sg = m.sign || {}, signs = k => (sg[k] || []).map(x => x.text).join(' / ');
+        steps.push({ instruction: text, say: stop ? text : m.verbal_pre_transition_instruction || m.instruction, short: stop ? 'Arrive at your stop.' : m.verbal_succinct_transition_instruction || m.instruction, multi: !!m.verbal_multi_cue,
+          sign: [signs('exit_number_elements') && 'Exit ' + signs('exit_number_elements'), signs('exit_toward_elements') && 'toward ' + signs('exit_toward_elements')].filter(Boolean).join(', '),
           begin: m.begin_shape_index + off, end: m.end_shape_index + off, length: m.length, time: m.time, road: (m.street_names || [])[0] || '',
           angle: V_ANGLE[m.type] || 0, left: m.type >= 13 && m.type <= 15, kind: stop ? 'stop' : arriving ? 'arrive' : m.type === 26 ? 'roundabout' : (m.type >= 9 && m.type <= 16) ? 'turn' : 'other',
           highway: !!m.highway, toll: !!m.toll, rough: !!m.rough, ferry: !!m.ferry });
@@ -1227,7 +1248,7 @@ async function osrmRoutes(quiet) {
       const begin = Math.max(0, coords.length - 1);
       g.forEach(c => coords.push(c));
       const turning = ['turn', 'end of road', 'fork'].includes(t) && st.maneuver.modifier !== 'straight';
-      steps.push({ instruction: text, say: text, begin, end: coords.length - 1, length: st.distance / 1609.34, time: st.duration, road: st.name || '',
+      steps.push({ instruction: text, say: text, short: text, begin, end: coords.length - 1, length: st.distance / 1609.34, time: st.duration, road: st.name || '',
         angle: t === 'depart' || t === 'arrive' ? 0 : O_ANGLE[st.maneuver.modifier] || 0, left: turning && /^(left|sharp left|uturn)$/.test(st.maneuver.modifier), kind: stop ? 'stop' : t === 'arrive' ? 'arrive' : /roundabout|rotary/.test(t) ? 'roundabout' : turning ? 'turn' : 'other' });
     }));
     return { time: rt.duration, dist: rt.distance / 1609.34, coords, steps, basic: true };
@@ -1256,6 +1277,7 @@ async function route(quiet) {
   routes = found; selected = 0;
   await mapReady;
   draw(!quiet);
+  loadTraffic();
   status(found.note || (valhallaRoutes.stuck && !useBackup ? 'There is no way around a spot you avoid, so this route goes through it.' : ''));
   writeHash();
   return true;
@@ -1385,13 +1407,14 @@ function drawTiming() {
   if (!routes.length || !pts.to || !routes[selected]) return;
   const rt = routes[selected], driving = prefs.mode === 'auto' || prefs.mode === 'rig';
   const park = driving ? (timing.parkUser != null ? timing.parkUser : timing.parkAuto != null ? timing.parkAuto : 5) : prefs.mode === 'bicycle' ? 1 : 0;
-  const total = rt.time + park * 60, now = Date.now(), clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const jam = traffic && driving ? traffic.delay : 0;   // extra minutes from live traffic, when a key is set
+  const total = rt.time + jam + park * 60, now = Date.now(), clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   $('parkRow').style.display = driving ? 'flex' : 'none';
   $('parkMin').textContent = park + ' min';
   $('parkNote').textContent = 'Parking estimate: ' + (timing.parkUser != null ? 'set by you' : timing.parkAuto == null ? 'checking the area...' : timing.note);
   document.querySelectorAll('#tmode button').forEach(b => b.classList.toggle('on', b.dataset.t === timing.mode));
   $('arriveAt').style.display = timing.mode === 'by' ? '' : 'none';
-  const sum = fmtTime(rt.time) + (prefs.mode === 'pedestrian' ? ' walk' : prefs.mode === 'bicycle' ? ' ride' : ' drive') + (park ? ' + ' + park + ' min to park' + (prefs.mode === 'bicycle' ? ' and lock up' : '') : '');
+  const sum = fmtTime(rt.time) + (prefs.mode === 'pedestrian' ? ' walk' : prefs.mode === 'bicycle' ? ' ride' : ' drive') + (jam >= 60 ? ' + ' + fmtTime(jam) + ' traffic' : traffic && driving ? ' (traffic is clear)' : '') + (park ? ' + ' + park + ' min to park' + (prefs.mode === 'bicycle' ? ' and lock up' : '') : '');
   const w = $('when'); w.innerHTML = '';
   if (timing.mode === 'by' && timing.at) {
     const hm = timing.at.split(':').map(Number), d = new Date(); d.setHours(hm[0], hm[1], 0, 0);
@@ -1422,9 +1445,11 @@ function layout() {   // keep the floating button and map credit clear of the ro
 }
 
 // ---------- Turn-by-turn navigation ----------
-// Voice: 'all' speaks everything, 'turns' only the turn prompts, 'off' nothing
-function say(text, extra) {
-  if (prefs.voice === 'off' || (extra && prefs.voice !== 'all') || !text || !window.speechSynthesis) return;
+// Voice detail: 'brief' speaks a short prompt at each turn; 'standard' adds an advance warning with street names;
+// 'detailed' adds how far to continue and what comes straight after a turn. Each call names the lowest level that hears it.
+const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
+function say(text, level) {
+  if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text || !window.speechSynthesis) return;
   try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {}
 }
 function spokenDist(m) {
@@ -1452,7 +1477,7 @@ function startNav() {
   $('navArrow').innerHTML = ''; $('navDist').textContent = ''; $('navText').textContent = 'Finding your location...'; $('navThen').textContent = '';
   $('navArrive').textContent = '--'; $('navLeft').textContent = ''; $('navProg').style.width = '0';
   // Phones only allow speech that starts inside a tap, so say something now even when the first prompt is far off
-  if (prefs.voice === 'all') say('Starting directions.'); else if (prefs.voice === 'turns' && window.speechSynthesis) { try { speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch (e) {} }
+  if (prefs.voice === 'detailed') say('Starting directions.', 'detailed'); else if (prefs.voice !== 'off' && window.speechSynthesis) { try { speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch (e) {} }
   keepAwake();
   if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
   drawStrip();
@@ -1531,7 +1556,7 @@ function onFix(p) {
   const toNext = next ? Math.max(0, cum[next.begin] - along) : left;
 
   if (left < 25) {
-    say('You have arrived.');
+    say('You have arrived.', 'brief');
     endNav('Welcome to ' + (pts.to.name || pts.to.label.split(',')[0]) + '.');
     return;
   }
@@ -1544,16 +1569,21 @@ function onFix(p) {
   for (let i = cur + 1; i < steps.length; i++) secs += steps[i].time || 0;
   const arrive = new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+  if (next && toNext < 3000) enrich(next, rt, cum);   // look up lanes and a landmark for the coming turn
+  const level = prefs.banner, extras = next ? guidance(next) : { lanes: null, laneText: '', mark: '' };
   $('navArrow').innerHTML = next ? arrow(next) : '';
   $('navDist').textContent = fmtDist(toNext / 1609.34);
-  $('navText').textContent = next ? next.instruction : 'Continue';
-  $('navThen').textContent = after ? 'Then: ' + after.instruction : '';
+  $('navText').textContent = !next ? 'Continue' : level === 'brief' ? next.short : withMark(next.instruction, extras.mark);
+  const lanesEl = $('navLanes'); lanesEl.innerHTML = '';
+  if (level !== 'brief' && extras.lanes && toNext < 1600) extras.lanes.forEach(l => lanesEl.appendChild(el('span', l.valid ? 'ok' : '', l.glyph)));
+  $('navMore').textContent = level === 'detailed' && next ? [next.sign, next.road && next.kind !== 'arrive' && !next.instruction.includes(next.road) ? 'onto ' + next.road : '', next.length ? 'then ' + fmtDist(next.length) + ' on it' : ''].filter(Boolean).join('  \u00b7  ') : '';
+  $('navThen').textContent = level !== 'brief' && after ? 'Then: ' + (level === 'detailed' ? after.instruction : after.short) : '';
   $('navArrive').textContent = arrive;
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34);
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
   // Closer in for a turn, further out at speed
   nav.zoom = toNext < 250 ? 17.2 : speed > 24 ? 14.8 : speed > 13 ? 15.7 : 16.5;
-  Object.assign(nav, { along, cur, nextSay: next ? next.say : '', info: [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ') });
+  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ') });
   drawStrip();
   if (document.body.classList.contains('steps')) drawNavSteps();
 
@@ -1561,20 +1591,100 @@ function onFix(p) {
   const near = Math.max(45, speed * 5), early = Math.max(400, speed * 20);
   if (cur !== nav.step) {
     nav.step = cur;
-    if (toNext > early * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', true); return; }
+    if (toNext > early * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', 'detailed'); return; }
   }
   if (!next) return;
-  if (toNext <= near) { if (!nav.said[cur + 'b']) { nav.said[cur + 'b'] = nav.said[cur + 'a'] = 1; say(next.say); } }
-  else if (toNext <= early && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = 1; say('In ' + spokenDist(toNext) + ', ' + next.say); }
+  const full = withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '');
+  if (toNext <= near) {
+    if (!nav.said[cur + 'b']) {
+      nav.said[cur + 'b'] = nav.said[cur + 'a'] = 1;
+      const then = prefs.voice === 'detailed' && after && (next.multi || next.length * 1609.34 < 250) ? ' Then ' + after.short.charAt(0).toLowerCase() + after.short.slice(1) : '';
+      say(prefs.voice === 'brief' ? next.short : full + then, 'brief');
+    }
+  } else if (toNext <= early && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = 1; say('In ' + spokenDist(toNext) + ', ' + full, 'standard'); }
+}
+
+// ---------- Lanes and landmarks for the coming turn ----------
+// The main router gives neither, so they are looked up one turn at a time as you approach: lanes from the backup
+// router (which reads the lane arrows mapped in OpenStreetMap), and a landmark from named places at the corner.
+const LANE_GLYPH = { left: '←', 'slight left': '↖', 'sharp left': '←', straight: '↑', 'slight right': '↗', right: '→', 'sharp right': '→', uturn: '↶', none: '↑' };
+const MARK_RANK = { fuel: 0, bank: 1, pharmacy: 2, supermarket: 3, fast_food: 4, cafe: 5, place_of_worship: 6, restaurant: 7, convenience: 8 };
+function enrich(step, rt, cum) {
+  if (step._rich || step.kind === 'arrive' || step.kind === 'stop') return;
+  step._rich = true;
+  const P = rt.coords[step.begin], t = cum[step.begin], at = d => rt.coords[Math.max(0, Math.min(rt.coords.length - 1, cum.findIndex(x => x >= d)))];
+  const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
+  if (prefs.lanes && driving) (async () => {
+    try {
+      const A = at(Math.max(0, t - 180)), B = at(Math.min(cum[cum.length - 1], t + 90));
+      const o = await (await fetch(`${ROUTER2}/routed-car/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?steps=true&overview=false`)).json();
+      if (o.code !== 'Ok') return;
+      let best = 60, lanes = null;
+      o.routes[0].legs[0].steps.forEach(st => st.intersections.forEach(x => { const d = meters([x.location[1], x.location[0]], P); if (x.lanes && x.lanes.length > 1 && d < best) { best = d; lanes = x.lanes; } }));
+      if (lanes && lanes.some(l => l.valid) && !lanes.every(l => l.valid)) step.lanes = lanes.map(l => ({ valid: !!l.valid, glyph: (l.indications || ['none']).map(i => LANE_GLYPH[i] || '↑').join('') }));
+    } catch (e) {}
+  })();
+  if (prefs.landmarks && (step.kind === 'turn' || step.kind === 'other') && Math.abs(step.angle) >= 30) (async () => {
+    try {
+      const tags = Object.keys(MARK_RANK).map(k => '&osm_tag=' + (k === 'supermarket' || k === 'convenience' ? 'shop:' : 'amenity:') + k).join('');
+      const d = await photon(`/reverse?lat=${P[0].toFixed(6)}&lon=${P[1].toFixed(6)}&radius=0.1&limit=10&lang=en${tags}`);
+      const near = (d.features || []).filter(f => f.properties.name).map(f => ({ name: f.properties.name, kind: f.properties.osm_value, ll: [f.geometry.coordinates[1], f.geometry.coordinates[0]] }))
+        .map(m => Object.assign(m, { d: meters(m.ll, P) })).filter(m => m.d <= 40).sort((x, y) => (x.d + (MARK_RANK[x.kind] || 9) * 4) - (y.d + (MARK_RANK[y.kind] || 9) * 4))[0];
+      if (!near) return;
+      // Is it before the corner as you approach (turn "just after" it) or at the corner itself?
+      const from = at(Math.max(0, t - 60)), kx = Math.cos(P[0] * Math.PI / 180);
+      const ax = (P[1] - from[1]) * kx, ay = P[0] - from[0], len = Math.hypot(ax, ay) || 1;
+      const along = (((near.ll[1] - P[1]) * kx) * ax + (near.ll[0] - P[0]) * ay) / len * 111320;   // metres past the corner in your direction of travel
+      const name = near.kind === 'fuel' && !/gas|fuel|station/i.test(near.name) ? 'the ' + near.name + ' gas station' : near.kind === 'bank' && !/bank|credit union/i.test(near.name) ? near.name + ' bank' : near.name;
+      step.mark = (along < -12 ? 'just after ' : 'at ') + name;
+    } catch (e) {}
+  })();
+}
+function guidance(step) {   // what to add to a prompt, given the toggles and what has been found so far
+  let laneText = '';
+  const lanes = prefs.lanes && step.lanes ? step.lanes : null;
+  if (lanes) {
+    const ok = lanes.map((l, i) => l.valid ? i : -1).filter(i => i >= 0), n = lanes.length, k = ok.length, run = ok[k - 1] - ok[0] + 1 === k;
+    const word = c => c === 1 ? 'lane' : (c === 2 ? 'two' : c === 3 ? 'three' : c) + ' lanes';
+    laneText = !run ? '' : ok[0] === 0 ? 'Use the left ' + word(k) : ok[k - 1] === n - 1 ? 'Use the right ' + word(k) : 'Use the middle ' + word(k);
+  }
+  return { lanes, laneText, mark: prefs.landmarks && step.mark ? step.mark : '' };
+}
+const withMark = (text, mark) => mark ? text.replace(/\.?\s*$/, '') + ', ' + mark + '.' : text;
+
+// ---------- Live traffic (only with the user's own TomTom key) ----------
+function addTraffic() {
+  if (!map || !map.isStyleLoaded()) return;
+  if (map.getLayer('traffic')) map.removeLayer('traffic');
+  if (map.getSource('traffic')) map.removeSource('traffic');
+  if (!prefs.ttKey || !prefs.trafficLayer) return;
+  map.addSource('traffic', { type: 'raster', tileSize: 256, maxzoom: 20, attribution: '&copy; TomTom',
+    tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(prefs.ttKey)}`] });
+  map.addLayer({ id: 'traffic', type: 'raster', source: 'traffic', minzoom: 6, paint: { 'raster-opacity': 0.85 } }, map.getLayer('alt') ? 'alt' : undefined);
+}
+let trafficFor = '', traffic = null;   // traffic: { delay (s), total (s) } for the trip currently shown
+async function loadTraffic() {
+  traffic = null;
+  const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
+  if (!prefs.ttKey || !driving || !pts.from || !pts.to) { trafficFor = ''; return; }
+  const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':'), key = locs + prefs.mode;
+  trafficFor = key;
+  try {
+    const r = await fetch(`https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?traffic=true&computeTravelTimeFor=all&travelMode=${prefs.mode === 'rig' ? 'truck' : 'car'}&key=${encodeURIComponent(prefs.ttKey)}`);
+    if (!r.ok) { $('ttMsg').textContent = r.status === 403 || r.status === 401 ? 'TomTom did not accept that key.' : 'Traffic is unavailable right now (' + r.status + ').'; return; }
+    const sm = (await r.json()).routes[0].summary;
+    if (trafficFor !== key) return;
+    traffic = { delay: Math.max(0, sm.travelTimeInSeconds - (sm.noTrafficTravelTimeInSeconds || sm.travelTimeInSeconds - (sm.trafficDelayInSeconds || 0))), total: sm.travelTimeInSeconds };
+    $('ttMsg').textContent = 'Traffic is on.';
+    drawTiming();
+  } catch (e) {}
 }
 
 // ---------- Information strip ----------
 // One line of glanceable text under the browser bar. Nothing here is tappable.
 let hereName = '', hereAt = null, hereWhen = 0, stripRoute = '';
-const creditUntil = Date.now() + 7000;   // the map credit shows here at start, then lives in Preferences > About
-setTimeout(() => drawStrip(), 7100);
 function drawStrip() {
-  const t = Date.now() < creditUntil && !nav ? '\u00a9 OpenStreetMap contributors' : !navigator.onLine ? 'Offline: maps and search need a connection'
+  const t = !navigator.onLine ? 'Offline: maps and search need a connection'
     : nav ? (nav.info || 'Starting...')
     : routes.length && pts.to ? stripRoute
     : hereName ? 'Near ' + hereName : here ? 'Location found'
@@ -1611,8 +1721,8 @@ function drawNavSteps() {
 }
 $('openSteps').onclick = () => { drawNavSteps(); document.body.classList.add('steps'); };
 $('openMenu').onclick = () => { $('menuMsg').textContent = ''; syncPrefs(); document.body.classList.add('menu'); };
-$('nav').onclick = () => { if (nav && nav.nextSay) say(nav.nextSay); };   // tapping the banner repeats the instruction
-$('mRepeat').onclick = () => { if (nav && nav.nextSay) { const v = prefs.voice; prefs.voice = 'all'; say(nav.nextSay); prefs.voice = v; } closeSheets(); };
+$('nav').onclick = () => { if (nav && nav.nextSay) say(nav.nextSay, 'brief'); };   // tapping the banner repeats the instruction
+$('mRepeat').onclick = () => { if (nav && nav.nextSay) { const v = prefs.voice; prefs.voice = 'detailed'; say(nav.nextSay); prefs.voice = v; } closeSheets(); };
 $('mOverview').onclick = () => {
   if (!nav) return;
   closeSheets(); nav.follow = false; document.body.classList.add('free');
@@ -1686,6 +1796,9 @@ function syncPrefs() {
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === String(prefs[g.dataset.set]))));
   document.querySelectorAll('[data-map]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.map]));
   document.querySelectorAll('[data-mapset]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === prefs[g.dataset.mapset])));
+  document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.nav]));
+  document.querySelectorAll('[data-traffic]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.traffic]));
+  if (document.activeElement !== $('ttKey')) $('ttKey').value = prefs.ttKey || '';
   $('rigH').value = prefs.rig.h; $('rigL').value = prefs.rig.l; $('rigW').value = prefs.rig.w;
 }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => { prefs.mode = b.dataset.mode; savePrefs(); syncPrefs(); route(); });
@@ -1696,6 +1809,9 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
   if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
 });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
+document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
+document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); });
+$('ttSave').onclick = () => { prefs.ttKey = $('ttKey').value.trim(); savePrefs(); $('ttMsg').textContent = prefs.ttKey ? 'Key saved. Traffic shows on your next route.' : 'Key removed. Traffic is off.'; addTraffic(); if (routes.length) loadTraffic().then(drawTiming); };
 const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
 document.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prefs[b.dataset.map] = !prefs[b.dataset.map]; mapPrefChanged(b.dataset.map); });
 document.querySelectorAll('[data-mapset] button').forEach(b => b.onclick = () => { prefs[b.parentElement.dataset.mapset] = b.dataset.v; mapPrefChanged(b.parentElement.dataset.mapset); });
