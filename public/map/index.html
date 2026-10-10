@@ -172,7 +172,11 @@
   #meetMsg:empty { display:none; }
   /* Navigation */
   #nav, #navbar, #arrived, #recenter { display:none; }
-  body.nav #top, body.nav #bottom, body.nav #fabs { display:none !important; }
+  body.nav #top, body.nav #bottom, body.nav #fabs button:not(#fabStop) { display:none !important; }
+  #fabStop { display:none; }
+  body.dest #fabStop, body.nav #fabStop { display:block; }
+  body.nav #fabs { bottom:calc(150px + env(safe-area-inset-bottom)); }
+  #stopQ, #meetName { width:100%; box-sizing:border-box; }
   body.nav #nav { display:flex; gap:14px; align-items:center; overflow:hidden; top:calc(36px + env(safe-area-inset-top)); padding:14px 18px; background:var(--accent); color:var(--accent-ink); }
   #navArrow svg { width:54px; height:54px; stroke-width:3.4; }
   #navDist { font-size:30px; font-weight:700; line-height:1.05; }
@@ -256,6 +260,7 @@
 
 <div id="quick"></div>
 <div id="fabs">
+  <button id="fabStop" class="round" title="Add a stop" aria-label="Add a stop"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.500-6-10a6 6 0 0 1 12 0c0 4.500-6 10-6 10z"/><path d="M12 8.500v5M9.500 11h5"/></svg></button>
   <button id="openMeet" class="round" title="Meet in the middle" aria-label="Meet in the middle"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c.5-3.500 2.500-5.500 5.500-5.500s5 2 5.500 5.500M14.500 14c3.200-.6 5.600 1 6.500 4.500"/></svg></button>
   <button id="locate" class="round" title="My location" aria-label="My location"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
 </div>
@@ -358,6 +363,7 @@
   <div class="chips" data-meet="kind">
     <button data-v="coffee">Coffee</button><button data-v="food">Food</button><button data-v="drinks">Drinks</button><button data-v="park">A park</button><button data-v="any">Anything</button>
   </div>
+  <div class="field"><input id="meetName" type="text" placeholder="Or a place name, like Starbucks" autocomplete="off" enterkeyhint="search"></div>
   <button id="meetGo" class="go">Find a fair spot</button>
   <div id="meetMsg"></div>
   <ul id="meetResults"></ul>
@@ -402,7 +408,8 @@
 </div>
 <div id="stops" class="panel sheet">
   <h2>Add a stop <button class="go" data-close>Done</button></h2>
-  <p>Finds places close to your route, nearest to the road first.</p>
+  <div class="field"><input id="stopQ" type="text" placeholder="Search a place or address" autocomplete="off" enterkeyhint="search"></div>
+  <p>Or pick a kind of place close to your route.</p>
   <div class="chips" id="stopKinds"></div>
   <div id="stopMsg"></div>
   <ul id="stopList" class="list"></ul>
@@ -1133,12 +1140,15 @@ async function findMeet() {
     step = 'places'; msg('Looking for places near the middle...');
     const km = Math.min(4, Math.max(0.8, span * 0.06 / 1000));
     let spots = [], kind = meet.kind;
-    for (const r of [km, km * 3, km * 8]) {
-      const found = await placesNear(mid, r, kind).catch(() => []);
+    const wanted = $('meetName').value.trim();
+    if (wanted) msg('Looking for "' + wanted + '" near the middle...');
+    for (const r of wanted ? [km * 2, km * 6, km * 16] : [km, km * 3, km * 8]) {
+      const found = await (wanted ? namedNear(mid, r, wanted) : placesNear(mid, r, kind)).catch(() => []);
       if (found.length > spots.length) spots = found;
       if (spots.length >= 3) break;
       await pause(1100);
     }
+    if (!spots.length && wanted) { msg('No "' + wanted + '" found near the middle of your trip. Check the spelling, or clear the name and pick a kind of place.'); return; }
     if (!spots.length && kind !== 'any') { kind = 'any'; spots = await placesNear(mid, km * 8, kind).catch(() => []); }
     if (!spots.length) { msg('No named places found near the middle of your trip. Try "Anything", or a different pair of locations.'); return; }
 
@@ -1737,11 +1747,63 @@ $('mOther').onclick = async () => {   // route around the stretch about a quarte
   const ok = await renav('Finding another way.');
   if (!ok) { tempAvoid = null; $('menuMsg').textContent = 'No other way found.'; await renav(); } else closeSheets();
 };
+$('fabStop').onclick = () => openStops();
 $('mStop').onclick = $('addStop').onclick = () => {
-  if (pts.via && !nav) { dropVia(); route(); return; }   // on the route sheet the same button removes the stop
-  closeSheets(); $('stopMsg').textContent = pts.via ? 'Current stop: ' + (pts.via.name || pts.via.label) + '. Choosing another replaces it.' : ''; $('stopList').innerHTML = '';
-  document.body.classList.add('stops');
+  if (pts.via && !nav) { dropVia(); route(); return; }
+  openStops();
 };
+function openStops() {   // on the route sheet the same button removes the stop
+  closeSheets(); $('stopMsg').textContent = pts.via ? 'Current stop: ' + (pts.via.name || pts.via.label) + '. Choosing another replaces it.' : ''; $('stopList').innerHTML = '';
+  document.body.classList.add('stops'); $('stopQ').value = '';
+}
+// Stop search: a kind of place ("gas") looks along the route; anything else is a name or address lookup
+let stopTimer = 0, stopId = 0;
+$('stopQ').addEventListener('input', () => { clearTimeout(stopTimer); stopTimer = setTimeout(searchStop, 450); });
+$('stopQ').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(stopTimer); searchStop(); $('stopQ').blur(); } });
+$('meetName').addEventListener('keydown', e => { if (e.key === 'Enter') { $('meetName').blur(); findMeet(); } });
+function offRoute(list, rt, start) {
+  const c = rt.coords, cum = [0];
+  for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + meters(c[i - 1], c[i]));
+  const stride = Math.max(1, Math.ceil(c.length / 2000)), first = Math.max(0, cum.findIndex(x => x >= start));
+  list.forEach(p => { let best = Infinity; for (let i = first; i < c.length; i += stride) { const d = meters(c[i], [p.lat, p.lon]); if (d < best) best = d; } p.off = best; });
+}
+async function searchStop() {
+  const q = $('stopQ').value.trim(), out = $('stopList'), msg = t => { $('stopMsg').textContent = t; }, id = ++stopId;
+  if (q.length < 3) return;
+  if (categoryOf(q)) return findStops(q, q);
+  const rt = nav ? nav.rt : routes[selected]; if (!rt) return;
+  const start = nav ? nav.along || 0 : 0, ref = nav && here ? here : rt.coords[Math.floor(rt.coords.length / 2)];
+  msg('Searching...');
+  const hits = [], add = arr => (arr || []).forEach(p => { if (!hits.some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)) hits.push(p); });
+  const jobs = [photon(`/api/?q=${encodeURIComponent(q)}&lang=en&limit=10&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => []),
+    nominatimLookup(q, ref)];
+  if (/^\d+\s+\S/.test(q)) jobs.push(censusLookup(q));
+  (await Promise.all(jobs)).forEach(add);
+  if (id !== stopId) return;
+  out.innerHTML = '';
+  if (!hits.length) { msg('No matches for "' + q + '".'); return; }
+  offRoute(hits, rt, start);
+  hits.sort((x, y) => x.off - y.off);
+  msg('Closest to your route first. Tap one to add it to your trip.');
+  hits.slice(0, 8).forEach(p => {
+    const li = el('li'), text = el('span', '', p.main);
+    if (p.sub) text.appendChild(el('small', '', p.sub));
+    li.append(text, el('em', '', fmtDist(p.off / 1609.34) + ' off route'));
+    li.onclick = () => { closeSheets(); setVia({ lat: p.lat, lon: p.lon, name: p.main, label: p.sub ? p.main + ', ' + p.sub : p.main }); };
+    out.appendChild(li);
+  });
+}
+// Meet in the middle by name: places matching the name inside a box around the midpoint
+async function namedNear(mid, r, name) {
+  const dLat = r / 111, dLon = dLat / Math.cos(mid[0] * Math.PI / 180), q = encodeURIComponent(name);
+  const inside = p => Math.abs(p.lat - mid[0]) <= dLat && Math.abs(p.lon - mid[1]) <= dLon;
+  try {
+    const d = await photon(`/api/?q=${q}&lang=en&limit=20&lat=${mid[0].toFixed(5)}&lon=${mid[1].toFixed(5)}&bbox=${(mid[1] - dLon).toFixed(4)},${(mid[0] - dLat).toFixed(4)},${(mid[1] + dLon).toFixed(4)},${(mid[0] + dLat).toFixed(4)}`);
+    return (d.features || []).filter(f => f.properties.name).map(f => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name, kind: (f.properties.osm_value || '').replace(/_/g, ' '), sub: labelOf(f.properties).sub })).filter(inside);
+  } catch (e) {}
+  const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=20&bounded=1&viewbox=${boxAround(mid, dLat)}&q=${q}`);
+  return d.filter(x => x.name).map(x => { const pl = nomiPlace(x); return { lat: pl.lat, lon: pl.lon, name: pl.main, kind: pl.kind, sub: pl.sub }; });
+}
 [['Gas', 'gas'], ['Coffee', 'coffee'], ['Food', 'food'], ['Restrooms', 'restroom'], ['Groceries', 'grocery'], ['Charging', 'charging'], ['Parking', 'parking']].forEach(([label, word]) => {
   const b = el('button', '', label); b.onclick = () => findStops(word, label); $('stopKinds').appendChild(b);
 });
