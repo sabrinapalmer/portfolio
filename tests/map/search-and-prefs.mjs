@@ -1,0 +1,36 @@
+import { chromium } from 'playwright-core';
+import fs from 'fs';
+const ROOT=new URL('../../',import.meta.url).pathname, CHROME=process.env.CHROME_PATH||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const html = fs.readFileSync(ROOT+'public/map/index.html','utf8');
+function enc(coords){let o='',pl=0,pn=0;const e=v=>{v=v<0?~(v<<1):v<<1;let s='';while(v>=0x20){s+=String.fromCharCode((0x20|(v&0x1f))+63);v>>=5}return s+String.fromCharCode(v+63)};
+ for(const [a,b] of coords){const A=Math.round(a*1e6),B=Math.round(b*1e6);o+=e(A-pl)+e(B-pn);pl=A;pn=B}return o}
+const F=(id,name,lat,lon)=>({geometry:{coordinates:[lon,lat]},properties:{osm_type:'N',osm_id:id,name,street:'Main St',city:'Chicago',state:'Illinois',country:'United States'}});
+const errs=[];
+const b = await chromium.launch({executablePath:CHROME,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFactor:2,permissions:['geolocation'],geolocation:{latitude:41.9,longitude:-87.7}});
+const p = await ctx.newPage();
+p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
+await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
+  if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
+  if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
+  if(u.includes('openfreemap')) return J({version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#eee'}}]});
+  if(u.includes('valhalla')) { const q=JSON.parse(decodeURIComponent(u.split('json=')[1])); const A=q.locations[0],B=q.locations.at(-1); return J({trip:{summary:{time:1500,length:12},legs:[{shape:enc([[A.lat,A.lon],[B.lat,B.lon]]),maneuvers:[{type:1,instruction:'Go.',begin_shape_index:0,end_shape_index:1,length:12,time:1500},{type:4,instruction:'Arrive.',begin_shape_index:1,end_shape_index:1,length:0,time:0}]}]}}); }
+  if(u.includes('nominatim')) return J([]);
+  if(u.includes('photon')&&u.includes('/reverse')) return J({features: u.includes('amenity:cafe')?[F(11,'Cafe One',41.91,-87.69),F(12,'Cafe Two',41.92,-87.68)]:u.includes('osm_tag')?[]:[F(9,'Elm Street',41.9,-87.7)]});
+  if(u.includes('photon')) return J({features: u.includes('bbox=')?[F(2,'Museum',41.94,-87.66)]:[]});
+  return r.abort();});
+await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
+console.log('strip at start:', await p.textContent('#strip'), '| on-map credit control:', await p.$$eval('.maplibregl-ctrl-attrib',e=>e.length));
+await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1200);
+console.log('route up: sheet', await p.isVisible('#bottom'), '| card', (await p.innerText('#routes')).replace(/\n/g,' / '));
+await p.click('#to'); await p.keyboard.type('coffee'); await p.waitForTimeout(1300);
+console.log('typed new search: old sheet visible?', await p.isVisible('#bottom'), '| list', await p.$$eval('#suggest li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), '| pins', await p.$$eval('.opt',e=>e.length), '| old dest pin', await p.$$eval('.pin.to',e=>e.length));
+await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1200);
+console.log('picked:', await p.textContent('#destName'), '| sheet', await p.isVisible('#bottom'));
+await p.click('#openPrefs'); await p.click('[data-mapset=units] [data-v=km]'); await p.click('[data-mapset=labels] [data-v=l]'); await p.click('[data-map=showBuildings]'); await p.waitForTimeout(800);
+console.log('km:', (await p.innerText('#routes')).replace(/\n/g,' / '), '| prefs', await p.evaluate(()=>JSON.stringify([prefs.units,prefs.labels,prefs.showBuildings])), '| route layer back', await p.evaluate(()=>!!map.getLayer('sel')));
+await p.click('[data-map=autoNight]'); await p.waitForTimeout(300); await p.click('#themes button >> nth=16'); await p.waitForTimeout(600);
+console.log('auto night: day theme', await p.evaluate(()=>prefs.theme), 'night theme', await p.evaluate(()=>prefs.nightTheme), 'showing', await p.evaluate(()=>themeKey()), 'ui', await p.evaluate(()=>document.documentElement.dataset.ui));
+await p.waitForTimeout(5500); await p.click('#closePrefs'); console.log('strip later:', await p.textContent('#strip'));
+console.log('errors', errs); await b.close();

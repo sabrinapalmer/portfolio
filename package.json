@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:map": "node tests/map/run.mjs"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -33,6 +34,8 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.13",
     "globals": "^15.11.0",
+    "maplibre-gl": "^4.7.1",
+    "playwright-core": "^1.56.1",
     "vite": "^5.4.9",
     "vite-plugin-pwa": "^0.20.5"
   },
