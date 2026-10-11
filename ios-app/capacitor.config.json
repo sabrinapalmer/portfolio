@@ -1,0 +1,6 @@
+{
+  "appId": "com.sabrinapalmer.map",
+  "appName": "Map",
+  "webDir": "www",
+  "ios": { "contentInset": "never", "backgroundColor": "#fffaf6" }
+}
