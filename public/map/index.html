@@ -81,6 +81,12 @@
   /* Route sheet */
   #bottom { bottom:calc(14px + env(safe-area-inset-bottom)); display:none; overflow:hidden; }
   #destHead { display:flex; align-items:center; gap:6px; padding:12px 8px 0 16px; }
+  #destHours { font-size:13px; color:var(--muted); margin:-2px 0 8px; } #destHours:empty { display:none; } #destHours.warn { color:#c0392b; font-weight:600; }
+  li.shut em { color:#c0392b; }
+  #speedo { display:none; position:fixed; z-index:9; left:10px; bottom:calc(100px + env(safe-area-inset-bottom)); background:var(--card); box-shadow:var(--shadow); border-radius:14px; padding:6px 10px; text-align:center; min-width:52px; }
+  body.nav #speedo.on { display:block; }
+  #speedo b { display:block; font-size:22px; line-height:1.1; } #speedo small { font-size:10px; color:var(--muted); } #speedo.over b { color:#c0392b; }
+  #speedo i { display:block; font-style:normal; margin-top:5px; padding:2px 4px; border:2px solid var(--ink); border-radius:6px; font-size:9px; line-height:1.15; font-weight:700; background:#fff; color:#111; } #speedo i:empty { display:none; } #speedo i span { display:block; font-size:17px; }
   #destName { flex:1; min-width:0; font-size:17px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #save.on { color:var(--accent); } #save.on svg { fill:currentColor; }
   #routeRow { display:flex; gap:8px; padding:10px; align-items:stretch; }
@@ -271,6 +277,7 @@
     <button id="save" class="round ghost" title="Save this place" aria-label="Save this place"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.600-7 10-7 10z"/></svg></button>
     <button id="clear" class="round ghost" title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
+  <div id="destHours"></div>
   <div id="routeRow"><div id="routes"></div><button id="go" class="go">Start</button></div>
   <div id="why"></div>
   <div id="timing">
@@ -326,7 +333,7 @@
   <h3>On-screen directions</h3>
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>Extra guidance</h3>
-  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button></div>
+  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
   <h3>Spots I avoid</h3>
   <p>Press and hold a spot on the map and choose "Avoid this spot", even during a trip. Tap its marker to stop avoiding it.</p>
   <ul class="list" id="avoidList"></ul>
@@ -339,6 +346,10 @@
   </div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
+  <h3>More reliable search (optional)</h3>
+  <p>Search uses free public servers that are sometimes slow or down. A free Geoapify key (no card) makes it steadier: create one at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and paste it here. It stays on this device. With a key, what you type in search is sent to Geoapify.</p>
+  <div class="rig"><div class="field" style="flex:1"><input id="geoKey" type="text" placeholder="Geoapify key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="geoSave">Save</button></div>
+  <div id="geoMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>Live traffic (optional)</h3>
   <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, driving routes come from TomTom and steer around jams, and your trip's start and end are sent to TomTom. Walking and biking are unchanged.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="ttKey" type="text" placeholder="TomTom key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="ttSave">Save</button></div>
@@ -346,7 +357,7 @@
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
   <p>No ads, no sponsored places, no account. Your places and settings stay on this device. Maps and roads come from OpenStreetMap, which anyone can correct.</p>
-  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search by Photon and Nominatim, routing by Valhalla and OSRM. Traffic, when you add a key, &copy; TomTom.</p>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search by Photon and Nominatim, routing by Valhalla and OSRM. Traffic, when you add a key, &copy; TomTom. Search, when you add a key, powered by Geoapify. Search, when you add a key, powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>.</p>
   <p><a id="report" target="_blank" rel="noopener">Report a map problem here</a></p>
 </div>
 
@@ -374,6 +385,7 @@
   <i id="navProg"></i>
 </div>
 <button id="recenter" class="go">Recenter</button>
+<div id="speedo"><b id="spdNow"></b><small id="spdUnit">mph</small><i id="spdLim"></i></div>
 <div id="navbar" class="panel">
   <div id="navEta"><b id="navArrive">--</b><span id="navLeft"></span></div>
   <button id="openSteps">Turns</button>
@@ -392,7 +404,7 @@
   <h3>On-screen directions</h3>
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>Extra guidance</h3>
-  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button></div>
+  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
   <h3>Map view</h3>
   <div class="chips" data-set="northUp"><button data-v="false">Faces my direction</button><button data-v="true">North up</button></div>
   <h3>This trip</h3>
@@ -426,7 +438,7 @@ const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null, via: null }, markers = { from: null, to: null, via: null };   // via: one optional stop on the way
 let tempAvoid = null;   // a point to route around for this trip only
@@ -452,7 +464,7 @@ function labelOf(p) {
   const main = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || p.city || 'Unnamed place';
   const street = p.name && p.street ? [p.housenumber, p.street].filter(Boolean).join(' ') : null;
   const sub = [street, p.city !== main ? p.city : null, p.state, p.country !== 'United States' ? p.country : null].filter(Boolean).join(', ');
-  return { main, sub };
+  return { main, sub, osm: p.osm_type && p.osm_id ? String(p.osm_type)[0].toUpperCase() + p.osm_id : '', hours: p.hours };
 }
 function decodePolyline(str, precision) {
   let i = 0, lat = 0, lng = 0; const out = [], f = Math.pow(10, precision || 6);
@@ -728,7 +740,114 @@ function watchHolds() {
 // no more than once a second.
 const pause = ms => new Promise(done => setTimeout(done, ms));
 let photonDownUntil = 0, nomiLast = 0, nomiChain = Promise.resolve();
+// ---------- Opening hours ----------
+// Reads the common OpenStreetMap formats ("Mo-Fr 08:00-17:00; Sa 09:00-13:00; Su off", "24/7"). Anything fancier returns null and the raw text is shown.
+const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+function weekOf(spec) {
+  if (/^\s*24\/7\s*$/.test(spec)) return 'always';
+  const week = [[], [], [], [], [], [], []];
+  for (const raw of spec.split(';')) {
+    const rule = raw.trim(); if (!rule) continue;
+    const m = rule.match(/^((?:Mo|Tu|We|Th|Fr|Sa|Su|PH)(?:\s*[-,]\s*(?:Mo|Tu|We|Th|Fr|Sa|Su|PH))*)?\s*(.*)$/);
+    let days = [];
+    if (m[1]) m[1].split(',').forEach(part => {
+      const [a, b] = part.trim().split('-').map(x => DAYS.indexOf(x.trim()));
+      if (a < 0) return;   // PH: holidays are not handled
+      if (b == null || b < 0) days.push(a); else for (let d = a; ; d = (d + 1) % 7) { days.push(d); if (d === b) break; }
+    }); else days = [0, 1, 2, 3, 4, 5, 6];
+    if (m[1] && !days.length) continue;
+    const rest = m[2].trim();
+    if (/^(off|closed)$/i.test(rest)) { days.forEach(d => { week[d] = []; }); continue; }
+    const spans = [];
+    for (const t of rest.split(',')) {
+      const x = t.trim().match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+      if (!x) return null;
+      const a = +x[1] * 60 + +x[2]; let b = +x[3] * 60 + +x[4]; if (b <= a) b += 1440;
+      spans.push([a, b]);
+    }
+    days.forEach(d => { week[d] = spans; });
+  }
+  return week;
+}
+function openState(spec, when) {   // { open, until (Date) } or { open: false, next (Date) }; null when the hours cannot be read
+  let week; try { week = weekOf(spec); } catch (e) { return null; }
+  if (!week) return null;
+  if (week === 'always') return { open: true, always: true };
+  const now = when.getDay() * 1440 + when.getHours() * 60 + when.getMinutes(), day0 = new Date(when); day0.setHours(0, 0, 0, 0);
+  const at = min => new Date(day0.getTime() + (min - when.getDay() * 1440) * 60000);
+  let next = Infinity;
+  for (let k = -1; k <= 7; k++) {   // yesterday (for after-midnight closing) through a week ahead
+    const d = ((when.getDay() + k) % 7 + 7) % 7, base = (when.getDay() + k) * 1440;
+    for (const [a, b] of week[d]) {
+      if (now >= base + a && now < base + b) return { open: true, until: at(base + b) };
+      if (base + a > now) next = Math.min(next, base + a);
+    }
+  }
+  return { open: false, next: next < Infinity ? at(next) : null };
+}
+function hoursText(spec, arrive) {   // one line for the place card; arrive is when you would get there
+  const now = new Date(), st = openState(spec, now), clock = t => t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+  if (!st) return { text: 'Hours: ' + spec, warn: false };
+  if (st.always) return { text: 'Open 24 hours', warn: false };
+  const day = t => t.toDateString() === now.toDateString() ? '' : new Date(now.getTime() + 86400000).toDateString() === t.toDateString() ? ' tomorrow' : ' ' + t.toLocaleDateString([], { weekday: 'short' });
+  const later = arrive ? openState(spec, arrive) : null;
+  if (st.open) {
+    if (later && !later.open) return { text: 'Closes at ' + clock(st.until) + ', before you would arrive', warn: true };
+    return { text: 'Open until ' + clock(st.until), warn: false };
+  }
+  if (later && later.open) return { text: 'Closed now, open when you arrive (until ' + clock(later.until) + ')', warn: false };
+  return { text: 'Closed now' + (st.next ? ', opens ' + clock(st.next) + day(st.next) : ''), warn: true };
+}
+async function fetchHours(places) {   // fills in .hours for places that have a map id; true when anything was found
+  const need = places.filter(p => p.osm && p.hours === undefined).slice(0, 20);
+  if (!need.length) return false;
+  try {
+    const d = await nominatim('/lookup?format=json&extratags=1&osm_ids=' + need.map(p => p.osm).join(','));
+    const by = {}; d.forEach(x => { by[x.osm_type[0].toUpperCase() + x.osm_id] = (x.extratags || {}).opening_hours || ''; });
+    need.forEach(p => { p.hours = by[p.osm] || ''; });
+    return need.some(p => p.hours);
+  } catch (e) { return false; }
+}
+function drawHours() {
+  const box = $('destHours'), p = pts.to;
+  if (!p || !p.hours) { box.textContent = ''; return; }
+  const rt = routes[selected], h = hoursText(p.hours, rt ? new Date(Date.now() + rt.time * 1000) : null);
+  box.textContent = h.text; box.classList.toggle('warn', h.warn);
+}
+
+// ---------- Optional paid-tier search (Geoapify) ----------
+// With a key saved, typed searches and kind-of-place searches go to Geoapify first. Answers are reshaped to look like
+// the free server's, so the rest of the app does not care which one replied. Any failure falls back to the free servers.
+const GEO_CAT = { 'amenity:cafe': 'catering.cafe', 'amenity:restaurant': 'catering.restaurant', 'amenity:fast_food': 'catering.fast_food', 'amenity:bar': 'catering.bar', 'amenity:pub': 'catering.pub',
+  'amenity:ice_cream': 'catering.ice_cream', 'amenity:fuel': 'commercial.gas', 'shop:supermarket': 'commercial.supermarket', 'shop': 'commercial', 'amenity:pharmacy': 'healthcare.pharmacy', 'amenity:bank': 'service.financial.bank',
+  'amenity:atm': 'service.financial.atm', 'amenity:hospital': 'healthcare.hospital', 'amenity:clinic': 'healthcare.clinic_or_praxis', 'leisure:park': 'leisure.park', 'leisure:playground': 'leisure.playground',
+  'tourism:hotel': 'accommodation.hotel', 'tourism:motel': 'accommodation.motel', 'amenity:parking': 'parking', 'shop:bakery': 'commercial.food_and_drink.bakery', 'amenity:post_office': 'service.post.office', 'amenity:library': 'education.library' };
+let geoDownUntil = 0;
+async function geoapify(path, signal) {   // null when this kind of lookup is not one Geoapify handles
+  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1)), key = '&apiKey=' + encodeURIComponent(prefs.geoKey);
+  let url;
+  if (path.startsWith('/api/')) {
+    url = 'https://api.geoapify.com/v1/geocode/autocomplete?format=geojson&lang=en&text=' + encodeURIComponent(q.get('q')) + '&limit=' + (q.get('limit') || 8)
+      + (q.get('lat') ? '&bias=proximity:' + q.get('lon') + ',' + q.get('lat') : '') + (q.get('bbox') ? '&filter=rect:' + q.get('bbox') : '');
+  } else if (path.startsWith('/reverse')) {
+    const tags = q.getAll('osm_tag'), radius = +(q.get('radius') || 1);
+    if (!tags.length || radius < 0.5 || !tags.every(t => GEO_CAT[t])) return null;
+    url = 'https://api.geoapify.com/v2/places?lang=en&categories=' + tags.map(t => GEO_CAT[t]).join(',') + '&filter=circle:' + q.get('lon') + ',' + q.get('lat') + ',' + Math.round(radius * 1000)
+      + '&bias=proximity:' + q.get('lon') + ',' + q.get('lat') + '&limit=' + (q.get('limit') || 20);
+  } else return null;
+  const r = await fetch(url + key, { signal });
+  if (!r.ok) { if (r.status === 401 || r.status === 403) $('geoMsg').textContent = 'Geoapify did not accept that key. Using the free search.'; geoDownUntil = Date.now() + 120000; throw new Error('geoapify ' + r.status); }
+  const d = await r.json();
+  return { features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => {
+    const p = x.properties || {}, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || '';
+    return { geometry: x.geometry, properties: { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.county, state: p.state, country: p.country,
+      osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: cat.split('.').pop(), hours: raw.opening_hours } };
+  }) };
+}
 async function photon(path, signal) {
+  if (prefs.geoKey && Date.now() > geoDownUntil) {
+    try { const g = await geoapify(path, signal); if (g) return g; } catch (e) { if (e.name === 'AbortError') throw e; }
+  }
   if (Date.now() < photonDownUntil) throw new Error('search down');
   let r;
   try { r = await fetch(GEOCODER + path, { signal }); } catch (e) { if (e.name === 'AbortError') throw e; photonDownUntil = Date.now() + 120000; throw new Error('search unreachable'); }
@@ -749,7 +868,8 @@ function nominatim(path, signal) {   // queued: one request at a time, at least 
 }
 function nomiPlace(x) {
   const a = x.address || {}, road = [a.house_number, a.road].filter(Boolean).join(' '), main = x.name || road || (x.display_name || '').split(',')[0];
-  return { lat: +x.lat, lon: +x.lon, main, sub: [x.name && road, a.city || a.town || a.village || a.municipality, a.state].filter(Boolean).join(', '), kind: (x.type || '').replace(/_/g, ' '), street: a.road || main };
+  return { lat: +x.lat, lon: +x.lon, main, sub: [x.name && road, a.city || a.town || a.village || a.municipality, a.state].filter(Boolean).join(', '), kind: (x.type || '').replace(/_/g, ' '), street: a.road || main,
+    osm: x.osm_type && x.osm_id ? x.osm_type[0].toUpperCase() + x.osm_id : '', hours: x.extratags ? x.extratags.opening_hours || '' : undefined };
 }
 const boxAround = (c, dLat) => { const dLon = dLat / Math.cos(c[0] * Math.PI / 180); return [c[1] - dLon, c[0] + dLat, c[1] + dLon, c[0] - dLat].map(n => n.toFixed(4)).join(','); };
 async function reverseName(lat, lon) {
@@ -909,7 +1029,7 @@ async function search(which, q, now) {
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
-  let near, far, exact = [], pending = 2 + (cat || deeper ? 1 : 0), backup = false;
+  let near, far, exact = [], pending = 2 + (cat || deeper ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   function paint() {
     if (id !== searchId) return;
@@ -932,7 +1052,10 @@ async function search(which, q, now) {
     shown.forEach((p, i) => {
       if (cat && exactNear.length && i === exactNear.length) list.appendChild(el('li', 'head', 'Other matches'));
       if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
-      list.appendChild(suggestion(which, p.main, p.sub, fmtDist(p.d / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }));
+      const st = p.hours ? openState(p.hours, new Date()) : null;
+      const li = suggestion(which, p.main, p.sub, fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours });
+      if (st && !st.open) li.classList.add('shut');
+      list.appendChild(li);
     });
     list.style.display = shown.length ? 'block' : 'none';
     const say = which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
@@ -940,6 +1063,10 @@ async function search(which, q, now) {
     else if (!pending) say(near === null && far === null && !exact.length ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
     else say('Searching...');
     settleEnter();
+    if (cat && !pending && !hoursAsked && shown.length) {   // one lookup for the opening hours of the places listed
+      hoursAsked = true;
+      fetchHours(shown).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); });
+    }
   }
   get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
@@ -975,7 +1102,10 @@ function setPoint(which, p) {
   $(which).value = p.label; if (which === 'to') syncClear();
   if (markers[which]) { markers[which].remove(); markers[which] = null; }
   if (!p.auto) mapReady.then(() => { if (pts[which] !== p) return; if (markers[which]) markers[which].remove(); markers[which] = marker('pin ' + which, [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); });
-  if (which === 'to') { document.body.classList.add('dest'); remember(p); clearPois(); dropVia(); }
+  if (which === 'to') {
+    document.body.classList.add('dest'); remember(p); clearPois(); dropVia(); drawHours();
+    if (p.hours === undefined && p.osm) fetchHours([p]).then(() => { if (pts.to === p) drawHours(); });
+  }
   if (pts.from && pts.to) { route(); return; }
   mapReady.then(() => map.easeTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 14) }));
   if (which === 'to' && !planning) startFromHere();
@@ -1256,16 +1386,17 @@ function tomtomShort(m) {
 }
 async function tomtomRoutes(quiet) {
   const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
-  const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry',
+  const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
     'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2), 'key=' + encodeURIComponent(prefs.ttKey)];
   if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
   if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
-  const url = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + q.join('&');
+  let url = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + q.join('&');
   const skip = avoid.concat(tempAvoid ? [tempAvoid] : []).slice(0, 10);
   const box = a => { const dLat = 60 / 111320, dLon = dLat / Math.cos(a.lat * Math.PI / 180); return { southWestCorner: { latitude: a.lat - dLat, longitude: a.lon - dLon }, northEastCorner: { latitude: a.lat + dLat, longitude: a.lon + dLon } }; };
   const ask = around => around ? fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avoidAreas: { rectangles: skip.map(box) } }) }) : fetch(url);
   let r = await ask(skip.length > 0), stuck = false;
+  if (r.status === 400 && url.includes('&sectionType=lanes')) { url = url.replace('&sectionType=lanes', ''); r = await ask(skip.length > 0); }   // lane data is optional
   if (!r.ok && skip.length && r.status === 400) { r = await ask(false); stuck = r.ok; }   // no way around: route through and say so
   if (!r.ok) { const e = new Error('TomTom ' + r.status); e.status = r.status; throw e; }
   const data = await r.json();
@@ -1291,6 +1422,14 @@ async function tomtomRoutes(quiet) {
         highway: inSec(at[i], 'MOTORWAY'), toll: inSec(at[i], 'TOLL_ROAD'), rough: false, ferry: inSec(at[i], 'FERRY') };
     });
     if (!steps.length) throw new Error('TomTom returned no directions');
+    try {   // lane arrows at each turn, where TomTom has them
+      const G = { STRAIGHT: '↑', SLIGHT_RIGHT: '↗', RIGHT: '→', SHARP_RIGHT: '→', RIGHT_U_TURN: '↷', SLIGHT_LEFT: '↖', LEFT: '←', SHARP_LEFT: '←', LEFT_U_TURN: '↶' };
+      secs.filter(x => /^LANES?$/i.test(x.sectionType) && Array.isArray(x.lanes) && x.lanes.length > 1 && coords[x.endPointIndex]).forEach(x => {
+        const st = steps.find(s2 => s2.kind !== 'arrive' && s2.kind !== 'stop' && s2.begin >= x.startPointIndex && meters(coords[s2.begin], coords[x.endPointIndex]) < 60);
+        const lanes = x.lanes.map(l => ({ valid: !!l.follow, glyph: (l.directions || []).map(d => G[d] || '↑').join('') || '↑' }));
+        if (st && lanes.some(l => l.valid) && !lanes.every(l => l.valid)) st.lanes = lanes;
+      });
+    } catch (e) {}
     const sm = t.summary, delay = Math.max(0, sm.noTrafficTravelTimeInSeconds != null ? sm.travelTimeInSeconds - sm.noTrafficTravelTimeInSeconds : sm.trafficDelayInSeconds || 0);
     return { time: sm.travelTimeInSeconds, dist: sm.lengthInMeters / 1609.34, coords, steps, live: true, delay };
   });
@@ -1493,6 +1632,7 @@ function drawTiming() {
   } else w.append(el('b', '', 'Arrive about ' + clock(now + total * 1000)), el('span', '', sum + '.'));
   stripRoute = (pts.to.name || pts.to.label.split(',')[0]) + '  \u00b7  ' + fmtTime(total) + '  \u00b7  ' + fmtDist(rt.dist) + '  \u00b7  ' + w.querySelector('b').textContent.toLowerCase();
   $('addStop').textContent = pts.via ? 'Remove stop: ' + (pts.via.name || 'stop') : 'Add a stop';
+  drawHours();
   drawStrip(); layout();
 }
 setInterval(() => { if ($('bottom').style.display === 'block' && !nav) drawTiming(); }, 30000);
@@ -1531,10 +1671,41 @@ function spokenDist(m) {
 async function keepAwake() { try { if (navigator.wakeLock && nav) wake = await navigator.wakeLock.request('screen'); } catch (e) {} }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
 
+// Speed limits for the route being driven, from the open router's map matching (one request per route). Limits exist only where OpenStreetMap has them.
+async function loadLimits(rt) {
+  if (!prefs.showSpeed || !(prefs.mode === 'auto' || prefs.mode === 'rig')) return;
+  try {
+    const stride = Math.max(1, Math.ceil(rt.coords.length / 3000)), shape = rt.coords.filter((c, i) => i % stride === 0 || i === rt.coords.length - 1).map(c => ({ lat: c[0], lon: c[1] }));
+    const r = await fetch(ROUTER + '/trace_attributes', { method: 'POST', body: JSON.stringify({ shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.speed_limit', 'edge.begin_shape_index', 'edge.end_shape_index', 'shape'], action: 'include' } }) });
+    const d = await r.json();
+    if (!d.edges || !d.shape || !nav || nav.rt !== rt) return;
+    const pts2 = decodePolyline(d.shape, 6), lim = new Array(pts2.length).fill(0);
+    d.edges.forEach(e => { if (e.speed_limit > 0 && e.speed_limit < 200) for (let i = e.begin_shape_index; i <= e.end_shape_index && i < lim.length; i++) lim[i] = e.speed_limit; });
+    nav.limits = { pts: pts2, lim, at: 0 };
+  } catch (e) {}
+}
+function limitHere(ll) {   // mph, rounded to the nearest 5; 0 when unknown
+  const L = nav.limits; if (!L) return 0;
+  let best = Infinity, bi = -1;
+  const scan = (a, b) => { for (let i = Math.max(0, a); i < Math.min(L.pts.length, b); i++) { const d = meters(L.pts[i], ll); if (d < best) { best = d; bi = i; } } };
+  scan(L.at - 30, L.at + 150); if (best > 60) scan(0, L.pts.length);
+  if (best > 60) return 0;
+  L.at = bi;
+  return Math.round(L.lim[bi] / 1.609344 / 5) * 5;
+}
+function drawSpeed(ll, speed) {
+  const box = $('speedo'), driving = prefs.mode === 'auto' || prefs.mode === 'rig', lim = driving ? limitHere(ll) : 0, mph = Math.round(speed * 2.23694);
+  const show = prefs.showSpeed && driving && (speed > 0.5 || lim > 0);
+  box.classList.toggle('on', !!show); if (!show) return;
+  $('spdNow').textContent = speed > 0.5 ? mph : ''; $('spdUnit').style.display = speed > 0.5 ? '' : 'none';
+  $('spdLim').innerHTML = lim ? 'LIMIT<span>' + lim + '</span>' : '';
+  box.classList.toggle('over', lim > 0 && mph >= lim + 5);
+}
 function loadNavRoute() {   // (re)build the progress tables for the current route
   const rt = routes[selected], cum = [0];
   for (let i = 1; i < rt.coords.length; i++) cum.push(cum[i - 1] + meters(rt.coords[i - 1], rt.coords[i]));
-  Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0 });
+  Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null });
+  loadLimits(rt);
 }
 function startNav() {
   if (!routes.length) return;
@@ -1614,6 +1785,7 @@ function onFix(p) {
   const head = onRoute && c[s.i + 1] ? bearing(c[s.i], c[s.i + 1]) : (p.coords.heading >= 0 && speed > 1 ? p.coords.heading : nav.head || 0);
   nav.head = head;
   showMe(ll, head);
+  drawSpeed(ll, speed);
   if (nav.follow) map.easeTo({ center: [ll[1], ll[0]], zoom: nav.zoom, bearing: prefs.northUp ? 0 : head, pitch: prefs.northUp ? 0 : 50, padding: { top: prefs.northUp ? 150 : 280, bottom: 70, left: 0, right: 0 }, duration: 900, easing: t => t });
   if (nav.busy) return;
   if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
@@ -1689,7 +1861,7 @@ function enrich(step, rt, cum) {
   step._rich = true;
   const P = rt.coords[step.begin], t = cum[step.begin], at = d => rt.coords[Math.max(0, Math.min(rt.coords.length - 1, cum.findIndex(x => x >= d)))];
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (prefs.lanes && driving) (async () => {
+  if (prefs.lanes && driving && !step.lanes) (async () => {
     try {
       const A = at(Math.max(0, t - 180)), B = at(Math.min(cum[cum.length - 1], t + 90));
       const o = await (await fetch(`${ROUTER2}/routed-car/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?steps=true&overview=false`)).json();
@@ -1926,6 +2098,7 @@ function syncPrefs() {
   document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.nav]));
   document.querySelectorAll('[data-traffic]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.traffic]));
   if (document.activeElement !== $('ttKey')) $('ttKey').value = prefs.ttKey || '';
+  if (document.activeElement !== $('geoKey')) $('geoKey').value = prefs.geoKey || '';
   $('rigH').value = prefs.rig.h; $('rigL').value = prefs.rig.l; $('rigW').value = prefs.rig.w;
 }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => { prefs.mode = b.dataset.mode; savePrefs(); syncPrefs(); route(); });
@@ -1938,6 +2111,7 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
 document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
 document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
+$('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };
 $('ttSave').onclick = () => { prefs.ttKey = $('ttKey').value.trim(); savePrefs(); $('ttMsg').textContent = prefs.ttKey ? 'Key saved. Traffic shows on your next route.' : 'Key removed. Traffic is off.'; addTraffic(); if (routes.length) loadTraffic().then(drawTiming); };
 const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
 document.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prefs[b.dataset.map] = !prefs[b.dataset.map]; mapPrefChanged(b.dataset.map); });

@@ -1,0 +1,46 @@
+import { chromium } from 'playwright-core';
+import fs from 'fs';
+const ROOT=new URL('../../',import.meta.url).pathname, CHROME=process.env.CHROME_PATH||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const html = fs.readFileSync(ROOT+'public/map/index.html','utf8');
+function enc(coords){let o='',pl=0,pn=0;const e=v=>{v=v<0?~(v<<1):v<<1;let s='';while(v>=0x20){s+=String.fromCharCode((0x20|(v&0x1f))+63);v>>=5}return s+String.fromCharCode(v+63)};
+ for(const [a,b] of coords){const A=Math.round(a*1e6),B=Math.round(b*1e6);o+=e(A-pl)+e(B-pn);pl=A;pn=B}return o}
+const F=(id,name,lat,lon)=>({geometry:{coordinates:[lon,lat]},properties:{osm_type:'N',osm_id:id,name,street:'Main St',city:'Chicago',state:'Illinois',country:'United States'}});
+const errs=[], reqs=[];
+const line=(a,b,n=10)=>Array.from({length:n+1},(_,i)=>[a.lat+(b.lat-a.lat)*i/n, a.lon+(b.lon-a.lon)*i/n]);
+const leg=(a,b,arr)=>({shape:enc(line(a,b)),maneuvers:[{type:1,instruction:'Drive on Oak Street.',street_names:['Oak Street'],begin_shape_index:0,end_shape_index:5,length:1,time:120},{type:10,instruction:'Turn right onto Pine Avenue.',street_names:['Pine Avenue'],begin_shape_index:5,end_shape_index:10,length:1,time:120},{type:4,instruction:'You have arrived at your destination.',begin_shape_index:10,end_shape_index:10,length:0,time:0}]});
+const b = await chromium.launch({executablePath:CHROME,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFactor:2,permissions:['geolocation'],geolocation:{latitude:41.9,longitude:-87.7}});
+const p = await ctx.newPage();
+p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
+await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
+  if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
+  if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
+  if(u.includes('openfreemap')) return J({version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#eee'}}]});
+  if(u.includes('sources_to_targets')) return r.abort();
+  if(u.includes('trace_attributes')) return r.abort();
+  if(u.includes('valhalla')) { const q=JSON.parse(decodeURIComponent(u.split('json=')[1])); const L=q.locations; reqs.push('route locs='+L.length+' avoid='+((q.exclude_polygons||[]).length)+' alt='+q.alternates);
+    return J({trip:{summary:{time:240*(L.length-1),length:2*(L.length-1)},legs:L.slice(1).map((x,i)=>leg(L[i],x))}}); }
+  if(u.includes('nominatim')) return J([]);
+  if(u.includes('photon')&&u.includes('/reverse')) return J({features: u.includes('amenity:fuel')?[F(21,'Shell',41.921,-87.681),F(22,'Far Gas',41.99,-87.9)]:u.includes('osm_tag')?[]:[F(9,'Elm Street',41.9,-87.7)]});
+  if(u.includes('photon')) { const q=new URL(u).searchParams.get('q'); return J({features: q==='Target'?[F(31,'Target',41.925,-87.68),F(32,'Target',42.3,-88.2)]:q==='Starbucks'&&u.includes('bbox=')?[F(41,'Starbucks',41.92,-87.68),F(42,'Starbucks',41.921,-87.675)]:u.includes('bbox=')?[F(2,'Museum',41.94,-87.66)]:[]}); }
+  return r.abort();});
+await p.goto('http://localhost/map'); await p.waitForTimeout(1800);
+await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1200);
+console.log('fab visible on route:', await p.isVisible('#fabStop'), JSON.stringify(await p.$eval('#fabStop',e=>{const r=e.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top)]})), 'bottom top', await p.$eval('#bottom',e=>Math.round(e.getBoundingClientRect().top)));
+await p.click('#fabStop'); await p.fill('#stopQ','Target'); await p.waitForTimeout(2500);
+console.log('stop search:', await p.$$eval('#stopList li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), '|', await p.textContent('#stopMsg'));
+await p.fill('#stopQ','gas'); await p.waitForTimeout(2500);
+console.log('stop category:', await p.$$eval('#stopList li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))));
+await p.fill('#stopQ','Target'); await p.waitForTimeout(2500); await p.click('#stopList li'); await p.waitForTimeout(1200);
+console.log(reqs.at(-1));
+await p.click('#go'); await p.waitForTimeout(1000);
+console.log('fab in nav:', await p.isVisible('#fabStop'), 'locate hidden:', !(await p.isVisible('#locate')));
+await p.click('#fabStop'); console.log('sheet open in nav:', await p.isVisible('#stopQ')); await p.click('#stops [data-close]');
+await p.click('#endNav'); await p.waitForTimeout(500);
+await p.evaluate(()=>{clearAll(); document.body.classList.add('meet'); meetPick({lat:41.94,lon:-87.66,label:'Friend spot'});});
+await p.waitForTimeout(300); await p.click('#meetGo'); await p.waitForTimeout(6000); console.log('meet simple:', await p.$$eval('#meetResults li',e=>e.length), await p.textContent('#meetMsg')); await p.click('#meetMore'); await p.fill('#meetName','Starbucks'); await p.press('#meetName','Enter'); await p.waitForTimeout(6000);
+console.log('meet by name:', await p.$$eval('#meetResults li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), '|', await p.textContent('#meetMsg'));
+await p.fill('#meetName','Nowhere Cafe'); await p.click('#meetGo'); await p.waitForTimeout(9000);
+console.log('meet none:', await p.textContent('#meetMsg'));
+console.log('errors', errs); await b.close();
