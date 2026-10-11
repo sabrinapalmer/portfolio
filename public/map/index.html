@@ -8,7 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Map">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="/map/icon-180.png">
+<link rel="manifest" href="/map/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
@@ -346,6 +347,11 @@
   </div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
+  <h3>Offline map</h3>
+  <p>Places you have looked at stay viewable without a connection for a while. To be sure of an area, move the map to it and save it. Search and new routes still need a connection; a route you already have keeps working.</p>
+  <div class="chips"><button id="offSave">Save the area on screen</button><button id="offClear">Remove saved areas</button></div>
+  <div id="offMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
+  <div id="offUse" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
   <h3>More reliable search (optional)</h3>
   <p>Search uses free public servers that are sometimes slow or down. A free Geoapify key (no card) makes it steadier: create one at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and paste it here. It stays on this device. With a key, what you type in search is sent to Geoapify.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="geoKey" type="text" placeholder="Geoapify key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="geoSave">Save</button></div>
@@ -437,6 +443,92 @@ const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing 
 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
+// ---------- Running as an installed app ----------
+// Inside the iPhone app (a native shell around this same page) location, voice and screen-on go through native
+// plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
+const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE = plugin('KeepAwake');
+const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
+if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
+
+// ---------- Offline map storage ----------
+// Map tiles, label fonts and the map style are kept in the browser's database. "saved" holds areas you chose to
+// download and is never trimmed; "seen" holds whatever you have looked at and is trimmed to the newest ~1500 tiles.
+const OFF = { tiles: '', glyphs: '', puts: 0 };
+let offDb = null;
+function idb() {
+  return offDb || (offDb = new Promise((res, rej) => {
+    const r = indexedDB.open('map-offline', 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('saved'); r.result.createObjectStore('seen', { keyPath: 'k' }).createIndex('t', 't'); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+}
+const idbDo = (store, mode, fn) => idb().then(db => new Promise(res => { let q; try { q = fn(db.transaction(store, mode).objectStore(store)); } catch (e) { return res(undefined); } q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); })).catch(() => undefined);
+const offGet = async k => (await idbDo('saved', 'readonly', s => s.get(k))) || ((await idbDo('seen', 'readonly', s => s.get(k))) || {}).b;
+const offSave = (k, v) => idbDo('saved', 'readwrite', s => s.put(v, k));
+function offSeen(k, b) {
+  idbDo('seen', 'readwrite', s => s.put({ k, b, t: Date.now() }));
+  if (++OFF.puts % 200 === 0) idbDo('seen', 'readonly', s => s.count()).then(n => {   // trim the oldest when it grows past ~1500
+    if (!(n > 1500)) return;
+    idb().then(db => { let left = n - 1000; const c = db.transaction('seen', 'readwrite').objectStore('seen').index('t').openCursor(); c.onsuccess = () => { const cur = c.result; if (cur && left-- > 0) { cur.delete(); cur.continue(); } }; });
+  });
+}
+function realUrl(key) {   // 't/z/x/y' -> tile address, 'g/fontstack/range' -> label font address
+  const rest = key.slice(2);
+  if (key[0] === 't') { const [z, x, y] = rest.split('/'); return OFF.tiles ? OFF.tiles.replace('{z}', z).replace('{x}', x).replace('{y}', y) : ''; }
+  const cut = rest.lastIndexOf('/'); return OFF.glyphs ? OFF.glyphs.replace('{fontstack}', rest.slice(0, cut)).replace('{range}', rest.slice(cut + 1)) : '';
+}
+async function offFetch(key, signal, keepForever) {   // stored copy first, then the network (and remember it)
+  const hit = await offGet(key);
+  if (hit) return hit;
+  const url = realUrl(key); if (!url) throw new Error('offline');
+  const r = await fetch(url, { signal });
+  if (r.status === 404 || r.status === 204) return new ArrayBuffer(0);
+  if (!r.ok) throw new Error('tile ' + r.status);
+  const buf = await r.arrayBuffer();
+  if (keepForever || key[0] === 'g') offSave(key, buf); else offSeen(key, buf);
+  return buf;
+}
+async function offlineStyle(st) {   // point the style's tiles and label fonts at the stored copies
+  for (const id in st.sources) {
+    const src = st.sources[id];
+    if (src.type !== 'vector' || !src.url || OFF.tiles && OFF.src !== id) continue;
+    let tj = null;
+    try { tj = await (await fetch(src.url)).json(); offSave('tilejson', JSON.stringify(tj)); } catch (e) { try { tj = JSON.parse(await offGet('tilejson')); } catch (e2) {} }
+    if (!tj || !tj.tiles) continue;
+    OFF.tiles = tj.tiles[0]; OFF.src = id; OFF.maxzoom = tj.maxzoom || 14;
+    st.sources[id] = { type: 'vector', tiles: ['omt://t/{z}/{x}/{y}'], minzoom: tj.minzoom || 0, maxzoom: OFF.maxzoom, attribution: tj.attribution || '' };
+  }
+  if (st.glyphs && !st.glyphs.startsWith('omt:')) { OFF.glyphs = st.glyphs; st.glyphs = 'omt://g/{fontstack}/{range}'; }
+  return st;
+}
+// Download every tile for the area on screen, from the current zoom down to street level
+async function saveArea() {
+  const msg = t => { $('offMsg').textContent = t; };
+  if (!OFF.tiles) { msg('The map has not loaded yet. Try again in a moment.'); return; }
+  if (saveArea.busy) return;
+  const b = map.getBounds(), keys = [], xy = (lat, lon, z) => { const n = Math.pow(2, z), la = Math.max(-85, Math.min(85, lat)) * Math.PI / 180; return [Math.floor((lon + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n)]; };
+  for (let z = 0; z <= OFF.maxzoom; z++) {
+    const [x0, y0] = xy(b.getNorth(), b.getWest(), z), [x1, y1] = xy(b.getSouth(), b.getEast(), z);
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) keys.push('t/' + z + '/' + x + '/' + y);
+    if (keys.length > 6000) { msg('That area is too big to save in one go. Zoom in to about a city or county and try again.'); return; }
+  }
+  saveArea.busy = true;
+  let done = 0, failed = 0, bytes = 0, next = 0;
+  const work = async () => { while (next < keys.length) { const k = keys[next++]; try { const hit = await idbDo('saved', 'readonly', s => s.get(k)); const buf = hit || await offFetch(k, undefined, true); bytes += buf.byteLength; } catch (e) { failed++; } if (++done % 20 === 0) msg('Saving ' + done + ' of ' + keys.length + '...'); } };
+  await Promise.all([work(), work(), work(), work(), work(), work()]);
+  saveArea.busy = false;
+  const areas = store('map.areas') || []; areas.push({ at: Date.now(), tiles: keys.length - failed, mb: +(bytes / 1048576).toFixed(1) }); store('map.areas', areas);
+  msg(failed ? 'Saved ' + (keys.length - failed) + ' of ' + keys.length + ' map pieces. ' + failed + ' failed; try again with a better connection.' : 'Saved. This area now works without a connection (' + (bytes / 1048576).toFixed(1) + ' MB).');
+  drawOffline();
+}
+function drawOffline() {
+  const areas = store('map.areas') || [], mb = areas.reduce((a, x) => a + x.mb, 0);
+  $('offUse').textContent = areas.length ? areas.length + (areas.length === 1 ? ' saved area, about ' : ' saved areas, about ') + mb.toFixed(1) + ' MB.' : 'No saved areas yet.';
+  $('offClear').style.display = areas.length ? '' : 'none';
+}
+async function clearAreas() { await idbDo('saved', 'readwrite', s => s.clear()); store('map.areas', []); $('offMsg').textContent = 'Saved areas removed.'; drawOffline(); }
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
@@ -613,8 +705,11 @@ function restyle(style, t) {
 }
 let rawStyle = null;
 async function themedStyle() {
-  if (!rawStyle) rawStyle = await (await fetch(STYLE)).text();
-  return restyle(JSON.parse(rawStyle), theme());
+  if (!rawStyle) {
+    try { rawStyle = await (await fetch(STYLE)).text(); offSave('style', rawStyle); }
+    catch (e) { rawStyle = await offGet('style'); if (!rawStyle) throw e; }   // no connection: the copy from last time
+  }
+  return restyle(await offlineStyle(JSON.parse(rawStyle)), theme());
 }
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
@@ -660,6 +755,7 @@ function drawThemes() {
   });
 }
 
+maplibregl.addProtocol('omt', async (params, ac) => ({ data: await offFetch(params.url.slice(6), ac.signal) }));
 mapReady = (async () => {
   let style = STYLE; shownTheme = themeKey();
   try { style = await themedStyle(); } catch (e) {}
@@ -1114,10 +1210,11 @@ function setPoint(which, p) {
 function startFromHere() {
   const use = () => { if (pts.to && !pts.from && here && !planning) setPoint('from', { lat: here[0], lon: here[1], label: 'My location', auto: true }); };
   if (here) { use(); return; }
-  if (!navigator.geolocation) { status('Location is not available. Use "Plan a route" to choose a start.'); return; }
+  if (!navigator.geolocation && !BG) { status('Location is not available. Use "Plan a route" to choose a start.'); return; }
   status('Getting your location...');
+  if (BG) return;   // in the app the running location watch picks this up on its first fix
   navigator.geolocation.getCurrentPosition(
-    p => { status(''); showMe([p.coords.latitude, p.coords.longitude]); use(); },
+    p => { if ($('status').textContent === 'Getting your location...') status(''); showMe([p.coords.latitude, p.coords.longitude]); use(); },
     e => { status('Location is off. Allow location for this site, or choose a start with the route button.'); if (e.code === 1) { locState = 'blocked'; locHelp(); } },
     { enableHighAccuracy: true, timeout: 10000 });
 }
@@ -1295,7 +1392,7 @@ async function findMeet() {
       const dest = { lat: p.lat, lon: p.lon, name: p.name, label: p.sub ? p.name + ', ' + p.sub : p.name };
       text.onclick = () => { document.body.classList.remove('meet'); prefs.mode = meet.myMode; savePrefs(); syncPrefs(); setPoint('to', dest); };
       share2.onclick = async () => {   // a link that opens this map with the place as the friend's destination
-        const url = location.origin + location.pathname + '#to=' + p.lat.toFixed(5) + ',' + p.lon.toFixed(5) + '&mode=' + meet.friendMode;
+        const url = SHARE_BASE + '#to=' + p.lat.toFixed(5) + ',' + p.lon.toFixed(5) + '&mode=' + meet.friendMode;
         try { if (navigator.share) await navigator.share({ title: 'Meet at ' + p.name, text: 'Meet at ' + p.name + '?', url }); else { await navigator.clipboard.writeText(url); msg('Link copied. Send it to your friend.'); } } catch (e) {}
       };
       li.append(text, share2); out.appendChild(li);
@@ -1476,12 +1573,20 @@ async function route(quiet) {
   }
   if (!found) {
     try { found = await osrmRoutes(quiet); useBackup = true; }
-    catch (e) { if (id === reqId) status(e.message && !/fetch/i.test(e.message) ? e.message : 'Routing is unavailable right now. Try again in a moment.'); return false; }
+    catch (e) {
+      const t = store('map.trip');   // no connection: fall back to the last route to this same place
+      if (t && t.mode === prefs.mode && t.routes && meters([t.to.lat, t.to.lon], [pts.to.lat, pts.to.lon]) < 80) {
+        found = t.routes; found.saved = true;
+        found.note = 'No connection. Showing the route saved at ' + new Date(t.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
+      } else { if (id === reqId) status(e.message && !/fetch/i.test(e.message) ? e.message : 'Routing is unavailable right now. Try again in a moment.'); return false; }
+    }
   }
   if (id !== reqId) return false;
+  const fromSaved = !!found.saved;
   found.forEach(describe);
   if (!prefs.showAll) { const note = found.note; found = sensible(found); found.note = note; }
   routes = found; selected = 0;
+  if (!fromSaved) store('map.trip', { at: Date.now(), mode: prefs.mode, from: pts.from, to: pts.to, via: pts.via || null, routes: [Object.assign({}, found[0], { _cells: undefined })] });
   await mapReady;
   draw(!quiet);
   loadTraffic();
@@ -1657,7 +1762,9 @@ function layout() {   // keep the floating button and map credit clear of the ro
 // 'detailed' adds how far to continue and what comes straight after a turn. Each call names the lowest level that hears it.
 const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
 function say(text, level) {
-  if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text || !window.speechSynthesis) return;
+  if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text) return;
+  if (TTS) { TTS.stop().catch(() => {}).then(() => TTS.speak({ text, lang: 'en-US', rate: 1, category: 'playback' })).catch(() => {}); return; }
+  if (!window.speechSynthesis) return;
   try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {}
 }
 function spokenDist(m) {
@@ -1668,7 +1775,7 @@ function spokenDist(m) {
   if (mi < 0.7) return 'half a mile';
   return (mi < 10 ? Math.round(mi * 2) / 2 : Math.round(mi)) + ' miles';
 }
-async function keepAwake() { try { if (navigator.wakeLock && nav) wake = await navigator.wakeLock.request('screen'); } catch (e) {} }
+async function keepAwake() { if (AWAKE) { try { if (nav) await AWAKE.keepAwake(); } catch (e) {} return; } try { if (navigator.wakeLock && nav) wake = await navigator.wakeLock.request('screen'); } catch (e) {} }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
 
 // Speed limits for the route being driven, from the open router's map matching (one request per route). Limits exist only where OpenStreetMap has them.
@@ -1709,7 +1816,7 @@ function loadNavRoute() {   // (re)build the progress tables for the current rou
 }
 function startNav() {
   if (!routes.length) return;
-  if (!navigator.geolocation) { status('Location is not available in this browser.'); return; }
+  if (!navigator.geolocation && !BG) { status('Location is not available in this browser.'); return; }
   nav = { follow: true, lastReroute: 0, lastTraffic: Date.now(), busy: false, zoom: 16.5 };
   loadNavRoute();
   document.body.classList.add('nav'); document.body.classList.remove('free');
@@ -1718,6 +1825,7 @@ function startNav() {
   // Phones only allow speech that starts inside a tap, so say something now even when the first prompt is far off
   if (prefs.voice === 'detailed') say('Starting directions.', 'detailed'); else if (prefs.voice !== 'off' && window.speechSynthesis) { try { speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch (e) {} }
   keepAwake();
+  if (BG) startWatch(true);   // switch to a watch that keeps going with the screen locked
   if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
   drawStrip();
 }
@@ -1727,6 +1835,8 @@ function endNav(arrivedAt) {
   document.body.classList.remove('nav', 'free'); closeSheets();
   try { if (wake) wake.release(); } catch (e) {}
   wake = null;
+  if (AWAKE) AWAKE.allowSleep().catch(() => {});
+  if (BG) startWatch(true);   // back to a foreground-only location watch
   if (here) showMe(here);
   map.easeTo({ pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 } });
   if (arrivedAt) {
@@ -2111,6 +2221,7 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
 document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
 document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
+$('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();
 $('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };
 $('ttSave').onclick = () => { prefs.ttKey = $('ttKey').value.trim(); savePrefs(); $('ttMsg').textContent = prefs.ttKey ? 'Key saved. Traffic shows on your next route.' : 'Key removed. Traffic is off.'; addTraffic(); if (routes.length) loadTraffic().then(drawTiming); };
 const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
@@ -2171,7 +2282,25 @@ $('locate').onclick = () => {
 
 // ---------- Location: one watch for the whole session, with a clear explanation when it does not work ----------
 let watchId = null, locState = 'waiting', locFirst = true, locHelped = false;
+let bgWatch = null;
 function startWatch(precise) {
+  if (BG) {   // in the app: a native watch, which keeps reporting with the screen locked while directions are running
+    const old = bgWatch; bgWatch = null;
+    Promise.resolve(old).then(id => id && BG.removeWatcher({ id })).catch(() => {});
+    const opts = { requestPermissions: true, stale: false, distanceFilter: nav ? 3 : 10 };
+    if (nav) Object.assign(opts, { backgroundTitle: 'Directions are running', backgroundMessage: 'Map is using your location to guide you.' });
+    bgWatch = BG.addWatcher(opts, (loc, err) => {
+      if (err) { if (err.code === 'NOT_AUTHORIZED') { locState = 'blocked'; drawStrip(); if (nav) $('navText').textContent = 'Location is off. Allow location for Map in Settings.'; } return; }
+      if (!loc) return;
+      locState = 'ok'; document.body.classList.remove('loc');
+      onFix({ coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy || 0, speed: loc.speed, heading: loc.bearing == null ? -1 : loc.bearing } });
+      if (!locFirst) return; locFirst = false;
+      if (!pts.from && !pts.to) map.jumpTo({ center: [here[1], here[0]], zoom: 14 });
+      else if (pts.to && !pts.from) startFromHere();
+      drawStrip();
+    });
+    return;
+  }
   if (!navigator.geolocation) { locState = 'unsupported'; drawStrip(); return; }
   if (watchId != null) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(p => {
@@ -2228,6 +2357,10 @@ function writeHash() {
   const f = parse(h.get('from')), t = parse(h.get('to'));
   if (f) setPointFromLatLng('from', f[0], f[1]);
   if (t) setPointFromLatLng('to', t[0], t[1]);
+  if (!f && !t && navigator.onLine === false) {   // opened with no connection: bring back the trip in progress
+    const last = store('map.trip');
+    if (last && Date.now() - last.at < 12 * 3600000) { prefs.mode = last.mode; syncPrefs(); setPoint('to', last.to); }
+  }
   startWatch(true);
 })();
 </script>
