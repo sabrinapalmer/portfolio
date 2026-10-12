@@ -41,7 +41,8 @@ const Home: React.FC = () => {
               I spent more than five years at Splunk, starting in sales
               engineering and moving into building the pipelines, dashboards,
               and internal apps the sales engineering team relied on. Now I
-              build my own apps and enter game jams.
+              build my own apps and websites, including Nearly Zero, a shop
+              for plastic-free clothing.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link

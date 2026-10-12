@@ -62,9 +62,9 @@ const Projects: React.FC = () => (
   <div className="page">
     <PageHeader
       title="Projects"
-      intro="Apps and tools I've built, and games from game jams. Newest first."
+      intro="Websites, apps and tools I've built, and games from game jams. Newest first."
     >
-      <nav aria-label="Project types" className="mt-6 flex gap-6 text-[15px]">
+      <nav aria-label="Project types" className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[15px]">
         {projectGroups.map((g) => (
           <a key={g.type} href={`#${g.type}`} className="link">
             {g.title}

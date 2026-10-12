@@ -5,7 +5,7 @@ import SpotifyCustomizer from "../assets/projects/SpotifyCustomizer.jpg";
 import Portfolio from "../assets/projects/Portfolio.jpg";
 import NetWorthLedger from "../assets/projects/NetWorthLedger.jpg";
 
-export type ProjectType = "apps" | "games";
+export type ProjectType = "websites" | "apps" | "games";
 
 export interface ProjectLink {
   label: string;
@@ -26,6 +26,11 @@ export interface Project {
 
 export const projectGroups: { type: ProjectType; title: string; intro: string }[] = [
   {
+    type: "websites",
+    title: "Websites",
+    intro: "Sites designed and built for businesses, including my own.",
+  },
+  {
     type: "apps",
     title: "Apps and tools",
     intro: "Things I built because I wanted to use them.",
@@ -38,6 +43,27 @@ export const projectGroups: { type: ProjectType; title: string; intro: string }[
 ];
 
 export const projects: Project[] = [
+  {
+    title: "Nearly Zero",
+    type: "websites",
+    date: "2026-09",
+    summary:
+      "My online shop for clothing made of natural fibers, with every piece tagged by how much plastic it contains.",
+    details:
+      "Shoppers filter by plastic level, from 0% to under 5%, and buy three ways: pieces I've checked by hand and ship myself, picks from other shops, and brands that meet the same standard. Includes favorites, a bag, and checkout.",
+    tags: ["HTML", "CSS", "JavaScript", "Vercel Functions", "E-commerce"],
+    links: [{ label: "Visit site", url: "https://www.wearnearlyzero.com" }],
+    featured: true,
+  },
+  {
+    title: "The Curated Estates",
+    type: "websites",
+    date: "2026-01",
+    summary:
+      "Website for a full-service estate sale company: services, how the process works, and consultation requests.",
+    tags: ["Next.js", "v0", "Vercel"],
+    links: [{ label: "Visit site", url: "https://www.thecuratedestates.com" }],
+  },
   {
     title: "Map",
     type: "apps",
@@ -77,7 +103,7 @@ export const projects: Project[] = [
       { label: "Live site", url: "https://playlistcustomizer.sabrinapalmer.com/" },
       { label: "Source", url: "https://github.com/sabrinapalmer/spotify-playlist-analyzer" },
     ],
-    featured: true,
+    
   },
   {
     title: "This site",
