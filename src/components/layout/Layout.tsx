@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import Navigation from "./Navigation";
 import { links, navItems } from "../../config/navigation";
 import { Star } from "../ui/Doodle";
+import { ClickSparkles, FloatingDoodles } from "../ui/Whimsy";
 
 const footerLinks = [
   { label: "Nearly Zero", url: "https://www.wearnearlyzero.com" },
@@ -22,7 +23,9 @@ const Layout: React.FC = () => {
   }, [pathname]);
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-clip">
+    <div className="relative flex min-h-screen flex-col overflow-x-clip">
+      <FloatingDoodles />
+      <ClickSparkles />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-ink focus:px-4 focus:py-2 focus:text-paper"
@@ -30,10 +33,10 @@ const Layout: React.FC = () => {
         Skip to content
       </a>
       <Navigation />
-      <main id="main" className="flex-1">
+      <main id="main" className="relative z-10 flex-1">
         <Outlet />
       </main>
-      <footer className="mt-28 bg-ink text-paper">
+      <footer className="relative z-10 mt-28 bg-ink text-paper">
         <div className="page grid gap-10 py-12 md:grid-cols-3">
           <div>
             <Link to="/" className="flex items-center gap-2">

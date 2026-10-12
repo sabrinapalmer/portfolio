@@ -1,39 +1,85 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
-/** Letters spring in one by one, and each one wobbles when hovered. */
+/** Resolves once web fonts are ready (or after a short timeout), so text
+ *  animations don't start in a fallback font and then jump. */
+const useFontsReady = () => {
+  const [ready, setReady] = useState(
+    typeof document === "undefined" || !("fonts" in document)
+  );
+  useEffect(() => {
+    if (ready) return;
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        setReady(true);
+      }
+    };
+    document.fonts.ready.then(finish);
+    const t = window.setTimeout(finish, 1200);
+    return () => window.clearTimeout(t);
+  }, [ready]);
+  return ready;
+};
+
+/** Letters spring in one by one and wobble on hover. Words never break
+ *  in the middle. */
 export const BouncyText: React.FC<{
   text: string;
   className?: string;
   delay?: number;
-}> = ({ text, className, delay = 0 }) => {
+  colors?: string[];
+}> = ({ text, className, delay = 0, colors }) => {
   const reduce = useReducedMotion();
+  const fontsReady = useFontsReady();
+  let index = 0;
+
   return (
-    <span className={className} aria-label={text} role="text">
-      {text.split("").map((ch, i) =>
-        ch === " " ? (
-          <span key={i} aria-hidden> </span>
-        ) : (
-          <motion.span
-            key={i}
-            aria-hidden
-            className="inline-block"
-            initial={reduce ? false : { y: 40, opacity: 0, rotate: -12 }}
-            animate={{ y: 0, opacity: 1, rotate: 0 }}
-            transition={{
-              type: "spring",
-              stiffness: 420,
-              damping: 14,
-              delay: delay + i * 0.045,
-            }}
-            whileHover={
-              reduce ? undefined : { y: -10, rotate: i % 2 ? 8 : -8, scale: 1.08 }
-            }
-          >
-            {ch}
-          </motion.span>
-        )
-      )}
+    <span className={className}>
+      <span className="sr-only">{text}</span>
+      <span aria-hidden>
+        {text.split(" ").map((word, w, words) => (
+          <React.Fragment key={w}>
+            <span className="inline-block whitespace-nowrap">
+              {word.split("").map((ch) => {
+                const i = index++;
+                return (
+                  <motion.span
+                    key={i}
+                    className="inline-block"
+                    style={colors ? { color: colors[i % colors.length] } : undefined}
+                    initial={reduce ? false : { y: 36, opacity: 0, rotate: -10 }}
+                    animate={
+                      fontsReady || reduce
+                        ? { y: 0, opacity: 1, rotate: 0 }
+                        : { y: 36, opacity: 0, rotate: -10 }
+                    }
+                    transition={{
+                      type: "spring",
+                      stiffness: 420,
+                      damping: 15,
+                      delay: delay + i * 0.04,
+                    }}
+                    whileHover={
+                      reduce
+                        ? undefined
+                        : {
+                            y: -8,
+                            rotate: i % 2 ? 8 : -8,
+                            transition: { type: "spring", stiffness: 500, damping: 10 },
+                          }
+                    }
+                  >
+                    {ch}
+                  </motion.span>
+                );
+              })}
+            </span>
+            {w < words.length - 1 ? " " : null}
+          </React.Fragment>
+        ))}
+      </span>
     </span>
   );
 };
@@ -56,23 +102,18 @@ export const Marquee: React.FC<{
   </div>
 );
 
-/** Pops in when scrolled into view. Use once per group, not on every element. */
+/** Static wrapper that gives a sticker its resting tilt. Content is always
+ *  visible: nothing waits on scroll position to appear. */
 export const PopIn: React.FC<{
   children: React.ReactNode;
   className?: string;
   delay?: number;
   rotate?: number;
-}> = ({ children, className, delay = 0, rotate = 0 }) => {
-  const reduce = useReducedMotion();
-  return (
-    <motion.div
-      className={className}
-      initial={reduce ? false : { opacity: 0, y: 30, scale: 0.94, rotate: rotate * 2 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1, rotate }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ type: "spring", stiffness: 260, damping: 20, delay }}
-    >
-      {children}
-    </motion.div>
-  );
-};
+}> = ({ children, className, rotate = 0 }) => (
+  <div
+    className={className}
+    style={rotate ? { transform: `rotate(${rotate}deg)` } : undefined}
+  >
+    {children}
+  </div>
+);
