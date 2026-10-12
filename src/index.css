@@ -1,18 +1,91 @@
-@import url("https://fonts.googleapis.com/css2?family=Chango&family=Josefin+Sans:ital,wght@0,100..700;1,100..700&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-chango: "Chango", cursive;
-  --font-josefin: "Josefin Sans", sans-serif;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-ink;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.plum.DEFAULT");
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: theme("colors.plum.wash");
+  }
 }
 
-.font-chango {
-  font-family: var(--font-chango);
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-page px-4 sm:px-6 lg:px-8;
+  }
+
+  .link {
+    @apply text-plum underline decoration-plum/30 underline-offset-4 transition-colors hover:decoration-plum;
+  }
+
+  .section-title {
+    @apply font-display text-2xl font-semibold sm:text-[1.75rem];
+  }
+
+  .tag {
+    @apply rounded bg-plum-wash px-2 py-0.5 text-[13px] text-plum-dark;
+  }
+
+  /* A strip of film negative: sprocket holes along both edges. */
+  .film-strip {
+    @apply relative bg-film py-6;
+  }
+
+  .film-strip::before,
+  .film-strip::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background-image: repeating-linear-gradient(
+      to right,
+      transparent 0 10px,
+      rgba(246, 245, 248, 0.82) 10px 20px,
+      transparent 20px 30px
+    );
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .film-strip::before {
+    top: 8px;
+  }
+
+  .film-strip::after {
+    bottom: 8px;
+  }
 }
 
-.font-josefin {
-  font-family: var(--font-josefin);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

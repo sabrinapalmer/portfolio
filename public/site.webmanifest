@@ -1,6 +1,6 @@
 {
-  "name": "Sabrina Palmer Portfolio",
-  "short_name": "SP Portfolio",
+  "name": "Sabrina Palmer",
+  "short_name": "Sabrina Palmer",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -13,8 +13,8 @@
       "type": "image/png"
     }
   ],
-  "theme_color": "#1DB954",
-  "background_color": "#ffffff",
+  "theme_color": "#F6F5F8",
+  "background_color": "#F6F5F8",
   "display": "standalone",
   "start_url": "/"
 }
