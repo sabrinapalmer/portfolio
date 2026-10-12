@@ -1,32 +1,11 @@
-import { SquareCode, Gamepad2, Palette, Mail } from "lucide-react";
-
 export const navItems = [
-  {
-    path: "experience",
-    name: "Experience",
-    icon: SquareCode,
-    description: "Professional software experience and technical projects",
-    gradient: "from-purple-400 to-pink-400",
-  },
-  {
-    path: "projects",
-    name: "Projects",
-    icon: Gamepad2,
-    description: "Games and personal projects",
-    gradient: "from-pink-400 to-purple-400",
-  },
-  {
-    path: "art",
-    name: "Art",
-    icon: Palette,
-    description: "Photography and paintings",
-    gradient: "from-purple-400 to-pink-400",
-  },
-  {
-    path: "contact",
-    name: "Contact",
-    icon: Mail,
-    description: "Get in touch with me 💌",
-    gradient: "from-pink-400 to-purple-400",
-  },
+  { path: "/experience", name: "Experience", title: "Experience" },
+  { path: "/projects", name: "Projects", title: "Projects" },
+  { path: "/art", name: "Photography", title: "Photography" },
+  { path: "/contact", name: "Contact", title: "Contact" },
 ] as const;
+
+export const links = {
+  email: "sabrinampalmer@gmail.com",
+  github: "https://github.com/sabrinapalmer",
+};

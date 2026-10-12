@@ -1,42 +1,27 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
-      backdropBlur: {
-        xs: "2px",
+      colors: {
+        paper: "#F6F5F8",
+        ink: "#24212B",
+        muted: "#69656F",
+        line: "#E1DEE6",
+        plum: {
+          DEFAULT: "#5E3A8C",
+          dark: "#4A2D70",
+          wash: "#EEE9F4",
+        },
+        film: "#1E1B22",
       },
-      animation: {
-        "float-1": "float1 20s ease-in-out infinite",
-        "float-2": "float2 23s ease-in-out infinite",
-        "float-3": "float3 25s ease-in-out infinite",
-        "float-4": "float4 22s ease-in-out infinite",
+      fontFamily: {
+        display: ['"Bricolage Grotesque Variable"', "system-ui", "sans-serif"],
+        sans: ['"Instrument Sans Variable"', "system-ui", "sans-serif"],
       },
-      keyframes: {
-        float1: {
-          "0%, 100%": { transform: "translate(0px, 0px) rotate(0deg)" },
-          "25%": { transform: "translate(10px, 10px) rotate(5deg)" },
-          "50%": { transform: "translate(0px, 20px) rotate(0deg)" },
-          "75%": { transform: "translate(-10px, 10px) rotate(-5deg)" },
-        },
-        float2: {
-          "0%, 100%": { transform: "translate(0px, 0px) rotate(0deg)" },
-          "25%": { transform: "translate(-15px, 15px) rotate(-5deg)" },
-          "50%": { transform: "translate(0px, 25px) rotate(0deg)" },
-          "75%": { transform: "translate(15px, 15px) rotate(5deg)" },
-        },
-        float3: {
-          "0%, 100%": { transform: "translate(0px, 0px) rotate(0deg)" },
-          "25%": { transform: "translate(15px, -15px) rotate(5deg)" },
-          "50%": { transform: "translate(0px, -25px) rotate(0deg)" },
-          "75%": { transform: "translate(-15px, -15px) rotate(-5deg)" },
-        },
-        float4: {
-          "0%, 100%": { transform: "translate(0px, 0px) rotate(0deg)" },
-          "25%": { transform: "translate(-10px, -10px) rotate(-5deg)" },
-          "50%": { transform: "translate(0px, -20px) rotate(0deg)" },
-          "75%": { transform: "translate(10px, -10px) rotate(5deg)" },
-        },
+      maxWidth: {
+        page: "72rem",
+        prose: "38rem",
       },
     },
   },

@@ -11,9 +11,9 @@ export default defineConfig({
       // /networth, until all tabs of the site are closed.
       registerType: "autoUpdate",
       manifest: {
-        name: "Sabrina Palmer Portfolio",
-        short_name: "SP Portfolio",
-        theme_color: "#1DB954",
+        name: "Sabrina Palmer",
+        short_name: "Sabrina Palmer",
+        theme_color: "#F6F5F8",
         icons: [
           {
             src: "/android-chrome-192x192.png",
