@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Artwork, formatArtDate } from "../../data/artworks";
 
@@ -43,12 +44,12 @@ const Lightbox: React.FC<LightboxProps> = ({
   const btn =
     "rounded-full p-2.5 text-paper/80 transition-colors hover:bg-white/10 hover:text-paper";
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={artwork.title}
-      className="fixed inset-0 z-50 flex flex-col bg-film"
+      className="fixed inset-0 z-[70] flex flex-col bg-film"
       onClick={onClose}
     >
       <div className="flex items-center justify-between px-4 py-3 text-sm text-paper/70">
@@ -109,7 +110,8 @@ const Lightbox: React.FC<LightboxProps> = ({
           {artwork.medium}, {formatArtDate(artwork.dateCreated)}
         </p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

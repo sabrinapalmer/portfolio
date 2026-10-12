@@ -127,7 +127,6 @@ export const projects: Project[] = [
     accent: "mint",
     links: [
       { label: "Live site", url: "https://playlistcustomizer.sabrinapalmer.com/" },
-      { label: "Source", url: "https://github.com/sabrinapalmer/spotify-playlist-analyzer" },
     ],
   },
   {

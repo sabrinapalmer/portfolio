@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import Profile from "../assets/profile.png";
@@ -34,20 +34,41 @@ const Polaroid: React.FC<{ src: string; caption: string; w: string }> = ({
   </div>
 );
 
+/** True on devices with a mouse or trackpad. Touch devices get tap-to-wiggle
+ *  instead of dragging, so stickers never trap page scrolling. */
+const useFinePointer = () => {
+  const query = "(hover: hover) and (pointer: fine)";
+  const [fine, setFine] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setFine(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return fine;
+};
+
 const Playground: React.FC = () => {
   const area = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
+  const canDrag = useFinePointer() && !reduce;
 
   const stickers: StickerDef[] = [
     {
       key: "me",
       label: "Photo of Sabrina",
-      style: { left: "30%", top: "18%" },
+      style: { left: "31%", top: "22%" },
       rotate: -4,
       delay: 0.5,
       node: (
-        <div className="h-36 w-36 overflow-hidden rounded-full border-2 border-ink bg-gum-soft shadow-sticker-lg sm:h-44 sm:w-44">
-          <img src={Profile} alt="" draggable={false} className="h-full w-full object-cover object-top" />
+        <div className="relative">
+          <div className="absolute -inset-3 animate-spin-slow rounded-full bg-[conic-gradient(from_0deg,#FF5FA8,#7C4DFF,#4DB8FF,#2FD0A0,#FFD43B,#FF9A3C,#FF5FA8)] opacity-70 blur-md" />
+          <div className="relative h-32 w-32 overflow-hidden rounded-full border-[3px] border-ink bg-gum-soft shadow-sticker-lg sm:h-44 sm:w-44">
+            <img src={Profile} alt="" draggable={false} width={176} height={176} className="h-full w-full object-cover object-top" />
+          </div>
+          <span className="absolute -right-1 -top-1 text-3xl" aria-hidden>✨</span>
         </div>
       ),
     },
@@ -57,7 +78,7 @@ const Playground: React.FC = () => {
       style: { left: "2%", top: "4%" },
       rotate: -9,
       delay: 0.65,
-      node: <Polaroid src={photo("Smile Tower").imageUrl} caption="smile tower" w="w-28 sm:w-32" />,
+      node: <Polaroid src={photo("Smile Tower").imageUrl} caption="smile tower" w="w-24 sm:w-32" />,
     },
     {
       key: "calf",
@@ -65,7 +86,7 @@ const Playground: React.FC = () => {
       style: { right: "3%", top: "2%" },
       rotate: 7,
       delay: 0.75,
-      node: <Polaroid src={photo("Calf and Mother").imageUrl} caption="calf + mom" w="w-28 sm:w-32" />,
+      node: <Polaroid src={photo("Calf and Mother").imageUrl} caption="calf + mom" w="w-24 sm:w-32" />,
     },
     {
       key: "sticks",
@@ -73,7 +94,7 @@ const Playground: React.FC = () => {
       style: { right: "6%", bottom: "4%" },
       rotate: -6,
       delay: 0.85,
-      node: <Polaroid src={photo("Sticks at Sunset, Moonrise").imageUrl} caption="moonrise" w="w-24 sm:w-28" />,
+      node: <Polaroid src={photo("Sticks at Sunset, Moonrise").imageUrl} caption="moonrise" w="w-[5.5rem] sm:w-28" />,
     },
     {
       key: "map",
@@ -83,19 +104,19 @@ const Playground: React.FC = () => {
       delay: 0.95,
       node: (
         <div className="rounded-3xl border-2 border-ink bg-sky-soft p-2 shadow-sticker">
-          <Doodle name="map" className="h-20 w-20" />
+          <Doodle name="map" className="h-14 w-14 sm:h-20 sm:w-20" />
         </div>
       ),
     },
     {
       key: "leaf",
       label: "Nearly Zero sticker",
-      style: { left: "40%", bottom: "2%" },
+      style: { left: "42%", bottom: "3%" },
       rotate: -10,
       delay: 1.05,
       node: (
         <div className="rounded-full border-2 border-ink bg-mint-soft p-2 shadow-sticker">
-          <Doodle name="leaf" className="h-16 w-16" />
+          <Doodle name="leaf" className="h-12 w-12 sm:h-16 sm:w-16" />
         </div>
       ),
     },
@@ -127,15 +148,18 @@ const Playground: React.FC = () => {
           key={s.key}
           aria-label={s.label}
           role="img"
-          className="absolute cursor-grab touch-none active:cursor-grabbing"
+          className={`absolute select-none ${
+            canDrag ? "cursor-grab touch-none active:cursor-grabbing" : ""
+          }`}
           style={s.style}
-          drag={!reduce}
+          drag={canDrag}
           dragConstraints={area}
           dragElastic={0.2}
           dragMomentum
           initial={reduce ? false : { scale: 0, rotate: s.rotate - 30 }}
           animate={{ scale: 1, rotate: s.rotate }}
           whileHover={reduce ? undefined : { scale: 1.06 }}
+          whileTap={reduce ? undefined : { scale: 1.1, rotate: s.rotate + 14 }}
           whileDrag={{ scale: 1.12, rotate: 0, zIndex: 20 }}
           transition={{ type: "spring", stiffness: 300, damping: 16, delay: s.delay }}
         >
@@ -146,7 +170,7 @@ const Playground: React.FC = () => {
         <svg viewBox="0 0 40 30" className="h-6 w-8" aria-hidden>
           <path d="M36 26C26 24 14 18 8 6M8 6l-2 9M8 6l8 3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
-        go ahead, drag them around
+        {canDrag ? "go ahead, drag them around" : "tap them!"}
       </p>
     </div>
   );
@@ -276,21 +300,32 @@ const Home: React.FC = () => {
       <section className="page grid items-center gap-14 pb-16 pt-10 sm:pt-16 lg:grid-cols-[1fr_1.05fr] lg:gap-10">
         <div>
           <p className="font-display text-xl font-semibold text-grape sm:text-2xl">
-            hi there, I'm
+            Hi, I'm <span aria-hidden>👋</span>
           </p>
           <h1 className="mt-1 text-[3.6rem] font-extrabold leading-[0.95] sm:text-[5.4rem]">
             <BouncyText text="Sabrina" delay={0.1} />
             <br />
-            <BouncyText text="Palmer" className="text-gum" delay={0.45} />
+            <BouncyText
+              text="Palmer"
+              delay={0.4}
+              colors={["#FF5FA8", "#E957C8", "#C24FE6", "#9B4DFF", "#7C4DFF", "#FF5FA8"]}
+            />
+            <span className="ml-2 inline-block animate-bob text-[0.55em]" aria-hidden>
+              ✨
+            </span>
           </h1>
-          <Squiggle className="mt-3 h-4 w-48" color="#FFD43B" />
+          <p className="mt-3 font-display text-lg font-semibold text-grape-dark sm:text-xl">
+            Building beautiful things with code and creativity{" "}
+            <span aria-hidden>💫</span>
+          </p>
+          <Squiggle className="mt-2 h-4 w-48" color="#FFD43B" />
           <p className="mt-6 max-w-prose text-lg sm:text-xl">
             I'm a{" "}
-            <span className="rounded-md bg-sky-soft px-1.5 font-semibold">software engineer</span>,{" "}
+            <span className="rounded-md bg-sky-soft px-1 font-semibold">software engineer</span>,{" "}
             a{" "}
-            <span className="rounded-md bg-gum-soft px-1.5 font-semibold">film photographer</span>,
+            <span className="rounded-md bg-gum-soft px-1 font-semibold">film photographer</span>,
             and a{" "}
-            <span className="rounded-md bg-mint-soft px-1.5 font-semibold">maker of small useful things</span>.
+            <span className="rounded-md bg-mint-soft px-1 font-semibold">maker of small useful things</span>.
             After five-plus years building data tools at Splunk, I make my own apps,
             run a plastic-free clothing shop, and enter game jams for fun.
           </p>

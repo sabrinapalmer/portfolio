@@ -1,5 +1,4 @@
 import React, { lazy, Suspense, useCallback, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import PageHeader from "../components/ui/PageHeader";
 import Doodle from "../components/ui/Doodle";
 import { artworks, mediums } from "../data/artworks";
@@ -62,39 +61,38 @@ const Art: React.FC = () => {
         </div>
       </PageHeader>
 
-      <motion.ul layout className="columns-2 gap-4 sm:gap-6 md:columns-3 lg:columns-4">
-        <AnimatePresence mode="popLayout">
-          {visible.map((art, i) => (
-            <motion.li
-              layout
-              key={art.imageUrl}
-              className="mb-5 break-inside-avoid sm:mb-7"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1, rotate: tilts[i % tilts.length] }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              whileHover={{ rotate: 0, scale: 1.04, zIndex: 5 }}
-              transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      <ul
+        key={filter}
+        className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-6 sm:gap-y-8 lg:grid-cols-4"
+      >
+        {visible.map((art, i) => (
+          <li
+            key={art.imageUrl}
+            className="animate-[fade-up_0.35s_ease-out_both]"
+            style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+          >
+            <button
+              type="button"
+              onClick={() => setSelected(i)}
+              className="relative block w-full border-2 border-ink bg-white p-2 pb-0 text-left shadow-sticker transition-transform duration-200 ease-out [transform:rotate(var(--tilt))] hover:z-10 hover:[transform:rotate(0deg)_scale(1.04)] focus-visible:[transform:rotate(0deg)]"
+              style={{ "--tilt": `${tilts[i % tilts.length]}deg` } as React.CSSProperties}
+              aria-label={`Open ${art.title}`}
             >
-              <button
-                type="button"
-                onClick={() => setSelected(i)}
-                className="block w-full border-2 border-ink bg-white p-2 pb-0 text-left shadow-sticker"
-                aria-label={`Open ${art.title}`}
-              >
-                <img
-                  src={art.imageUrl}
-                  alt={art.title}
-                  loading="lazy"
-                  className="w-full"
-                />
-                <span className="block px-0.5 py-2 font-display text-base font-semibold leading-tight">
-                  {art.title}
-                </span>
-              </button>
-            </motion.li>
-          ))}
-        </AnimatePresence>
-      </motion.ul>
+              <img
+                src={art.imageUrl}
+                alt={art.title}
+                loading="lazy"
+                width={400}
+                height={400}
+                className="aspect-square w-full bg-grape-soft object-cover"
+              />
+              <span className="block truncate px-0.5 py-2 font-display text-[15px] font-semibold leading-tight sm:text-base">
+                {art.title}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
 
       {selected !== null && visible[selected] && (
         <Suspense fallback={null}>
