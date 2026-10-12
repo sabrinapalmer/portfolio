@@ -11,24 +11,29 @@
     @apply bg-paper font-sans text-ink antialiased;
     font-size: 17px;
     line-height: 1.6;
+    /* notebook dots */
+    background-image: radial-gradient(
+      rgba(124, 77, 255, 0.13) 1.2px,
+      transparent 1.2px
+    );
+    background-size: 22px 22px;
   }
 
   h1,
   h2,
   h3 {
     @apply font-display text-ink;
-    letter-spacing: -0.015em;
-    line-height: 1.15;
+    line-height: 1.1;
   }
 
   :focus-visible {
-    outline: 2px solid theme("colors.plum.DEFAULT");
+    outline: 3px solid theme("colors.gum.DEFAULT");
     outline-offset: 3px;
-    border-radius: 2px;
+    border-radius: 6px;
   }
 
   ::selection {
-    background: theme("colors.plum.wash");
+    background: theme("colors.butter.DEFAULT");
   }
 }
 
@@ -38,20 +43,28 @@
   }
 
   .link {
-    @apply text-plum underline decoration-plum/30 underline-offset-4 transition-colors hover:decoration-plum;
+    @apply font-medium text-grape-dark underline decoration-gum decoration-2 underline-offset-4 transition-colors hover:text-gum;
   }
 
   .section-title {
-    @apply font-display text-2xl font-semibold sm:text-[1.75rem];
+    @apply font-display text-[2rem] font-bold sm:text-[2.6rem];
   }
 
-  .tag {
-    @apply rounded bg-plum-wash px-2 py-0.5 text-[13px] text-plum-dark;
+  .sticker {
+    @apply rounded-[20px] border-2 border-ink bg-white shadow-sticker;
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-full border-2 border-ink px-5 py-2.5 text-[15px] font-semibold text-ink shadow-sticker transition-transform hover:-translate-y-0.5 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none;
+  }
+
+  .chip {
+    @apply rounded-full border-[1.5px] border-ink/80 bg-white px-2.5 py-0.5 text-[13px] font-medium text-ink;
   }
 
   /* A strip of film negative: sprocket holes along both edges. */
   .film-strip {
-    @apply relative bg-film py-6;
+    @apply relative overflow-hidden bg-film py-7;
   }
 
   .film-strip::before,
@@ -60,23 +73,27 @@
     position: absolute;
     left: 0;
     right: 0;
-    height: 8px;
+    height: 9px;
+    z-index: 1;
     background-image: repeating-linear-gradient(
       to right,
       transparent 0 10px,
-      rgba(246, 245, 248, 0.82) 10px 20px,
+      rgba(251, 246, 255, 0.85) 10px 20px,
       transparent 20px 30px
     );
-    border-radius: 2px;
     pointer-events: none;
   }
 
   .film-strip::before {
-    top: 8px;
+    top: 9px;
   }
 
   .film-strip::after {
-    bottom: 8px;
+    bottom: 9px;
+  }
+
+  .pause-on-hover:hover > * {
+    animation-play-state: paused;
   }
 }
 
@@ -85,6 +102,7 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
