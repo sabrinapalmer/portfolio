@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import emailjs from "@emailjs/browser";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import PageHeader from "../components/ui/PageHeader";
+import Doodle, { Flower } from "../components/ui/Doodle";
 import { links } from "../config/navigation";
 
 interface FormState {
@@ -12,11 +14,42 @@ interface FormState {
 type Status = "idle" | "sending" | "sent" | "error";
 
 const field =
-  "mt-1.5 block w-full rounded border border-line bg-white px-3.5 py-2.5 text-ink placeholder:text-muted/70 focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20";
+  "mt-1.5 block w-full rounded-2xl border-2 border-ink bg-white px-4 py-3 text-ink shadow-sticker transition-shadow focus:shadow-[4px_4px_0_0_#FF5FA8] focus:outline-none";
+
+const confettiColors = ["#7C4DFF", "#FF5FA8", "#FF9A3C", "#FFD43B", "#2FD0A0", "#4DB8FF"];
+
+const Confetti: React.FC = () => {
+  const pieces = Array.from({ length: 36 }, (_, i) => {
+    const angle = (i / 36) * Math.PI * 2;
+    const dist = 90 + (i % 5) * 28;
+    return {
+      x: Math.cos(angle) * dist,
+      y: Math.sin(angle) * dist - 40,
+      r: (i * 47) % 360,
+      c: confettiColors[i % confettiColors.length],
+      round: i % 3 === 0,
+    };
+  });
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-1/2" aria-hidden>
+      {pieces.map((p, i) => (
+        <motion.span
+          key={i}
+          className={`absolute block h-2.5 w-2.5 border border-ink ${p.round ? "rounded-full" : ""}`}
+          style={{ background: p.c }}
+          initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 0.4 }}
+          animate={{ x: p.x, y: p.y + 120, opacity: 0, rotate: p.r, scale: 1 }}
+          transition={{ duration: 1.4, ease: [0.2, 0.7, 0.4, 1] }}
+        />
+      ))}
+    </div>
+  );
+};
 
 const Contact: React.FC = () => {
   const [form, setForm] = useState<FormState>({ name: "", email: "", message: "" });
   const [status, setStatus] = useState<Status>("idle");
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY);
@@ -57,36 +90,34 @@ const Contact: React.FC = () => {
   return (
     <div className="page">
       <PageHeader
-        title="Contact"
+        title="Say hi"
+        color="#4DB8FF"
         intro="For projects, collaborations, or access to one of my apps, send a message here or email me directly."
+        art={<Flower className="h-28 w-28" fill="#4DB8FF" />}
       />
 
-      <div className="grid gap-12 md:grid-cols-[14rem_1fr] md:gap-12">
-        <dl className="space-y-6">
-          <div>
-            <dt className="text-sm text-muted">Email</dt>
-            <dd>
-              <a className="link break-all" href={`mailto:${links.email}`}>
-                {links.email}
-              </a>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-muted">GitHub</dt>
-            <dd>
-              <a
-                className="link"
-                href={links.github}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                sabrinapalmer
-              </a>
-            </dd>
-          </div>
-        </dl>
+      <div className="grid gap-12 md:grid-cols-[18rem_1fr] md:gap-14">
+        <div className="space-y-5">
+          <a
+            href={`mailto:${links.email}`}
+            className="sticker block -rotate-1 bg-butter p-5 transition-transform hover:rotate-0"
+          >
+            <span className="text-sm font-semibold">Email</span>
+            <span className="block break-all font-display text-xl font-bold">{links.email}</span>
+          </a>
+          <a
+            href={links.github}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sticker block rotate-1 bg-mint-soft p-5 transition-transform hover:rotate-0"
+          >
+            <span className="text-sm font-semibold">GitHub</span>
+            <span className="block font-display text-xl font-bold">sabrinapalmer</span>
+          </a>
+          <Doodle name="sparkle" className="mx-auto hidden h-24 w-24 animate-bob md:block" />
+        </div>
 
-        <form onSubmit={onSubmit} className="max-w-xl space-y-5">
+        <form onSubmit={onSubmit} className="sticker max-w-2xl space-y-5 bg-sky-soft p-6 sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block text-[15px] font-medium">
               Name
@@ -126,16 +157,19 @@ const Contact: React.FC = () => {
           </label>
 
           <div className="flex flex-wrap items-center gap-4">
+            <div className="relative">
+              <AnimatePresence>{status === "sent" && !reduce && <Confetti />}</AnimatePresence>
             <button
               type="submit"
               disabled={status === "sending"}
-              className="rounded bg-plum px-5 py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-plum-dark disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn bg-gum disabled:cursor-not-allowed disabled:opacity-60"
             >
               {status === "sending" ? "Sending…" : "Send message"}
             </button>
+            </div>
             <p role="status" className="text-[15px]">
               {status === "sent" && (
-                <span className="text-emerald-700">
+                <span className="font-semibold text-emerald-700">
                   Message sent. I'll reply by email.
                 </span>
               )}

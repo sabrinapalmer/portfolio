@@ -1,10 +1,13 @@
 import React, { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import PageHeader from "../components/ui/PageHeader";
+import Doodle from "../components/ui/Doodle";
 import { artworks, mediums } from "../data/artworks";
 
 const Lightbox = lazy(() => import("../components/ui/Lightbox"));
 
 const ALL = "All";
+const tilts = [-2.5, 1.8, -1.2, 2.4, -1.8, 1.2];
 
 const Art: React.FC = () => {
   const [filter, setFilter] = useState<string>(ALL);
@@ -27,14 +30,16 @@ const Art: React.FC = () => {
     <div className="page">
       <PageHeader
         title="Photography"
-        intro="Mostly film photography, plus a piece of furniture I built. Select a photo to see it full size."
+        color="#4DB8FF"
+        intro="Mostly film photography, plus a piece of furniture I built. Tap a photo to see it big."
+        art={<Doodle name="camera" className="h-32 w-32" />}
       >
         <div
           role="group"
           aria-label="Filter by medium"
-          className="mt-6 flex flex-wrap gap-2"
+          className="mt-7 flex flex-wrap gap-3"
         >
-          {[ALL, ...mediums].map((m) => {
+          {[ALL, ...mediums].map((m, i) => {
             const count =
               m === ALL
                 ? artworks.length
@@ -46,41 +51,50 @@ const Art: React.FC = () => {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setFilter(m)}
-                className={`rounded border px-3.5 py-1.5 text-[15px] transition-colors ${
-                  active
-                    ? "border-ink bg-ink text-paper"
-                    : "border-line bg-white text-ink hover:border-ink"
+                className={`btn !py-1.5 ${
+                  active ? ["bg-gum", "bg-sky", "bg-butter"][i % 3] : "bg-white !shadow-none"
                 }`}
               >
-                {m} <span className={active ? "text-paper/70" : "text-muted"}>{count}</span>
+                {m} <span className="font-normal opacity-70">{count}</span>
               </button>
             );
           })}
         </div>
       </PageHeader>
 
-      <ul className="columns-2 gap-3 sm:gap-4 md:columns-3 lg:columns-4">
-        {visible.map((art, i) => (
-          <li key={art.imageUrl} className="mb-3 break-inside-avoid sm:mb-4">
-            <button
-              type="button"
-              onClick={() => setSelected(i)}
-              className="group block w-full text-left"
-              aria-label={`Open ${art.title}`}
+      <motion.ul layout className="columns-2 gap-4 sm:gap-6 md:columns-3 lg:columns-4">
+        <AnimatePresence mode="popLayout">
+          {visible.map((art, i) => (
+            <motion.li
+              layout
+              key={art.imageUrl}
+              className="mb-5 break-inside-avoid sm:mb-7"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1, rotate: tilts[i % tilts.length] }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              whileHover={{ rotate: 0, scale: 1.04, zIndex: 5 }}
+              transition={{ type: "spring", stiffness: 300, damping: 22 }}
             >
-              <img
-                src={art.imageUrl}
-                alt={art.title}
-                loading="lazy"
-                className="w-full rounded-sm transition-opacity group-hover:opacity-90"
-              />
-              <span className="mt-1.5 block text-sm text-muted group-hover:text-ink">
-                {art.title}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+              <button
+                type="button"
+                onClick={() => setSelected(i)}
+                className="block w-full border-2 border-ink bg-white p-2 pb-0 text-left shadow-sticker"
+                aria-label={`Open ${art.title}`}
+              >
+                <img
+                  src={art.imageUrl}
+                  alt={art.title}
+                  loading="lazy"
+                  className="w-full"
+                />
+                <span className="block px-0.5 py-2 font-display text-base font-semibold leading-tight">
+                  {art.title}
+                </span>
+              </button>
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </motion.ul>
 
       {selected !== null && visible[selected] && (
         <Suspense fallback={null}>
