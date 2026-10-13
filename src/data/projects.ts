@@ -2,6 +2,9 @@ import Stonemoth from "../assets/projects/Stonemoth.jpg";
 import Flawp from "../assets/projects/Flawp.jpg";
 import WaywardWarlock from "../assets/projects/WaywardWarlock.jpg";
 import SpotifyCustomizer from "../assets/projects/SpotifyCustomizer.jpg";
+import NetWorthShot from "../assets/projects/NetWorthLedger.jpg";
+import ThisSiteShot from "../assets/projects/ThisSite.jpg";
+import type { CoverName } from "../components/ui/SiteCover";
 
 export type ProjectType = "websites" | "apps" | "games";
 export type Accent = "grape" | "gum" | "tang" | "butter" | "mint" | "sky";
@@ -28,6 +31,7 @@ export interface Project {
   tags: string[];
   image?: string;
   doodle?: DoodleName;
+  cover?: CoverName;
   accent: Accent;
   links: ProjectLink[];
   featured?: boolean;
@@ -70,6 +74,7 @@ export const projects: Project[] = [
       "Filter by plastic level from 0% to under 5%, and buy three ways: pieces I've checked by hand and ship myself, picks from other shops, and brands that meet the same standard.",
     tags: ["HTML", "CSS", "JavaScript", "Vercel Functions", "E-commerce"],
     doodle: "leaf",
+    cover: "nearlyzero",
     accent: "mint",
     links: [{ label: "Visit wearnearlyzero.com", url: "https://www.wearnearlyzero.com" }],
     featured: true,
@@ -84,6 +89,7 @@ export const projects: Project[] = [
       "Turn-by-turn directions that explain why a route was chosen, opening hours and speed limits, offline use, and a meet-up feature that finds a fair place to meet a friend based on where each of you is and how you're travelling.",
     tags: ["JavaScript", "MapLibre", "OpenStreetMap", "PWA"],
     doodle: "map",
+    cover: "map",
     accent: "sky",
     links: [{ label: "Open the map", url: "/map" }],
     featured: true,
@@ -97,6 +103,7 @@ export const projects: Project[] = [
       "Guided setup for every kind of account, column matching for each bank's format, duplicate removal across overlapping exports, and per-account detail you can edit. Nothing connects to a bank and files never leave the browser.",
     tags: ["JavaScript", "Data cleaning", "Charts"],
     doodle: "chart",
+    image: NetWorthShot,
     accent: "butter",
     links: [{ label: "Open the ledger", url: "/networth" }],
     featured: true,
@@ -109,6 +116,7 @@ export const projects: Project[] = [
       "Website for a full-service estate sale company: services, how the process works, and consultation requests.",
     tags: ["Next.js", "v0", "Vercel"],
     doodle: "house",
+    cover: "curated",
     accent: "tang",
     links: [
       { label: "Visit thecuratedestates.com", url: "https://www.thecuratedestates.com" },
@@ -136,6 +144,7 @@ export const projects: Project[] = [
     summary: "My portfolio, which also hosts the Map and Net Worth Ledger apps.",
     tags: ["React", "TypeScript", "Tailwind CSS", "Framer Motion", "Vercel"],
     doodle: "sparkle",
+    image: ThisSiteShot,
     accent: "grape",
     links: [{ label: "Source", url: "https://github.com/sabrinapalmer/portfolio" }],
   },

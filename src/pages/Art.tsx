@@ -6,7 +6,6 @@ import { artworks, mediums } from "../data/artworks";
 const Lightbox = lazy(() => import("../components/ui/Lightbox"));
 
 const ALL = "All";
-const tilts = [-2.5, 1.8, -1.2, 2.4, -1.8, 1.2];
 
 const Art: React.FC = () => {
   const [filter, setFilter] = useState<string>(ALL);
@@ -74,8 +73,7 @@ const Art: React.FC = () => {
             <button
               type="button"
               onClick={() => setSelected(i)}
-              className="relative block w-full border-2 border-ink bg-white p-2 pb-0 text-left shadow-sticker transition-transform duration-200 ease-out [transform:rotate(var(--tilt))] hover:z-10 hover:[transform:rotate(0deg)_scale(1.04)] focus-visible:[transform:rotate(0deg)]"
-              style={{ "--tilt": `${tilts[i % tilts.length]}deg` } as React.CSSProperties}
+              className="relative block w-full border-2 border-ink bg-white p-2 pb-0 text-left shadow-sticker transition-transform duration-200 ease-out hover:z-10 hover:-translate-y-1 hover:shadow-sticker-lg"
               aria-label={`Open ${art.title}`}
             >
               <img
