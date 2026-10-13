@@ -17,24 +17,28 @@ const photo = (title: string) => artworks.find((a) => a.title === title)!;
 type StickerDef = {
   key: string;
   style: React.CSSProperties;
-  rotate: number;
   delay: number;
   node: React.ReactNode;
   label: string;
 };
 
-const Polaroid: React.FC<{ src: string; caption: string; w: string }> = ({
-  src,
-  caption,
-  w,
-}) => (
-  <div className={`border-2 border-ink bg-white p-1.5 pb-0 shadow-sticker ${w}`}>
-    <img src={src} alt="" draggable={false} className="aspect-square w-full object-cover" />
-    <p className="py-1 text-center font-display text-sm font-semibold leading-tight">{caption}</p>
+const Polaroid: React.FC<{ src: string; caption: string }> = ({ src, caption }) => (
+  <div className="w-full border-2 border-ink bg-white p-[5%] pb-0 shadow-sticker">
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      width={300}
+      height={300}
+      className="aspect-square w-full bg-grape-soft object-cover"
+    />
+    <p className="truncate py-[0.35em] text-center font-display text-[clamp(10px,3.2cqw,15px)] font-semibold leading-tight">
+      {caption}
+    </p>
   </div>
 );
 
-/** True on devices with a mouse or trackpad. Touch devices get tap-to-wiggle
+/** True on devices with a mouse or trackpad. Touch devices get tap-to-bounce
  *  instead of dragging, so stickers never trap page scrolling. */
 const useFinePointer = () => {
   const query = "(hover: hover) and (pointer: fine)";
@@ -50,6 +54,8 @@ const useFinePointer = () => {
   return fine;
 };
 
+/* Every position and size is a percentage of the playground, so the
+   arrangement keeps its shape at any screen width. */
 const Playground: React.FC = () => {
   const area = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -57,116 +63,122 @@ const Playground: React.FC = () => {
 
   const stickers: StickerDef[] = [
     {
-      key: "me",
-      label: "Photo of Sabrina",
-      style: { left: "31%", top: "22%" },
-      rotate: -4,
-      delay: 0.5,
-      node: (
-        <div className="relative">
-          <div className="absolute -inset-3 animate-spin-slow rounded-full bg-[conic-gradient(from_0deg,#FF5FA8,#7C4DFF,#4DB8FF,#2FD0A0,#FFD43B,#FF9A3C,#FF5FA8)] opacity-70 blur-md" />
-          <div className="relative h-32 w-32 overflow-hidden rounded-full border-[3px] border-ink bg-gum-soft shadow-sticker-lg sm:h-44 sm:w-44">
-            <img src={Profile} alt="" draggable={false} width={176} height={176} className="h-full w-full object-cover object-top" />
-          </div>
-          <span className="absolute -right-1 -top-1 text-3xl" aria-hidden>✨</span>
-        </div>
-      ),
-    },
-    {
       key: "tower",
       label: "Smile Tower photo",
-      style: { left: "2%", top: "4%" },
-      rotate: -9,
-      delay: 0.65,
-      node: <Polaroid src={photo("Smile Tower").imageUrl} caption="smile tower" w="w-24 sm:w-32" />,
+      style: { left: "4%", top: "5%", width: "26%" },
+      delay: 0.5,
+      node: <Polaroid src={photo("Smile Tower").imageUrl} caption="smiley" />,
     },
     {
       key: "calf",
       label: "Calf and mother photo",
-      style: { right: "3%", top: "2%" },
-      rotate: 7,
-      delay: 0.75,
-      node: <Polaroid src={photo("Calf and Mother").imageUrl} caption="calf + mom" w="w-24 sm:w-32" />,
+      style: { right: "4%", top: "5%", width: "26%" },
+      delay: 0.6,
+      node: <Polaroid src={photo("Calf and Mother").imageUrl} caption="calf + mom" />,
     },
     {
-      key: "sticks",
-      label: "Sunset photo",
-      style: { right: "6%", bottom: "4%" },
-      rotate: -6,
-      delay: 0.85,
-      node: <Polaroid src={photo("Sticks at Sunset, Moonrise").imageUrl} caption="moonrise" w="w-[5.5rem] sm:w-28" />,
-    },
-    {
-      key: "map",
-      label: "Map sticker",
-      style: { left: "4%", bottom: "6%" },
-      rotate: 8,
-      delay: 0.95,
+      key: "me",
+      label: "Photo of Sabrina",
+      style: { left: "32%", top: "22%", width: "36%" },
+      delay: 0.4,
       node: (
-        <div className="rounded-3xl border-2 border-ink bg-sky-soft p-2 shadow-sticker">
-          <Doodle name="map" className="h-14 w-14 sm:h-20 sm:w-20" />
-        </div>
-      ),
-    },
-    {
-      key: "leaf",
-      label: "Nearly Zero sticker",
-      style: { left: "42%", bottom: "3%" },
-      rotate: -10,
-      delay: 1.05,
-      node: (
-        <div className="rounded-full border-2 border-ink bg-mint-soft p-2 shadow-sticker">
-          <Doodle name="leaf" className="h-12 w-12 sm:h-16 sm:w-16" />
+        <div className="relative aspect-square w-full">
+          <div className="absolute -inset-[7%] animate-spin-slow rounded-full bg-[conic-gradient(from_0deg,#FF5FA8,#7C4DFF,#4DB8FF,#2FD0A0,#FFD43B,#FF9A3C,#FF5FA8)] opacity-70 blur-md" />
+          <div className="relative h-full w-full overflow-hidden rounded-full border-[3px] border-ink bg-gum-soft shadow-sticker-lg">
+            <img
+              src={Profile}
+              alt=""
+              draggable={false}
+              width={300}
+              height={300}
+              className="h-full w-full object-cover object-top"
+            />
+          </div>
+          <span className="absolute right-0 top-0 text-[clamp(18px,6cqw,32px)]" aria-hidden>
+            ✨
+          </span>
         </div>
       ),
     },
     {
       key: "star",
       label: "Star sticker",
-      style: { left: "26%", top: "2%" },
-      rotate: 12,
-      delay: 1.15,
-      node: <Star className="h-12 w-12 drop-shadow-[3px_3px_0_#2B1840]" />,
+      style: { left: "36%", top: "4%", width: "10%" },
+      delay: 0.9,
+      node: <Star className="aspect-square w-full drop-shadow-[3px_3px_0_#2B1840]" />,
     },
     {
       key: "flower",
       label: "Flower sticker",
-      style: { right: "30%", top: "44%" },
-      rotate: 0,
-      delay: 1.2,
-      node: <Flower className="h-14 w-14 drop-shadow-[3px_3px_0_#2B1840]" fill="#FF9A3C" />,
+      style: { left: "62%", top: "56%", width: "11%" },
+      delay: 1.0,
+      node: (
+        <Flower className="aspect-square w-full drop-shadow-[3px_3px_0_#2B1840]" fill="#FF9A3C" />
+      ),
+    },
+    {
+      key: "map",
+      label: "Map sticker",
+      style: { left: "5%", bottom: "7%", width: "20%" },
+      delay: 0.7,
+      node: (
+        <div className="aspect-square w-full rounded-[22%] border-2 border-ink bg-sky-soft p-[12%] shadow-sticker">
+          <Doodle name="map" className="h-full w-full" />
+        </div>
+      ),
+    },
+    {
+      key: "leaf",
+      label: "Nearly Zero sticker",
+      style: { left: "41%", bottom: "5%", width: "16%" },
+      delay: 0.8,
+      node: (
+        <div className="aspect-square w-full rounded-full border-2 border-ink bg-mint-soft p-[14%] shadow-sticker">
+          <Doodle name="leaf" className="h-full w-full" />
+        </div>
+      ),
+    },
+    {
+      key: "sticks",
+      label: "Sunset photo",
+      style: { right: "5%", bottom: "6%", width: "22%" },
+      delay: 0.75,
+      node: <Polaroid src={photo("Sticks at Sunset, Moonrise").imageUrl} caption="moonrise" />,
     },
   ];
 
   return (
-    <div
-      ref={area}
-      className="relative h-[380px] rounded-[28px] border-2 border-dashed border-grape/50 bg-white/40 sm:h-[460px]"
-    >
-      {stickers.map((s) => (
-        <motion.div
-          key={s.key}
-          aria-label={s.label}
-          role="img"
-          className={`absolute select-none ${
-            canDrag ? "cursor-grab touch-none active:cursor-grabbing" : ""
-          }`}
-          style={s.style}
-          drag={canDrag}
-          dragConstraints={area}
-          dragElastic={0.2}
-          dragMomentum
-          initial={reduce ? false : { scale: 0, rotate: s.rotate - 30 }}
-          animate={{ scale: 1, rotate: s.rotate }}
-          whileHover={reduce ? undefined : { scale: 1.06 }}
-          whileTap={reduce ? undefined : { scale: 1.1, rotate: s.rotate + 14 }}
-          whileDrag={{ scale: 1.12, rotate: 0, zIndex: 20 }}
-          transition={{ type: "spring", stiffness: 300, damping: 16, delay: s.delay }}
-        >
-          {s.node}
-        </motion.div>
-      ))}
-      <p className="pointer-events-none absolute -bottom-9 right-2 flex items-center gap-1 font-display text-base font-semibold text-grape">
+    <div>
+      <div
+        ref={area}
+        className="relative aspect-[5/4] w-full rounded-[28px] border-2 border-dashed border-grape/50 bg-white/50"
+        style={{ containerType: "inline-size" }}
+      >
+        {stickers.map((s) => (
+          <motion.div
+            key={s.key}
+            aria-label={s.label}
+            role="img"
+            className={`absolute select-none ${
+              canDrag ? "cursor-grab touch-none active:cursor-grabbing" : ""
+            }`}
+            style={s.style}
+            drag={canDrag}
+            dragConstraints={area}
+            dragElastic={0.15}
+            dragMomentum={false}
+            initial={reduce ? false : { scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={reduce ? undefined : { scale: 1.05, y: -3 }}
+            whileTap={reduce ? undefined : { scale: 1.1 }}
+            whileDrag={{ scale: 1.1, zIndex: 20 }}
+            transition={{ type: "spring", stiffness: 320, damping: 18, delay: s.delay }}
+          >
+            {s.node}
+          </motion.div>
+        ))}
+      </div>
+      <p className="mt-3 flex items-center justify-end gap-1 font-display text-base font-semibold text-grape">
         <svg viewBox="0 0 40 30" className="h-6 w-8" aria-hidden>
           <path d="M36 26C26 24 14 18 8 6M8 6l-2 9M8 6l8 3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
@@ -302,7 +314,7 @@ const Home: React.FC = () => {
           <p className="font-display text-xl font-semibold text-grape sm:text-2xl">
             Hi, I'm <span aria-hidden>👋</span>
           </p>
-          <h1 className="mt-1 text-[3.6rem] font-extrabold leading-[0.95] sm:text-[5.4rem]">
+          <h1 className="mt-1 text-[clamp(2.9rem,13vw,5.4rem)] font-extrabold leading-[0.95]">
             <BouncyText text="Sabrina" delay={0.1} />
             <br />
             <BouncyText
@@ -342,7 +354,7 @@ const Home: React.FC = () => {
       </section>
 
       {/* Ribbon */}
-      <div className="-mx-4 my-10 -rotate-2 border-y-2 border-ink bg-grape py-3 text-white shadow-sticker">
+      <div className="my-10 border-y-2 border-ink bg-grape py-3 text-white shadow-sticker">
         <Marquee>
           {ribbon.map((r) => (
             <span key={r} className="flex items-center gap-6 px-3 font-display text-2xl font-bold">
@@ -366,8 +378,8 @@ const Home: React.FC = () => {
         </div>
         <div className="mt-10 grid gap-8 md:grid-cols-2">
           {featured.map((p, i) => (
-            <PopIn key={p.title} delay={(i % 2) * 0.1}>
-              <ProjectCard project={p} tilt={i % 2 ? 1.2 : -1.2} />
+            <PopIn key={p.title} className="h-full">
+              <ProjectCard project={p} />
             </PopIn>
           ))}
         </div>
@@ -379,10 +391,13 @@ const Home: React.FC = () => {
         <p className="mt-2 text-muted">Things I'm building right now.</p>
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           {inTheWorks.map((w, i) => (
-            <PopIn key={w.title} rotate={i % 2 ? 1.5 : -1.5} delay={i * 0.08}>
+            <PopIn key={w.title}>
               <div className={`sticker flex items-center gap-5 p-5 ${accentSoft[w.accent]}`}>
                 <Doodle name={w.doodle} className="h-20 w-20 shrink-0" />
                 <div>
+                  <span className="mb-1.5 inline-block rounded-full border-2 border-ink bg-white px-2 py-0.5 text-xs font-bold">
+                    Coming soon
+                  </span>
                   <h3 className="text-xl font-bold">{w.title}</h3>
                   <p className="mt-1 text-[15px]">{w.summary}</p>
                 </div>
@@ -437,7 +452,7 @@ const Home: React.FC = () => {
 
       {/* Say hi */}
       <section className="page mt-24">
-        <PopIn rotate={-1}>
+        <PopIn>
           <div className="sticker relative overflow-hidden bg-gum px-6 py-12 text-center sm:px-12">
             <Star className="absolute left-6 top-6 h-10 w-10 animate-spin-slow" />
             <Flower className="absolute bottom-6 right-8 h-12 w-12 animate-bob" fill="#FFD43B" />

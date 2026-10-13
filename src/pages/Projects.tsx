@@ -42,10 +42,10 @@ const Projects: React.FC = () => (
             <h2 className="section-title">{group.title}</h2>
           </div>
           <p className="mt-1 text-muted">{group.intro}</p>
-          <div className="mt-8 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <div className={`mt-8 grid gap-8 md:grid-cols-2 ${items.length % 3 === 0 ? "lg:grid-cols-3" : ""}`}>
             {items.map((p, i) => (
-              <PopIn key={p.title} delay={(i % 3) * 0.08}>
-                <ProjectCard project={p} tilt={[-1.2, 0.8, -0.6][i % 3]} />
+              <PopIn key={p.title} className="h-full">
+                <ProjectCard project={p} />
               </PopIn>
             ))}
           </div>
@@ -58,10 +58,13 @@ const Projects: React.FC = () => (
       <p className="mt-1 text-muted">Not public yet, coming along.</p>
       <div className="mt-8 grid gap-6 sm:grid-cols-2">
         {inTheWorks.map((w, i) => (
-          <PopIn key={w.title} rotate={i % 2 ? 1.5 : -1.5}>
+          <PopIn key={w.title}>
             <div className={`sticker flex items-center gap-5 p-5 ${accentSoft[w.accent]}`}>
               <Doodle name={w.doodle} className="h-20 w-20 shrink-0" />
               <div>
+                <span className="mb-1.5 inline-block rounded-full border-2 border-ink bg-white px-2 py-0.5 text-xs font-bold">
+                  Coming soon
+                </span>
                 <h3 className="text-xl font-bold">{w.title}</h3>
                 <p className="mt-1 text-[15px]">{w.summary}</p>
               </div>

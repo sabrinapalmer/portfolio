@@ -19,11 +19,11 @@ const PageHeader: React.FC<PageHeaderProps> = ({
 }) => (
   <header className="relative pb-12 pt-12 sm:pt-16">
     {art && (
-      <div className="pointer-events-none absolute right-0 top-8 hidden animate-bob sm:block">
+      <div className="pointer-events-none absolute right-0 top-10 hidden animate-bob md:block">
         {art}
       </div>
     )}
-    <h1 className="text-5xl font-extrabold sm:text-7xl">
+    <h1 className="text-[clamp(2rem,10vw,4.5rem)] font-extrabold">
       <BouncyText text={title} />
     </h1>
     <Squiggle className="mt-2 h-4 w-44" color={color} />

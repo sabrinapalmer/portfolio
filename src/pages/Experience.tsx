@@ -19,7 +19,7 @@ const Experience: React.FC = () => (
     {employers.map((employer) => (
       <section key={employer.company} className="grid gap-10 lg:grid-cols-[17rem_1fr]">
         <div className="lg:sticky lg:top-28 lg:self-start">
-          <div className="sticker -rotate-2 bg-butter p-6">
+          <div className="sticker bg-butter p-6">
             <h2 className="text-4xl font-extrabold">{employer.company}</h2>
             <p className="mt-1 font-semibold">
               {employer.roles[employer.roles.length - 1].start} –{" "}
@@ -77,7 +77,7 @@ const Experience: React.FC = () => (
       <h2 className="section-title">Talks and conference projects</h2>
       <div className="mt-8 grid gap-6 md:grid-cols-3">
         {talks.map((t, i) => (
-          <PopIn key={t.title} rotate={[-1.5, 1, -0.8][i % 3]} delay={i * 0.08}>
+          <PopIn key={t.title} className="h-full">
             <div className={`sticker h-full p-6 ${talkColors[i % 3]}`}>
               <p className="font-semibold text-grape-dark">
                 {t.venue}, {t.year}

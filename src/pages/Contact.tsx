@@ -100,7 +100,7 @@ const Contact: React.FC = () => {
         <div className="space-y-5">
           <a
             href={`mailto:${links.email}`}
-            className="sticker block -rotate-1 bg-butter p-5 transition-transform hover:rotate-0"
+            className="sticker block bg-butter p-5 transition-transform hover:-translate-y-1"
           >
             <span className="text-sm font-semibold">Email</span>
             <span className="block break-all font-display text-xl font-bold">{links.email}</span>
@@ -109,7 +109,7 @@ const Contact: React.FC = () => {
             href={links.github}
             target="_blank"
             rel="noopener noreferrer"
-            className="sticker block rotate-1 bg-mint-soft p-5 transition-transform hover:rotate-0"
+            className="sticker block bg-mint-soft p-5 transition-transform hover:-translate-y-1"
           >
             <span className="text-sm font-semibold">GitHub</span>
             <span className="block font-display text-xl font-bold">sabrinapalmer</span>
