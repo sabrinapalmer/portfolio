@@ -88,6 +88,7 @@
   body.nav #speedo.on { display:block; }
   #speedo b { display:block; font-size:22px; line-height:1.1; } #speedo small { font-size:10px; color:var(--muted); } #speedo.over b { color:#c0392b; }
   #speedo i { display:block; font-style:normal; margin-top:5px; padding:2px 4px; border:2px solid var(--ink); border-radius:6px; font-size:9px; line-height:1.15; font-weight:700; background:#fff; color:#111; } #speedo i:empty { display:none; } #speedo i span { display:block; font-size:17px; }
+  #status.warn { color:#c0392b; font-weight:600; }
   #destName { flex:1; min-width:0; font-size:17px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #save.on { color:var(--accent); } #save.on svg { fill:currentColor; }
   #routeRow { display:flex; gap:8px; padding:10px; align-items:stretch; }
@@ -335,8 +336,12 @@
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>Extra guidance</h3>
   <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
+  <h3>Wildfires</h3>
+  <p>Active US wildfire areas from the national fire agencies (NIFC), updated a few times a day. Routes keep at least half a mile from fire areas that are not fully contained. This does not include evacuation zones or road closures: follow local officials.</p>
+  <div class="chips"><button data-pref="fires">Show and avoid wildfires</button></div>
+  <div id="fireMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>Spots I avoid</h3>
-  <p>Press and hold a spot on the map and choose "Avoid this spot", even during a trip. Tap its marker to stop avoiding it.</p>
+  <p>Press and hold a spot on the map and choose "Avoid this spot" (the road there) or "Avoid this area" (about a mile around it), even during a trip. Tap its marker to stop avoiding it.</p>
   <ul class="list" id="avoidList"></ul>
   <h3>My rig (used in Rig mode)</h3>
   <p>For a camper, trailer or tall vehicle. Routes avoid roads and bridges posted below these limits.</p>
@@ -530,7 +535,7 @@ function drawOffline() {
 }
 async function clearAreas() { await idbDo('saved', 'readwrite', s => s.clear()); store('map.areas', []); $('offMsg').textContent = 'Saved areas removed.'; drawOffline(); }
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null, via: null }, markers = { from: null, to: null, via: null };   // via: one optional stop on the way
 let tempAvoid = null;   // a point to route around for this trip only
@@ -719,6 +724,11 @@ function addRouteLayers() {
   line('alt', false, { 'line-color': css('--alt'), 'line-width': 6, 'line-opacity': .9 });
   line('casing', true, { 'line-color': '#ffffff', 'line-width': 11 });
   line('sel', true, { 'line-color': css('--accent'), 'line-width': 6.5 });
+  map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
+  map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
+  if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['==', ['get', 'kind'], 'fire'], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
+  drawZones();
   addTraffic();
 }
 let shownTheme = '';
@@ -762,6 +772,7 @@ mapReady = (async () => {
   const v = store('map.view');
   map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false });
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
+  map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 6) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
   map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
   map.on('dragstart', () => { if (nav) { nav.follow = false; document.body.classList.add('free'); } });
   map.on('click', onMapClick); watchHolds();
@@ -785,11 +796,12 @@ function showMe(ll, heading) {
 }
 function drawAvoid() {
   avoidMarkers.forEach(m => m.remove());
+  drawZones();
   avoidMarkers = map ? avoid.map(a => {
     const m = marker('avoid', [a.lat, a.lon]);
     m.getElement().onclick = e => {   // tap an avoided spot to stop avoiding it
       e.stopPropagation();
-      const div = el('div', 'pop'), b = el('button', 'go', 'Stop avoiding this spot');
+      const div = el('div', 'pop'), b = el('button', 'go', a.r > 500 ? 'Stop avoiding this area' : 'Stop avoiding this spot');
       b.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } avoid = avoid.filter(x => x !== a); store('map.avoid', avoid); drawAvoid(); drawLists(); if (nav) renav('Rerouting.'); else route(); };
       div.append(el('small', '', a.label), b); openPop([a.lon, a.lat], div, { offset: 14 });
     };
@@ -807,14 +819,20 @@ function openPop(lngLat, div, opts) {
 }
 function onMapClick(e) {
   if (mapPop && Date.now() - mapPopAt > 500) { mapPop.remove(); mapPop = null; return; }
+  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures(e.point, { layers: ['zone-fill'] }).find(f => f.properties.kind === 'fire');
+  if (fire) {
+    const p = fire.properties, div = el('div', 'pop');
+    div.append(el('b', '', p.title), el('small', '', p.info), el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
+    openPop(e.lngLat, div); return;
+  }
   if (nav || !routes.length) return;
   const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['alt'] });
   if (hit.length) { selected = hit[0].properties.i; draw(false); }
 }
 function mapMenu(lngLat) {
   const lat = lngLat.lat, lon = lngLat.lng, div = el('div', 'pop');
-  const items = nav ? [['Avoid this spot', 'go', () => addAvoid(lat, lon)]]   // during a trip the only map action is to avoid a spot
-    : [['Go here', 'go', () => setPointFromLatLng('to', lat, lon)], ['Start here', '', () => setPointFromLatLng('from', lat, lon)], ['Avoid this spot', '', () => addAvoid(lat, lon)]];
+  const items = nav ? [['Avoid this spot', 'go', () => addAvoid(lat, lon)], ['Avoid this area (1 mile)', '', () => addAvoid(lat, lon, 1600)]]   // during a trip the only map action is to avoid a spot
+    : [['Go here', 'go', () => setPointFromLatLng('to', lat, lon)], ['Start here', '', () => setPointFromLatLng('from', lat, lon)], ['Avoid this spot', '', () => addAvoid(lat, lon)], ['Avoid this area (1 mile)', '', () => addAvoid(lat, lon, 1600)]];
   items.forEach(([txt, cls, fn]) => { const b = el('button', cls, txt); b.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } fn(); }; div.appendChild(b); });
   openPop(lngLat, div);
 }
@@ -1252,13 +1270,13 @@ function drawLists() {
   fill('avoidList', avoid, 'None yet.', i => { avoid.splice(i, 1); store('map.avoid', avoid); drawAvoid(); drawLists(); route(); });
   fill('savedList', saved, 'None yet. Tap the heart on a destination to save it.', i => { saved.splice(i, 1); store('map.saved', saved); drawLists(); drawQuick(); syncSave(); });
 }
-async function addAvoid(lat, lon) {
-  const a = { lat, lon, label: lat.toFixed(4) + ', ' + lon.toFixed(4) };
+async function addAvoid(lat, lon, r) {
+  const a = { lat, lon, r: r || 120, label: lat.toFixed(4) + ', ' + lon.toFixed(4) };
   avoid.push(a); store('map.avoid', avoid); drawAvoid(); drawLists();
   if (nav) await renav('Avoiding that spot.');
   else if (!(await route())) status('Got it. Routes will avoid that spot. Tap its marker to undo.');
   const n = await reverseName(lat, lon);
-  if (n) { a.label = n.street; store('map.avoid', avoid); drawLists(); }
+  if (n) { a.label = (a.r > 500 ? 'Area around ' : '') + n.street; store('map.avoid', avoid); drawLists(); }
 }
 function tipOnce() {   // one-time hint, since press-and-hold is not discoverable
   if (store('map.tipHold')) return;
@@ -1406,6 +1424,98 @@ async function findMeet() {
 // ---------- Routing ----------
 // Both routers are normalised to: { time (s), dist (mi), coords [[lat, lon]], steps [{ instruction, say, begin, end, length (mi), time (s), angle, kind, left, highway, toll, rough, ferry }] }
 const V_ANGLE = { 9: 45, 10: 90, 11: 135, 12: 180, 13: -180, 14: -135, 15: -90, 16: -45, 18: 30, 19: -30, 20: 30, 21: -30, 23: 30, 24: -30, 37: 20, 38: -20 };
+// ---------- Areas to keep out of: avoided spots and active wildfires ----------
+// A zone is a circle { c: [lat, lon], r (m) } or a fire shape { rings: [[[lon, lat]...]], box [w, s, e, n], pad (m) }.
+let fires = [], fireBoxes = [], fireAt = 0, fireFail = false;
+const FIRE_PAD = 800;
+function zones() {
+  const z = avoid.concat(tempAvoid ? [tempAvoid] : []).map(a => ({ kind: 'spot', c: [a.lat, a.lon], r: a.r || 120, name: a.label }));
+  if (prefs.fires) fires.filter(f => f.active).forEach(f => z.push(f));
+  return z;
+}
+function inRing(p, ring) {   // p [lat, lon], ring [[lon, lat]...]
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > p[0]) !== (yj > p[0]) && p[1] < (xj - xi) * (p[0] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function inZone(p, z) {
+  if (z.c) return meters(p, z.c) < z.r;
+  const d = z.pad / 111320, k = Math.cos(p[0] * Math.PI / 180);
+  if (p[0] < z.box[1] - d || p[0] > z.box[3] + d || p[1] < z.box[0] - d / k || p[1] > z.box[2] + d / k) return false;
+  if (z.rings.some(r => inRing(p, r))) return true;
+  return z.rings.some(r => r.some(v => meters(p, [v[1], v[0]]) < z.pad));   // near the edge (outlines are simplified to ~200 m)
+}
+// Points of a route inside a zone the trip can actually avoid (not one its start, stop or end is in)
+function zoneHits(coords, list) {
+  const ends = [pts.from, pts.via, pts.to].filter(Boolean).map(q => [q.lat, q.lon]);
+  const live = (list || zones()).filter(z => !ends.some(e => inZone(e, z)));
+  const out = [];
+  if (!live.length) return out;
+  coords.forEach(p => { const z = live.find(z2 => inZone(p, z2)); if (z) out.push({ p, z }); });
+  return out;
+}
+function zonesAround() {   // zones that contain a trip end, so the warning can say so
+  const ends = [pts.from, pts.via, pts.to].filter(Boolean).map(q => [q.lat, q.lon]);
+  return zones().filter(z => ends.some(e => inZone(e, z)));
+}
+// Wildfire areas from NIFC (WFIGS): current perimeters, plus incident points for new fires with no perimeter yet
+const WFIGS = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/';
+async function loadFires(box) {   // box [west, south, east, north]
+  if (!prefs.fires) return;
+  const fresh = Date.now() - fireAt < 600000;
+  if (fresh && fireBoxes.some(b => b[0] <= box[0] && b[1] <= box[1] && b[2] >= box[2] && b[3] >= box[3])) return;
+  const big = [box[0] - 0.3, box[1] - 0.3, box[2] + 0.3, box[3] + 0.3], b = big.map(n => n.toFixed(3));
+  const geo = `&geometry=${b.join(',')}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outSR=4326&f=geojson`;
+  const get = async url => { const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000); try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error('fire data ' + r.status); return await r.json(); } finally { clearTimeout(t); } };
+  try {
+    const [per, loc] = await Promise.all([
+      get(WFIGS + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=poly_IncidentName,attr_IncidentSize,attr_PercentContained,poly_DateCurrent&geometryPrecision=4&maxAllowableOffset=0.002' + geo),
+      get(WFIGS + 'WFIGS_Incident_Locations_Current/FeatureServer/0/query?where=' + encodeURIComponent("IncidentTypeCategory='WF'") + '&outFields=IncidentName,IncidentSize,PercentContained,FireDiscoveryDateTime' + geo)
+    ]);
+    if (per.error || loc.error) throw new Error('fire data ' + ((per.error || loc.error).message || 'error'));
+    if (!fresh) { fires = []; fireBoxes = []; }
+    const acres = n => n ? Math.round(n).toLocaleString() + ' acres' : 'size not reported';
+    const ago = t => { const h = (Date.now() - t) / 3600000; return h < 1 ? 'under an hour ago' : h < 48 ? Math.round(h) + ' hours ago' : Math.round(h / 24) + ' days ago'; };
+    (per.features || []).forEach(f => {
+      const p = f.properties || {}, g = f.geometry; if (!g) return;
+      const rings = g.type === 'Polygon' ? [g.coordinates[0]] : g.type === 'MultiPolygon' ? g.coordinates.map(x => x[0]) : [];
+      const name = p.poly_IncidentName || 'Unnamed';
+      if (!rings.length || fires.some(x => x.name === name && x.rings)) return;
+      const all = rings.flat(), pc = p.attr_PercentContained;
+      const old = p.poly_DateCurrent && Date.now() - p.poly_DateCurrent > 45 * 86400000;
+      fires.push({ kind: 'fire', name, rings, pad: FIRE_PAD, box: [Math.min(...all.map(v => v[0])), Math.min(...all.map(v => v[1])), Math.max(...all.map(v => v[0])), Math.max(...all.map(v => v[1]))],
+        active: !old && !(pc >= 100), info: acres(p.attr_IncidentSize) + ', ' + (pc == null ? 'containment not reported' : pc + '% contained') + (p.poly_DateCurrent ? '. Outline mapped ' + ago(p.poly_DateCurrent) + '.' : '.') });
+    });
+    (loc.features || []).forEach(f => {
+      const p = f.properties || {}, g = f.geometry; if (!g || !g.coordinates) return;
+      const c = [g.coordinates[1], g.coordinates[0]], found = p.FireDiscoveryDateTime || 0, size = p.IncidentSize || 0, pc = p.PercentContained;
+      if (/training|assist|test/i.test(p.IncidentName || '') || pc >= 100 || Date.now() - found > 30 * 86400000) return;   // finished, old, or not a real fire
+      if (size < 10 && Date.now() - found > 3 * 86400000) return;   // small fires more than a few days old are almost always out
+      if (fires.some(x => x.rings ? x.rings.some(r => inRing(c, r)) : meters(x.c, c) < 500)) return;   // already mapped
+      const r = Math.min(15000, Math.sqrt(size * 4047 / Math.PI) + 1600);
+      fires.push({ kind: 'fire', name: p.IncidentName || 'Unnamed', c, r, active: true, info: acres(size) + ', ' + (pc == null ? 'containment not reported' : pc + '% contained') + '. Reported ' + ago(found) + '. No mapped outline yet, so a circle around the reported spot is avoided.' });
+    });
+    fireBoxes.push(big); fireAt = Date.now(); fireFail = false;
+    const act = fires.filter(x => x.active).length;
+    $('fireMsg').textContent = (act ? act + (act === 1 ? ' active fire' : ' active fires') + ' nearby. ' : 'No active fires nearby. ') + 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
+    drawZones();
+  } catch (e) { fireFail = true; $('fireMsg').textContent = 'Could not get wildfire data (' + (e.name === 'AbortError' ? 'timed out' : e.message) + '). Routes are not being checked for fires.'; throw e; }
+}
+function circleRing(c, r) { const out = []; for (let k = 0; k <= 32; k++) { const t = k / 32 * 2 * Math.PI; out.push([c[1] + r / 111320 / Math.cos(c[0] * Math.PI / 180) * Math.cos(t), c[0] + r / 111320 * Math.sin(t)]); } return out; }
+function drawZones() {
+  if (!map || !map.getSource('zones')) return;
+  const feats = [];
+  if (prefs.fires) fires.forEach(f => feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } }));
+  avoid.forEach(a => { if ((a.r || 120) > 300) feats.push({ type: 'Feature', properties: { kind: 'spot', active: true }, geometry: { type: 'Polygon', coordinates: [circleRing([a.lat, a.lon], a.r)] } }); });
+  map.getSource('zones').setData({ type: 'FeatureCollection', features: feats });
+}
+function tripBox() {
+  const q = [pts.from, pts.via, pts.to].filter(Boolean);
+  return [Math.min(...q.map(x => x.lon)), Math.min(...q.map(x => x.lat)), Math.max(...q.map(x => x.lon)), Math.max(...q.map(x => x.lat))];
+}
 async function valhallaRoutes(quiet) {
   const veh = { use_highways: prefs.noHwy ? 0 : 1, use_tolls: prefs.noToll ? 0 : 0.5, use_ferry: prefs.noFerry ? 0 : 0.5, exclude_unpaved: !!prefs.noUnpaved, maneuver_penalty: prefs.simple ? 40 : 5,
     service_penalty: prefs.noAlleys ? 120 : 15, country_crossing_penalty: prefs.noBorders ? 3600 : 0, shortest: !!prefs.shortest };
@@ -1421,15 +1531,39 @@ async function valhallaRoutes(quiet) {
   };
   // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
   // misses the spot whenever the tap lands a few metres off the road or on the other side of a divided road.
-  const skip = avoid.concat(tempAvoid ? [tempAvoid] : []);
-  const circle = a => { const out = []; for (let k = 0; k <= 10; k++) { const t = k / 10 * 2 * Math.PI; out.push([a.lon + 60 / 111320 / Math.cos(a.lat * Math.PI / 180) * Math.cos(t), a.lat + 60 / 111320 * Math.sin(t)]); } return out; };
+  // Small avoided spots go to the router as little circles. The router caps the total outline at 10 km, so large
+  // areas (fires, "avoid this area") are handled after: block the roads the route used inside them and ask again.
+  const skip = avoid.concat(tempAvoid ? [tempAvoid] : []).filter(a => (a.r || 120) <= 150).slice(0, 20);
+  const circle = a => { const r = Math.min(a.r || 120, 150), out = []; for (let k = 0; k <= 10; k++) { const t = k / 10 * 2 * Math.PI; out.push([a.lon + r / 111320 / Math.cos(a.lat * Math.PI / 180) * Math.cos(t), a.lat + r / 111320 * Math.sin(t)]); } return out; };
   if (skip.length) body.exclude_polygons = skip.map(circle);
   const ask = async () => { const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()]; };
   let [r, data] = await ask(), stuck = false;
   if (!data.trip && skip.length) { delete body.exclude_polygons; [r, data] = await ask(); stuck = !!data.trip; }   // no way around: route through and say so
   if (!data.trip) { const e = new Error(data.error || data.message || 'No route found.'); e.noRoute = r.status === 400; throw e; }
   valhallaRoutes.stuck = stuck;
-  return [data.trip].concat((data.alternates || []).map(a => a.trip)).map(t => {
+  const shapeOf = t => t.legs.reduce((acc, leg) => { const c = decodePolyline(leg.shape, 6); if (acc.length) c.shift(); return acc.concat(c); }, []);
+  valhallaRoutes.blocked = 0;
+  let trips = [data.trip].concat((data.alternates || []).map(a => a.trip));
+  if (zones().length) {
+    const ex = [];
+    for (let pass = 0; pass < 5; pass++) {
+      const clean = trips.filter(t => !zoneHits(shapeOf(t)).length);
+      if (clean.length) { trips = clean; break; }
+      // Points every ~150 m where the quickest route is inside a zone; the router drops the road nearest each one
+      const hits = zoneHits(shapeOf(trips[0]));
+      let step = 150, picked = [];
+      do { let last = null; picked = hits.filter(h => { if (!last || meters(last, h.p) > step) { last = h.p; return true; } return false; }); step *= 1.6; } while (ex.length + picked.length > 50 && step < 20000);
+      picked = picked.slice(0, 50 - ex.length);
+      if (!picked.length) break;
+      picked.forEach(h => ex.push({ lat: h.p[0], lon: h.p[1] }));
+      body.exclude_locations = ex; body.alternates = 0;
+      let d2;
+      try { d2 = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json(); } catch (e) { d2 = {}; }
+      if (!d2.trip) break;   // no way around: keep the last route; the warning comes from zoneNote()
+      trips = [d2.trip]; valhallaRoutes.blocked = ex.length;
+    }
+  }
+  return trips.map(t => {
     let coords = []; const steps = [];
     t.legs.forEach((leg, li) => {   // a trip with a stop comes back as two legs; join them into one line and one list of steps
       const c = decodePolyline(leg.shape, 6), off = coords.length ? coords.length - 1 : 0, last = li === t.legs.length - 1;
@@ -1489,8 +1623,9 @@ async function tomtomRoutes(quiet) {
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
   if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
   let url = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + q.join('&');
-  const skip = avoid.concat(tempAvoid ? [tempAvoid] : []).slice(0, 10);
-  const box = a => { const dLat = 60 / 111320, dLon = dLat / Math.cos(a.lat * Math.PI / 180); return { southWestCorner: { latitude: a.lat - dLat, longitude: a.lon - dLon }, northEastCorner: { latitude: a.lat + dLat, longitude: a.lon + dLon } }; };
+  const tb = tripBox(), near = z => { const bx = z.c ? [z.c[1], z.c[0], z.c[1], z.c[0]] : z.box; return bx[2] > tb[0] - 1 && bx[0] < tb[2] + 1 && bx[3] > tb[1] - 1 && bx[1] < tb[3] + 1; };
+  const skip = zones().filter(near).slice(0, 10).map(z => z.c ? { lat: z.c[0], lon: z.c[1], r: z.r } : { box: z.box, pad: z.pad });
+  const box = a => { if (a.box) { const d = a.pad / 111320, k = Math.cos(a.box[1] * Math.PI / 180); return { southWestCorner: { latitude: a.box[1] - d, longitude: a.box[0] - d / k }, northEastCorner: { latitude: a.box[3] + d, longitude: a.box[2] + d / k } }; } const dLat = (a.r || 120) / 111320, dLon = dLat / Math.cos(a.lat * Math.PI / 180); return { southWestCorner: { latitude: a.lat - dLat, longitude: a.lon - dLon }, northEastCorner: { latitude: a.lat + dLat, longitude: a.lon + dLon } }; };
   const ask = around => around ? fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avoidAreas: { rectangles: skip.map(box) } }) }) : fetch(url);
   let r = await ask(skip.length > 0), stuck = false;
   if (r.status === 400 && url.includes('&sectionType=lanes')) { url = url.replace('&sectionType=lanes', ''); r = await ask(skip.length > 0); }   // lane data is optional
@@ -1563,8 +1698,14 @@ async function route(quiet) {
   if (!quiet) status('Finding routes...');
   const id = ++reqId;
   let found = null;
+  if (prefs.fires) { await loadFires(tripBox()).catch(() => {}); if (id !== reqId) return false; }
+  if (useBackup && Date.now() - useBackup > 300000) useBackup = false;   // try the main router again after 5 minutes
   if (prefs.ttKey && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
-    try { found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.'; }
+    try {
+      found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.';
+      const ok = found.filter(rt => !zoneHits(rt.coords).length);   // a traffic route that still enters an avoided area is dropped
+      if (ok.length) { const n = found.note; found = ok; found.note = n; } else found = null;
+    }
     catch (e) { $('ttMsg').textContent = e.status === 403 || e.status === 401 ? 'TomTom did not accept that key. Using routes without traffic.' : 'Traffic routing failed (' + e.message + '). Using routes without traffic.'; }
   }
   if (!found && !useBackup) {
@@ -1572,7 +1713,7 @@ async function route(quiet) {
     catch (e) { if (e.noRoute) { if (id === reqId) status(e.message); return false; } }
   }
   if (!found) {
-    try { found = await osrmRoutes(quiet); useBackup = true; }
+    try { found = await osrmRoutes(quiet); useBackup = Date.now(); }
     catch (e) {
       const t = store('map.trip');   // no connection: fall back to the last route to this same place
       if (t && t.mode === prefs.mode && t.routes && meters([t.to.lat, t.to.lon], [pts.to.lat, pts.to.lon]) < 80) {
@@ -1590,11 +1731,22 @@ async function route(quiet) {
   await mapReady;
   draw(!quiet);
   loadTraffic();
-  status(found.note || (valhallaRoutes.stuck && !useBackup && !found[0].live ? 'There is no way around a spot you avoid, so this route goes through it.' : ''));
+  status(zoneNote(routes[selected]) || found.note || '');
   writeHash();
   return true;
 }
 
+function zoneNote(rt) {   // a warning when the route still enters an area you avoid, or starts or ends in one
+  $('status').classList.remove('warn');
+  if (!rt) return '';
+  const hit = zoneHits(rt.coords)[0], fire = zonesAround().find(z => z.kind === 'fire');
+  const what = z => z.kind === 'fire' ? 'the ' + z.name + ' Fire area' : 'an area you avoid';
+  if (hit) { $('status').classList.add('warn'); return 'This route goes through ' + what(hit.z) + '. There was no way around it. Check road closures before you go.'; }
+  if (fire) { $('status').classList.add('warn'); return 'Your start or destination is inside or near the ' + fire.name + ' Fire area. Check evacuation orders and road closures.'; }
+  if (prefs.fires && fireFail) return 'Could not get wildfire data, so this route is not checked for fires.';
+  if (useBackup && zones().length) return 'Backup router in use: it cannot avoid areas. Check the route against the shaded areas.';
+  return '';
+}
 // ---------- Explaining routes ----------
 // Drop alternatives that are not worth offering: much slower than the quickest, or nearly the same roads as one already kept.
 function cellsOf(rt) {   // the route as a set of roughly 150 m grid squares, sampled every 120 m
@@ -1867,6 +2019,14 @@ function snap(ll) {
 }
 // Route again from where you are now, keeping navigation running
 // While navigating on a traffic-aware route, ask again every 5 minutes. Same roads: only the arrival time updates. Different roads: switch and say so.
+async function fireCheck() {   // during a trip: fresh fire data every 10 minutes; reroute if the road ahead now enters a fire area
+  nav.lastFire = Date.now(); fireAt = 0;
+  try { await loadFires(tripBox()); } catch (e) { return; }
+  if (!nav || nav.busy) return;
+  const ahead = nav.rt.coords.slice(Math.max(0, nav.seg || 0));
+  const hit = zoneHits(ahead, fires.filter(f => f.active))[0];
+  if (hit) await renav('The ' + hit.z.name + ' fire area is ahead. Finding a way around.');
+}
 async function trafficCheck() {
   const old = nav.rt; nav.lastTraffic = Date.now();
   const ok = await renav('', true);
@@ -1899,6 +2059,7 @@ function onFix(p) {
   if (nav.follow) map.easeTo({ center: [ll[1], ll[0]], zoom: nav.zoom, bearing: prefs.northUp ? 0 : head, pitch: prefs.northUp ? 0 : 50, padding: { top: prefs.northUp ? 150 : 280, bottom: 70, left: 0, right: 0 }, duration: 900, easing: t => t });
   if (nav.busy) return;
   if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
+  if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
   if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting
     if (++nav.off >= 3 && Date.now() - nav.lastReroute > 8000) renav('Rerouting.');
     return;
@@ -2212,7 +2373,7 @@ function syncPrefs() {
   $('rigH').value = prefs.rig.h; $('rigL').value = prefs.rig.l; $('rigW').value = prefs.rig.w;
 }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => { prefs.mode = b.dataset.mode; savePrefs(); syncPrefs(); route(); });
-document.querySelectorAll('[data-pref]').forEach(b => b.onclick = () => { prefs[b.dataset.pref] = !prefs[b.dataset.pref]; savePrefs(); syncPrefs(); route(); });
+document.querySelectorAll('[data-pref]').forEach(b => b.onclick = () => { prefs[b.dataset.pref] = !prefs[b.dataset.pref]; savePrefs(); syncPrefs(); if (b.dataset.pref === 'fires') { fireAt = 0; drawZones(); if (prefs.fires && map) { const g = map.getBounds(); loadFires([g.getWest(), g.getSouth(), g.getEast(), g.getNorth()]).catch(() => {}); } } route(); });
 document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
   const k = b.parentElement.dataset.set; prefs[k] = b.dataset.v === 'true' ? true : b.dataset.v === 'false' ? false : b.dataset.v;
   savePrefs(); syncPrefs(); if (prefs.voice === 'off' && window.speechSynthesis) speechSynthesis.cancel();
