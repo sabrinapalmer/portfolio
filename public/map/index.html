@@ -1125,7 +1125,7 @@ function censusLookup(q) {
 }
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
   try {
-    const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=5&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, signal);
+    const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 0.5)}&q=${encodeURIComponent(q)}`, signal);
     return d.map(nomiPlace);
   } catch (e) { return []; }
 }
@@ -1143,11 +1143,11 @@ async function search(which, q, now) {
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
-  let near, far, exact = [], pending = 2 + (cat || deeper ? 1 : 0), backup = false, hoursAsked = false;
+  let near, close, far, exact = [], pending = 3 + (cat || deeper ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   function paint() {
     if (id !== searchId) return;
-    if (near === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
+    if (near === null && close === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
       backup = true; pending++;
       nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
         .then(d => { far = d.map(nomiPlace); }, () => {}).then(() => { pending--; paint(); });
@@ -1156,7 +1156,11 @@ async function search(which, q, now) {
     const items = [], byDist = (x, y) => dist(x) - dist(y);
     const add = arr => (arr || []).forEach(p => { if (!items.some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)) items.push(p); });
     const exactNear = exact.filter(p => dist(p) <= NEARBY).sort(byDist);
-    add(exactNear); add((near || []).slice().sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); add(far);
+    // Street addresses: the exact match leads. Names (a store, a chain): everything near you in one list, closest first,
+    // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
+    if (isAddress || cat) { add(exactNear); add((close || []).concat(near || []).sort(byDist)); }
+    else add(exactNear.concat(close || [], near || []).sort(byDist));
+    add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); add(far);
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 10);
     lastSearch = { which, q, items: shown, pending };
@@ -1174,7 +1178,7 @@ async function search(which, q, now) {
     list.style.display = shown.length ? 'block' : 'none';
     const say = which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
     if (shown.length) say(pending ? 'Looking further...' : '');
-    else if (!pending) say(near === null && far === null && !exact.length ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
+    else if (!pending) say(near === null && close === null && far === null && !exact.length ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
     else say('Searching...');
     settleEnter();
     if (cat && !pending && !hoursAsked && shown.length) {   // one lookup for the opening hours of the places listed
@@ -1184,6 +1188,8 @@ async function search(which, q, now) {
   }
   get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
+  const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
+  get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
   if (cat) setTimeout(() => {
     if (id !== searchId) return;
     nearbyKind(ref, cat).then(found => {
@@ -1563,6 +1569,16 @@ async function valhallaRoutes(quiet) {
       trips = [d2.trip]; valhallaRoutes.blocked = ex.length;
     }
   }
+  // Alternates from one request usually share the toll road. If every way uses tolls, ask once more with tolls
+  // avoided and offer that as its own choice (for example Mexico 1 libre next to the 1D toll road).
+  const tolled = t => t.legs.some(l => l.maneuvers.some(m => m.toll));
+  if (!quiet && (costing === 'auto' || costing === 'truck') && !prefs.noToll && trips.every(tolled)) {
+    try {
+      const free = Object.assign({}, body, { alternates: 0, costing_options: { [costing]: Object.assign({}, opt, { use_tolls: 0 }) } });
+      const d3 = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(free))}`)).json();
+      if (d3.trip && !tolled(d3.trip) && !zoneHits(shapeOf(d3.trip)).length) trips.push(d3.trip);
+    } catch (e) {}
+  }
   return trips.map(t => {
     let coords = []; const steps = [];
     t.legs.forEach((leg, li) => {   // a trip with a stop comes back as two legs; join them into one line and one list of steps
@@ -1765,7 +1781,7 @@ function sensible(list) {
   const quickest = Math.min.apply(null, list.map(r => r.time)), tolled = list.some(r => r.time === quickest && r.toll), kept = [list[0]];
   list.slice(1).forEach(r => {
     const slower = r.time - quickest;
-    const worth = slower <= Math.max(90, quickest * 0.2) || (tolled && !r.toll && slower <= quickest * 0.5);   // within 20%, or a toll-free way within 50%
+    const worth = slower <= Math.max(90, quickest * 0.2) || (tolled && !r.toll && !kept.some(k => !k.toll) && slower <= quickest);   // within 20%, or the first toll-free way up to twice as long
     if (worth && !kept.some(k => sameRoads(r, k) > 0.8)) kept.push(r);
   });
   return kept;
@@ -1780,7 +1796,7 @@ function describe(rt) {
 function titles() {   // a short name for each option, taken from what makes it different
   const used = new Set(), min = k => Math.min.apply(null, routes.map(r => r[k]));
   return routes.map(rt => {
-    const pick = [[rt.time === min('time'), 'Fastest'], [rt.lefts === min('lefts') && routes.some(r => r.lefts > rt.lefts), 'Fewest left turns'], [rt.turns === min('turns') && routes.some(r => r.turns > rt.turns), 'Fewest turns'], [rt.dist === min('dist'), 'Shortest'],
+    const pick = [[rt.time === min('time'), 'Fastest'], [!rt.toll && routes.some(r => r.toll), 'No tolls'], [rt.lefts === min('lefts') && routes.some(r => r.lefts > rt.lefts), 'Fewest left turns'], [rt.turns === min('turns') && routes.some(r => r.turns > rt.turns), 'Fewest turns'], [rt.dist === min('dist'), 'Shortest'],
       [!rt.basic && rt.hwy < 0.3 && routes.some(r => r.hwy >= 1), 'No highway']].find(([ok, name]) => ok && !used.has(name));
     const name = pick ? pick[1] : 'Another way'; used.add(name); return name;
   });
