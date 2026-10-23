@@ -59,7 +59,7 @@
   .seg { flex:1; display:flex; background:var(--bg); border-radius:999px; padding:3px; border:2px solid var(--line); }
   .seg button { flex:1; padding:7px 4px; background:transparent; color:var(--muted); }
   .seg button.on { background:var(--accent); color:var(--accent-ink); }
-  #suggest { list-style:none; margin:8px 0 0; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:44vh; overflow:auto; }
+  #suggest { list-style:none; margin:8px 0 0; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:min(52vh, calc(100vh - var(--kb, 0px) - 150px)); overflow:auto; }
   #suggest li { padding:10px 12px; border-radius:14px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:center; }
   #suggest li:active { background:var(--soft); }
   #suggest small { display:block; color:var(--muted); font-weight:500; }
@@ -466,7 +466,13 @@ const $ = id => document.getElementById(id);
 // plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
-const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE = plugin('KeepAwake');
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
+// In the app the keyboard slides over the page instead of shrinking it (resizing the page redraws the whole map, which
+// made the search box slow to respond). The search list is kept above the keyboard instead.
+if (KEYS && KEYS.addListener) {
+  KEYS.addListener('keyboardWillShow', i => document.documentElement.style.setProperty('--kb', ((i && i.keyboardHeight) || 0) + 'px'));
+  KEYS.addListener('keyboardWillHide', () => document.documentElement.style.setProperty('--kb', '0px'));
+}
 // The App Store app only uses services licensed for it: Geoapify (search, routing) through the site's own server,
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
@@ -749,14 +755,22 @@ async function themedStyle() {
   }
   return restyle(await offlineStyle(JSON.parse(rawStyle)), theme());
 }
+// A route colour no street uses in that theme: a vivid magenta-pink (a deeper one on light maps), unless a theme sets its own
+const routeColor = t => t.route || (t.ui === 'dark' ? '#ff4fc8' : '#e0218a');
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
   map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
-  line('alt', false, { 'line-color': css('--alt'), 'line-width': 6, 'line-opacity': .9 });
-  line('casing', true, { 'line-color': '#ffffff', 'line-width': 11 });
-  line('sel', true, { 'line-color': css('--accent'), 'line-width': 6.5 });
+  // The chosen route glows above the streets: a soft wide halo, a contrasting edge, the route colour, and a bright core.
+  // Widths grow with zoom so the route always stays wider than the streets under it.
+  const t = theme(), dark = t.ui === 'dark', rc = routeColor(t), z = (a, b2) => ['interpolate', ['exponential', 1.5], ['zoom'], 8, a, 18, b2];
+  line('alt-casing', false, { 'line-color': dark ? '#0b0a18' : '#ffffff', 'line-width': z(7, 16), 'line-opacity': .9 });
+  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(4.5, 11), 'line-opacity': .95 });
+  line('glow', true, { 'line-color': rc, 'line-width': z(20, 44), 'line-blur': z(10, 22), 'line-opacity': dark ? .55 : .35 });
+  line('casing', true, { 'line-color': dark ? '#0b0a18' : '#ffffff', 'line-width': z(9.5, 22) });
+  line('sel', true, { 'line-color': rc, 'line-width': z(6, 15) });
+  line('core', true, { 'line-color': '#ffffff', 'line-width': z(1.4, 3.5), 'line-opacity': dark ? .75 : .55, 'line-blur': .5 });
   map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
   map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
@@ -1081,32 +1095,34 @@ async function reverseName(lat, lon) {
 const listFor = which => $(which === 'friend' ? 'meetSuggest' : 'suggest');
 const NEARBY = 80000;   // metres: what counts as "near you" for ordering results and for Enter
 let lastSearch = null, enterFor = null;
-function settleEnter() {   // called when Enter was pressed and whenever results change
+function settleEnter() {   // after Return, once every source has answered: keep the list open and pin the options on the map
   const s = lastSearch;
   if (!enterFor || !s || s.q !== enterFor.q || s.which !== enterFor.which) return;
-  if (s.pending) return;   // wait for every source so the nearest match wins
-  const say = s.which === 'friend' ? t => { $('meetMsg').textContent = t; } : status, hit = s.items.find(p => p.d <= NEARBY);
+  if (s.pending) return;
   enterFor = null;
-  if (hit) { listFor(s.which).style.display = 'none'; $(s.which).blur(); const pt = { lat: hit.lat, lon: hit.lon, label: hit.sub ? hit.main + ', ' + hit.sub : hit.main, name: hit.main }; if (s.which === 'friend') meetPick(pt); else setPoint(s.which, pt); }
-  else if (s.items.length) say('Nothing nearby matches "' + s.q + '". These are further away; tap one if it is right.');
+  const list = listFor(s.which), say = s.which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
+  if (!s.items.length) return;
+  list.style.display = 'block';
+  if (s.which === 'to') showPois(s.items.filter(p => p.d <= NEARBY).slice(0, 10));
+  say(s.items.some(p => p.d <= NEARBY) ? '' : 'Nothing nearby matches "' + s.q + '". These are further away.');
 }
 let debounce;
 ['from', 'to', 'friend'].forEach(which => {
   const input = $(which);
-  input.addEventListener('focus', () => { input.select(); if (!input.value.trim()) shortcuts(which); });
+  input.addEventListener('focus', () => { if (input.value) input.select(); if (!input.value.trim()) requestAnimationFrame(() => setTimeout(() => { if (document.activeElement === input && !input.value.trim()) shortcuts(which); }, 0)); });
   input.addEventListener('input', () => {
     clearTimeout(debounce);
     const q = input.value.trim();
     if (!q) { shortcuts(which); return; }
     debounce = setTimeout(() => search(which, q), 150);
   });
-  input.addEventListener('keydown', e => {   // Enter takes the best nearby match; it never jumps to a far-away place
+  input.addEventListener('keydown', e => {   // Return puts the keyboard away and shows the options (and pins them); it never picks one for you
     if (e.key !== 'Enter') return;
     const q = input.value.trim();
     if (!q) return;
-    if (which === 'to' && categoryOf(q)) { input.blur(); return; }   // a kind of place: leave the options showing
-    clearTimeout(debounce);
+    e.preventDefault(); clearTimeout(debounce);
     enterFor = { which, q };
+    input.blur();
     if (!lastSearch || lastSearch.q !== q || lastSearch.which !== which) search(which, q, true); else settleEnter();
   });
 });
@@ -1207,6 +1223,23 @@ async function nominatimLookup(q, ref, signal) {   // addresses, streets and pla
   } catch (e) { return []; }
 }
 
+// Travel time to each search option, from where you are (or the planned start), by the mode you travel.
+// Kept for 15 minutes per place, start (rounded to ~1 km) and mode, so retyping does not ask again.
+const etaCache = new Map(); let etaTimer = 0;
+const etaFrom = () => planning && pts.from ? [pts.from.lat, pts.from.lon] : here;
+const etaKey = p => { const f = etaFrom(); return f && [p.lat.toFixed(4), p.lon.toFixed(4), f[0].toFixed(2), f[1].toFixed(2), prefs.mode].join(','); };
+function etaOf(p) { const k = etaKey(p), e = k && etaCache.get(k); return e && Date.now() - e.at < 900000 ? e.t : null; }
+async function fillEtas(list) {
+  const from = etaFrom(), need = list.filter(p => etaOf(p) == null && (p.d == null || p.d < 300000));
+  if (!from || !need.length) return false;
+  try {
+    meet.rough = false;
+    const times = await travelTimes({ lat: from[0], lon: from[1] }, need, prefs.mode === 'rig' ? 'auto' : prefs.mode, true);
+    if (meet.rough) return false;   // estimates only (the router did not answer): show distances rather than guesses
+    need.forEach((p, i) => { if (times[i] != null) etaCache.set(etaKey(p), { t: times[i], at: Date.now() }); });
+    return true;
+  } catch (e) { return false; }
+}
 // Places within about 25 miles of you first (nearest on top), then anywhere; exact addresses go above both.
 async function search(which, q, now) {
   const list = listFor(which);
@@ -1231,13 +1264,14 @@ async function search(which, q, now) {
     }
     // Order: exact matches near you, other places near you (nearest first), then anything further away
     const items = [], byDist = (x, y) => dist(x) - dist(y);
-    const add = arr => (arr || []).forEach(p => { if (!items.some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)) items.push(p); });
+    const low = x => String(x || '').toLowerCase();
+    const same = (o, p) => { const d = meters([o.lat, o.lon], [p.lat, p.lon]); return d < 60 || (d < 300 && (low(p.main).startsWith(low(o.main)) || low(o.main).startsWith(low(p.main)))); };   // "Walmart Pharmacy" inside the Walmart
+    const add = arr => (arr || []).forEach(p => { if (!items.some(o => same(o, p))) items.push(p); });
     const exactNear = exact.filter(p => dist(p) <= NEARBY).sort(byDist);
     // Street addresses: the exact match leads. Names (a store, a chain): everything near you in one list, closest first,
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
-    if (isAddress || cat) { add(exactNear); add((close || []).concat(near || []).sort(byDist)); }
-    else add(exactNear.concat(close || [], near || []).sort(byDist));
-    add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); add(far);
+    if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
+    else add(exact.concat(close || [], near || [], far || []).sort(byDist));   // every server's answers in one list, nearest first
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 10);
     lastSearch = { which, q, items: shown, pending };
@@ -1248,7 +1282,8 @@ async function search(which, q, now) {
       if (cat && exactNear.length && i === exactNear.length) list.appendChild(el('li', 'head', 'Other matches'));
       if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
       const st = p.hours ? openState(p.hours, new Date()) : null;
-      const li = suggestion(which, p.main, p.sub, fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours });
+      const eta = etaOf(p);
+      const li = suggestion(which, p.main, p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours });
       if (st && !st.open) li.classList.add('shut');
       list.appendChild(li);
     });
@@ -1258,6 +1293,10 @@ async function search(which, q, now) {
     else if (!pending) say(near === null && close === null && far === null && !exact.length ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
     else say('Searching...');
     settleEnter();
+    if (!pending && shown.length && etaFrom() && useGeo()) {   // travel times for the top few once the list settles (Geoapify only: each costs a lookup)
+      clearTimeout(etaTimer);
+      etaTimer = setTimeout(() => { if (id === searchId) fillEtas(shown.slice(0, 6)).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); }); }, now ? 0 : 700);
+    }
     if (cat && !pending && !hoursAsked && shown.length) {   // one lookup for the opening hours of the places listed
       hoursAsked = true;
       fetchHours(shown).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); });
@@ -1265,7 +1304,7 @@ async function search(which, q, now) {
   }
   if (useGeo()) { near = []; pending--; }   // Geoapify: the close search plus the wide one (ranked by distance) cover this, and each request costs a credit
   else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
-  get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
+  get(base + '&limit=' + (useGeo() ? 15 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
   const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
   get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
   if (cat) setTimeout(() => {
@@ -1395,13 +1434,13 @@ const SPEED = { auto: 12, rig: 12, bicycle: 4.3, pedestrian: 1.3 };   // metres 
 const roughTime = (a, b, mode) => meters([a.lat, a.lon], [b.lat, b.lon]) * 1.3 / SPEED[mode];
 // Seconds from one point to many by the given mode. Tries one batch request, then single routes, then an estimate,
 // so a hiccup on the routing server never leaves a place without a time.
-async function travelTimes(src, targets, mode) {
+async function travelTimes(src, targets, mode, geoOnly) {   // geoOnly: no community-server fallbacks (search drive times)
   let times = null;
   if (useGeo() || !FREE_OK) try {
     const d = await geoFetch('matrix', {}, null, { mode: GEO_MODE[mode], sources: [{ location: [src.lon, src.lat] }], targets: targets.map(t => ({ location: [t.lon, t.lat] })) });
     if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x && x.time != null ? x.time : null);
   } catch (e) {}
-  if (!times && FREE_OK) try {
+  if (!times && FREE_OK && !geoOnly) try {
     const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
     const d = await (await fetch(`${ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
     if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x.time);
@@ -1410,7 +1449,7 @@ async function travelTimes(src, targets, mode) {
   let singles = 0;
   for (let i = 0; i < targets.length; i++) {
     if (times[i] != null) continue;
-    if (singles < 6 && (FREE_OK || useGeo())) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
+    if (singles < 6 && !geoOnly && (FREE_OK || useGeo())) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
     times[i] = roughTime(src, targets[i], mode); meet.rough = true;
   }
   return times;

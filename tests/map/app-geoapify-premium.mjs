@@ -63,10 +63,10 @@ await p.route('**/*', async r => {
   if (/photon|nominatim|openstreetmap\.de|census\.gov/.test(u)) { calls.push('COMMUNITY ' + u); return r.abort(); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/geo')) {
     const q = new URL(u).searchParams, ep = q.get('ep'); calls.push('geo ' + ep + (q.get('avoid') ? ' avoid=' + q.get('avoid') : '') + (q.get('type') ? ' type=' + q.get('type') : ''));
-    if (ep === 'autocomplete') return J({ type: 'FeatureCollection', features: /walmart/i.test(q.get('text')) ? (q.get('filter') ? [place('Walmart', 32.37, -117.06, 'Rosarito', 'Mexico')] : [place('Walmart', 32.64, -117.08, 'Chula Vista', 'United States')]) : [place('Ensenada', 31.86, -116.6, 'Ensenada', 'Mexico')] });
+    if (ep === 'autocomplete') return J({ type: 'FeatureCollection', features: /walmart/i.test(q.get('text')) ? (q.get('filter') ? [place('Walmart', 32.37, -117.06, 'Rosarito', 'Mexico')] : [place('Walmart', 32.64, -117.08, 'Chula Vista', 'United States'), place('Walmart Supercenter', 32.47, -117.00, 'Tijuana', 'Mexico'), place('Walmart Pharmacy', 32.6401, -117.0801, 'Chula Vista', 'United States')]) : [place('Ensenada', 31.86, -116.6, 'Ensenada', 'Mexico')] });
     if (ep === 'search' || ep === 'reverse' || ep === 'places') return J({ type: 'FeatureCollection', features: [] });
     if (ep === 'routing') { if (dirty) q.set('dirty', '1'); return J(geoRoute(q)); }
-    if (ep === 'matrix') return J({ sources_to_targets: [[{ time: 600 }]] });
+    if (ep === 'matrix') { const b = JSON.parse(r.request().postData() || '{}'); return J({ sources_to_targets: [b.targets.map((t, i) => ({ time: 600 + 300 * i, distance: 1000 }))] }); }
     return r.fulfill({ status: 404, body: '{}' });
   }
   if (u.startsWith('https://www.sabrinapalmer.com/api/premium')) {
@@ -89,6 +89,16 @@ await p.fill('#to', 'walmart'); await p.waitForTimeout(2500);
 const list = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
 console.log('walmart list:', list);
 check(list.length && /Rosarito/.test(list[0]), 'search via Geoapify lists the Rosarito Walmart first');
+check(list.length === 3 && /Supercenter/.test(list[1]) && /Chula Vista/.test(list[2]), 'all results in one list nearest first, the Supercenter included, the pharmacy folded into its store');
+await p.waitForTimeout(1200);
+const timed = await p.$$eval('#suggest li:not(.head) em', e => e.map(x => x.innerText));
+console.log('right column:', timed);
+check(timed.length === 3 && timed.every(t => /min/.test(t)), 'each option shows the drive time');
+const toBefore = await p.evaluate(() => pts.to);
+await p.focus('#to'); await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
+check(await p.isVisible('#suggest') && (await p.evaluate(() => pts.to)) === toBefore, 'Return keeps the options open and picks nothing');
+check(await p.evaluate(() => document.activeElement.id !== 'to'), 'Return puts the keyboard away');
+check(await p.evaluate(() => poiMarkers.length) >= 1, 'Return pins the nearby options on the map');
 
 await p.fill('#to', 'ensenada'); await p.waitForTimeout(1500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(2500);
 console.log('routes:', (await p.innerText('#routes')).replace(/\n/g, ' / '));
