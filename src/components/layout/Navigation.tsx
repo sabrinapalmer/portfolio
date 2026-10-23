@@ -1,104 +1,255 @@
-import React, { useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { navItems } from "../../config/navigation";
-import { Flower } from "../ui/Doodle";
 
-const blobColor: Record<string, string> = {
-  "/experience": "bg-butter",
-  "/projects": "bg-mint",
-  "/art": "bg-gum",
-  "/contact": "bg-sky",
-};
+interface NavigationProps {
+  currentPage: string;
+  isHome: boolean;
+  onNavigate: (path: string) => void;
+}
 
-const Navigation: React.FC = () => {
-  const [open, setOpen] = useState(false);
-  const { pathname } = useLocation();
+const Navigation: React.FC<NavigationProps> = ({
+  currentPage,
+  isHome,
+  onNavigate,
+}) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  useEffect(() => setOpen(false), [pathname]);
+  const handleNavigation = (e: React.MouseEvent, path: string) => {
+    e.preventDefault();
+    if (path === currentPage && !isHome) return;
+    onNavigate(path);
+    setIsMenuOpen(false);
+  };
+
+  const handleHomeClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isHome) return;
+    onNavigate("");
+    setIsMenuOpen(false);
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: {
+      opacity: 0,
+      x: 50,
+    },
+    visible: {
+      opacity: 1,
+      x: 0,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20,
+      },
+    },
+  };
+
+  const dropdownVariants = {
+    hidden: {
+      opacity: 0,
+      y: -20,
+      scale: 0.95,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 30,
+      },
+    },
+    exit: {
+      opacity: 0,
+      y: -20,
+      scale: 0.95,
+      transition: {
+        duration: 0.2,
+      },
+    },
+  };
+
+  if (isHome) {
+    return (
+      <motion.div
+        className="h-full flex flex-col justify-center px-4 md:px-12 py-8 md:py-12"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-1 md:gap-6">
+          {navItems.map((item) => (
+            <motion.button
+              key={item.path}
+              variants={itemVariants}
+              onClick={(e) => handleNavigation(e, item.path)}
+              className="w-full relative"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div
+                className={`relative bg-gradient-to-r ${item.gradient} p-4 md:p-6 rounded-xl shadow-md hover:shadow-lg 
+                          transition-all duration-300 overflow-hidden`}
+              >
+                <div className="flex items-center space-x-3 md:space-x-4">
+                  <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                    <item.icon size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="font-josefin text-lg md:text-xl font-semibold text-white">
+                      {item.name}
+                    </h3>
+                    <p className="font-josefin text-sm text-white/90 mt-1 hidden md:block">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
-    <header className="sticky top-0 z-40 pt-3">
-      <div className="page">
-        <div className="flex h-14 items-center justify-between rounded-full border-2 border-ink bg-white/90 pl-3 pr-2 shadow-sticker backdrop-blur">
-          <Link to="/" className="group flex items-center gap-2">
-            <Flower className="h-8 w-8 transition-transform duration-500 group-hover:rotate-[72deg]" />
-            <span className="font-display text-xl font-bold leading-none">
-              Sabrina Palmer
-            </span>
-          </Link>
+    <div className="max-w-7xl mx-auto px-4">
+      <div className="flex justify-between h-16 items-center">
+        <motion.button
+          onClick={handleHomeClick}
+          className="font-chango text-xl bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent"
+          whileHover={{ opacity: 0.8 }}
+          whileTap={{ opacity: 0.7 }}
+          transition={{ duration: 0.2 }}
+        >
+          Sabrina Palmer ✨
+        </motion.button>
 
-          <nav aria-label="Main" className="hidden md:block">
-            <ul className="flex items-center gap-1">
-              {navItems.map((item) => (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    className="relative block rounded-full px-4 py-1.5 text-[15px] font-semibold"
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex space-x-6">
+          {navItems.map((item) => (
+            <motion.button
+              key={item.path}
+              layoutId={`tab-${item.path}`}
+              onClick={(e) => handleNavigation(e, item.path)}
+              className="group relative"
+              whileHover={{ opacity: 0.9 }}
+              whileTap={{ opacity: 0.8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div
+                className={`px-4 py-2 rounded-full relative overflow-hidden ${
+                  currentPage === item.path
+                    ? `bg-gradient-to-r ${item.gradient} shadow-md`
+                    : "hover:bg-purple-50"
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <item.icon
+                    size={24}
+                    className={
+                      currentPage === item.path
+                        ? "text-white"
+                        : "text-purple-500"
+                    }
+                  />
+                  <span
+                    className={`font-josefin ${
+                      currentPage === item.path
+                        ? "text-white"
+                        : "text-purple-500"
+                    }`}
                   >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && (
-                          <motion.span
-                            layoutId="nav-blob"
-                            className={`absolute inset-0 rounded-full border-2 border-ink ${blobColor[item.path]}`}
-                            transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                          />
-                        )}
-                        <span className="relative">{item.name}</span>
-                      </>
-                    )}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <button
-            type="button"
-            className="rounded-full border-2 border-ink bg-butter p-1.5 md:hidden"
-            aria-expanded={open}
-            aria-controls="mobile-nav"
-            aria-label={open ? "Close menu" : "Open menu"}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? <X size={20} /> : <Menu size={20} />}
-          </button>
+                    {item.name}
+                  </span>
+                </div>
+              </div>
+            </motion.button>
+          ))}
         </div>
 
+        {/* Mobile Menu Button */}
+        <motion.button
+          className="md:hidden p-2 rounded-lg hover:bg-purple-50"
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {isMenuOpen ? (
+            <X className="h-6 w-6 text-purple-500" />
+          ) : (
+            <Menu className="h-6 w-6 text-purple-500" />
+          )}
+        </motion.button>
+
+        {/* Mobile Dropdown Menu */}
         <AnimatePresence>
-          {open && (
-            <motion.nav
-              id="mobile-nav"
-              aria-label="Main"
-              className="sticker mt-2 p-2 md:hidden"
-              initial={{ opacity: 0, y: -10, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          {isMenuOpen && (
+            <motion.div
+              className="absolute top-16 left-0 right-0 bg-white shadow-lg rounded-b-xl p-4 md:hidden"
+              variants={dropdownVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
             >
-              <ul className="flex flex-col gap-1">
+              <div className="flex flex-col space-y-2">
                 {navItems.map((item) => (
-                  <li key={item.path}>
-                    <NavLink
-                      to={item.path}
-                      className={({ isActive }) =>
-                        `block rounded-2xl px-4 py-3 text-lg font-semibold ${
-                          isActive ? `${blobColor[item.path]} border-2 border-ink` : ""
-                        }`
-                      }
+                  <motion.button
+                    key={item.path}
+                    onClick={(e) => handleNavigation(e, item.path)}
+                    className="w-full"
+                    whileHover={{ opacity: 0.9 }}
+                    whileTap={{ opacity: 0.8 }}
+                  >
+                    <div
+                      className={`px-4 py-3 rounded-lg ${
+                        currentPage === item.path
+                          ? `bg-gradient-to-r ${item.gradient} shadow-md`
+                          : "hover:bg-purple-50"
+                      }`}
                     >
-                      {item.name}
-                    </NavLink>
-                  </li>
+                      <div className="flex items-center space-x-3">
+                        <item.icon
+                          size={20}
+                          className={
+                            currentPage === item.path
+                              ? "text-white"
+                              : "text-purple-500"
+                          }
+                        />
+                        <span
+                          className={`font-josefin ${
+                            currentPage === item.path
+                              ? "text-white"
+                              : "text-purple-500"
+                          }`}
+                        >
+                          {item.name}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.button>
                 ))}
-              </ul>
-            </motion.nav>
+              </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
-    </header>
+    </div>
   );
 };
 

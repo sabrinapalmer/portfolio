@@ -1,79 +1,302 @@
-import React from "react";
-import PageHeader from "../components/ui/PageHeader";
-import ProjectCard from "../components/ui/ProjectCard";
-import Doodle from "../components/ui/Doodle";
-import { PopIn } from "../components/ui/Motion";
-import {
-  accentBg,
-  accentSoft,
-  inTheWorks,
-  projectGroups,
-  projects,
-} from "../data/projects";
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Code, Globe, Github, Gamepad2, Calendar, Sparkles, Star, Heart } from "lucide-react";
+import { Project } from "../types";
+import { pageTransition } from "../utils/animation";
+import Stonemoth from "../assets/projects/Stonemoth.jpg";
+import Flawp from "../assets/projects/Flawp.jpg";
+import WaywardWarlock from "../assets/projects/WaywardWarlock.jpg";
+import SpotifyCustomizer from "../assets/projects/SpotifyCustomizer.jpg";
+import Portfolio from "../assets/projects/Portfolio.jpg";
+import NetWorthLedger from "../assets/projects/NetWorthLedger.jpg";
 
-const Projects: React.FC = () => (
-  <div className="page">
-    <PageHeader
-      title="Projects"
-      color="#2FD0A0"
-      intro="Websites, apps and tools I've built, games from game jams, and what I'm working on next. Newest first."
-      art={<Doodle name="sparkle" className="h-36 w-36" />}
-    >
-      <nav aria-label="Project types" className="mt-7 flex flex-wrap gap-3">
-        {projectGroups.map((g) => (
-          <a key={g.type} href={`#${g.type}`} className={`btn !py-1.5 ${accentBg[g.accent]}`}>
-            {g.title}
-          </a>
-        ))}
-        <a href="#in-the-works" className="btn !py-1.5 bg-white">
-          In the works
-        </a>
-      </nav>
-    </PageHeader>
+const formatDescription = (text: string) => {
+  return text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+};
 
-    {projectGroups.map((group) => {
-      const items = projects
-        .filter((p) => p.type === group.type)
-        .sort((a, b) => b.date.localeCompare(a.date));
-      return (
-        <section key={group.type} id={group.type} className="scroll-mt-24 pt-10">
-          <div className="flex items-center gap-3">
-            <span className={`h-5 w-5 rounded-full border-2 border-ink ${accentBg[group.accent]}`} aria-hidden />
-            <h2 className="section-title">{group.title}</h2>
-          </div>
-          <p className="mt-1 text-muted">{group.intro}</p>
-          <div className={`mt-8 grid gap-8 md:grid-cols-2 ${items.length % 3 === 0 ? "lg:grid-cols-3" : ""}`}>
-            {items.map((p, i) => (
-              <PopIn key={p.title} className="h-full">
-                <ProjectCard project={p} />
-              </PopIn>
+const projects: Project[] = [
+  {
+    title: "Nearly Zero",
+    description:
+      "My online shop for clothing made of natural fibers. Every piece is tagged by how much plastic it contains, " +
+      "from **0%** to under 5%, and you can filter by that level.",
+    tags: ["JavaScript", "Vercel Functions", "Supabase", "E-commerce"],
+    type: "web",
+    date: "2026-09-20",
+    links: { demo: "https://www.wearnearlyzero.com" },
+  },
+  {
+    title: "Map",
+    description:
+      "A map and directions app built on open map data, with no ads or sponsored results. Turn-by-turn voice " +
+      "directions, opening hours, offline areas, and a meet-in-the-middle feature for picking a fair place to meet.",
+    tags: ["JavaScript", "MapLibre", "OpenStreetMap", "PWA"],
+    type: "apps",
+    date: "2026-10-16",
+    links: { demo: "/map" },
+  },
+  {
+    title: "Net Worth Ledger",
+    description:
+      "Import CSV exports from any bank and see net worth over time. Matches each bank's columns, removes " +
+      "duplicates across overlapping exports, and never sends files anywhere: everything stays in the browser.",
+    tags: ["JavaScript", "Data Cleaning", "Charts"],
+    type: "apps",
+    image: NetWorthLedger,
+    date: "2026-10-11",
+    links: { demo: "/networth" },
+  },
+  {
+    title: "The Curated Estates",
+    description:
+      "Website for a full-service estate sale company: services, how the process works, and consultation requests.",
+    tags: ["Next.js", "v0", "Vercel"],
+    type: "web",
+    date: "2026-01-15",
+    links: { demo: "https://www.thecuratedestates.com" },
+  },
+  {
+    title: "Personal Portfolio",
+    description:
+      "A modern, responsive portfolio website built to showcase my projects and skills. Features smooth animations " +
+      "and a clean, minimalist design that adapts seamlessly across all devices.",
+    tags: ["React", "Tailwind CSS", "Vite", "Vercel", "TypeScript"],
+    type: "web",
+    image: Portfolio,
+    date: "2024-10-15",
+    links: {
+      demo: "https://sabrinapalmer.com",
+      github: "https://github.com/sabrinapalmer/portfolio",
+    },
+  },
+  {
+    title: "Stonemoth",
+    description:
+      'Created for Ludum Dare Game Jam 56 with the theme "Tiny Creatures". Working alongside ' +
+      '<a href="https://bradjste.com" target="_blank" rel="noopener noreferrer" class="text-purple-500 hover:text-purple-700">Brad Stevenson</a>, ' +
+      "we built this game in just 72 hours. Out of nearly 2000 submissions, we achieved notable rankings: **94th** in Innovation and " +
+      "**168th** in Theme.",
+    tags: ["Unity", "C#", "Game Jam"],
+    type: "games",
+    image: Stonemoth,
+    date: "2024-10-07",
+    links: {
+      demo: "https://bradjste.itch.io/stonemoth",
+      github: "https://github.com/sabrinapalmer/STONEMOTH",
+      extra: {
+        label: "Game Jam Page",
+        url: "https://ldjam.com/events/ludum-dare/56/ld56-game",
+      },
+    },
+  },
+  {
+    title: "Spotify Playlist Customizer",
+    description:
+      "A web application that enhances the Spotify playlist experience by allowing users to create custom playlist " +
+      "covers that reflect the songs in their playlist. Users can also reorganize their playlists based on various song features, " +
+      "providing a new way to experience their music collections. Currently in development mode - email me to request access and try it out!",
+    tags: ["React", "Node.js", "Spotify API"],
+    type: "apps",
+    image: SpotifyCustomizer,
+    date: "2024-10-01",
+    links: {
+      demo: "https://playlistcustomizer.sabrinapalmer.com/",
+    },
+  },
+  {
+    title: "Flawp",
+    description:
+      'Developed for the Game Maker\'s Toolkit Game Jam 2022 with the theme "Roll of the Dice". ' +
+      'Created in collaboration with <a href="https://bradjste.com" target="_blank" rel="noopener noreferrer" class="text-purple-500 hover:text-purple-700">Brad Stevenson</a>. ' +
+      "Out of over 6000 entries, we achieved rankings of **792nd** in Creativity, **1251st** in Presentation, and **1042nd** Overall.",
+    tags: ["Unity", "C#", "Game Jam"],
+    type: "games",
+    image: Flawp,
+    date: "2022-07-17",
+    links: {
+      demo: "https://bradjste.itch.io/flawp",
+      extra: {
+        label: "Game Jam Page",
+        url: "https://itch.io/jam/gmtk-jam-2022/rate/1625103",
+      },
+    },
+  },
+  {
+    title: "Wayward Warlock",
+    description:
+      'Created for Ludum Dare Game Jam 49 with the theme "Unstable". ' +
+      "As part of a team of four talented developers, we crafted this game competing against almost 3000 submissions. " +
+      "While we faced strong competition, we gained valuable experience working as a larger team in the game jam environment.",
+    tags: ["Unity", "C#", "Game Jam"],
+    type: "games",
+    image: WaywardWarlock,
+    date: "2021-10-04",
+    links: {
+      github: "https://github.com/sabrinapalmer/WaywardWarlock",
+      extra: {
+        label: "Game Jam Page",
+        url: "https://ldjam.com/events/ludum-dare/49/wayward-warlock",
+      },
+    },
+  },
+];
+
+const filterLabels: Record<string, string> = {
+  all: "All",
+  web: "Websites",
+  apps: "Apps",
+  games: "Games",
+};
+
+const isExternal = (url?: string) => !!url && /^https?:/.test(url);
+const linkProps = (url?: string) =>
+  isExternal(url) ? { target: "_blank", rel: "noopener noreferrer" } : {};
+
+const Projects: React.FC = () => {
+  const [filter, setFilter] = useState<"all" | Project["type"]>("all");
+
+  const filteredProjects = projects
+    .filter((project) => filter === "all" || project.type === filter)
+    .sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    });
+
+  return (
+    <motion.div {...pageTransition}>
+      <div className="space-y-8">
+        <div>
+          <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
+            Creative Projects
+            <Gamepad2 className="text-pink-500 ml-2 mt-[-4px]" size={20} />
+          </h2>
+
+          <div className="flex flex-wrap gap-2">
+            {["all", "web", "apps", "games"].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilter(type as typeof filter)}
+                className={`px-4 py-2 rounded-full transition-all duration-300 backdrop-blur-xs ${
+                  filter === type
+                    ? "font-josefin bg-gradient-to-r from-purple-400 to-pink-400 text-white shadow-md"
+                    : "font-josefin bg-white/90 text-gray-600 hover:text-purple-500 hover:bg-purple-50"
+                }`}
+              >
+                {filterLabels[type]}
+              </button>
             ))}
           </div>
-        </section>
-      );
-    })}
+        </div>
 
-    <section id="in-the-works" className="scroll-mt-24 pt-16">
-      <h2 className="section-title">In the works</h2>
-      <p className="mt-1 text-muted">Not public yet, coming along.</p>
-      <div className="mt-8 grid gap-6 sm:grid-cols-2">
-        {inTheWorks.map((w, i) => (
-          <PopIn key={w.title}>
-            <div className={`sticker flex items-center gap-5 p-5 ${accentSoft[w.accent]}`}>
-              <Doodle name={w.doodle} className="h-20 w-20 shrink-0" />
-              <div>
-                <span className="mb-1.5 inline-block rounded-full border-2 border-ink bg-white px-2 py-0.5 text-xs font-bold">
-                  Coming soon
-                </span>
-                <h3 className="text-xl font-bold">{w.title}</h3>
-                <p className="mt-1 text-[15px]">{w.summary}</p>
-              </div>
-            </div>
-          </PopIn>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredProjects.map((project) => (
+            <ProjectCard key={project.title} project={project} />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
+  <motion.div
+    className="bg-white/90 rounded-xl shadow-md border border-purple-100 hover:shadow-lg transition-shadow backdrop-blur-xs"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+  >
+    {project.image ? (
+      <img
+        src={project.image}
+        alt={project.title}
+        className="w-full h-48 object-cover rounded-t-xl"
+        loading="lazy"
+        decoding="async"
+      />
+    ) : (
+      <a
+        href={project.links.demo}
+        {...linkProps(project.links.demo)}
+        className="relative flex h-48 items-center justify-center overflow-hidden rounded-t-xl bg-gradient-to-br from-purple-200 via-pink-100 to-purple-100"
+        aria-label={project.title}
+      >
+        <Sparkles className="absolute left-6 top-6 text-purple-300" size={20} />
+        <Star className="absolute right-8 bottom-8 text-pink-300" size={18} />
+        <Heart className="absolute right-10 top-8 text-purple-200" size={16} />
+        <span className="font-chango text-2xl text-center px-6 bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+          {project.title}
+        </span>
+      </a>
+    )}
+    <div className="p-6">
+      <div className="flex justify-between items-start mb-2">
+        <a
+          href={project.links.extra?.url || project.links.demo}
+          {...linkProps(project.links.extra?.url || project.links.demo)}
+          className="font-josefin text-xl font-semibold text-purple-500 hover:text-purple-700"
+        >
+          {project.title}
+        </a>
+        <div className="flex items-center text-gray-500 text-sm">
+          <Calendar size={14} className="mr-1" />
+          {new Date(project.date).toLocaleDateString("en-US", {
+            month: "short",
+            year: "numeric",
+          })}
+        </div>
+      </div>
+      <p
+        className="font-josefin text-gray-600 mb-4"
+        dangerouslySetInnerHTML={{
+          __html: formatDescription(project.description),
+        }}
+      />
+      <div className="flex flex-wrap gap-2 mb-4">
+        {project.tags.map((tag) => (
+          <span
+            key={tag}
+            className="font-josefin px-3 py-1 bg-purple-100 text-purple-500 rounded-full text-sm"
+          >
+            {tag}
+          </span>
         ))}
       </div>
-    </section>
-  </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {project.links.demo && (
+          <a
+            href={project.links.demo}
+            {...linkProps(project.links.demo)}
+            className="font-josefin flex items-center gap-2 text-purple-500 hover:text-purple-700"
+          >
+            <Globe size={18} />
+            <span>{isExternal(project.links.demo) ? "Live Demo" : "Open"}</span>
+          </a>
+        )}
+        {project.links.github && (
+          <a
+            href={project.links.github}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-josefin flex items-center gap-2 text-purple-500 hover:text-purple-700"
+          >
+            <Github size={18} />
+            <span>Source Code</span>
+          </a>
+        )}
+        {project.links.extra && (
+          <a
+            href={project.links.extra.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-josefin flex items-center gap-2 text-purple-500 hover:text-purple-700"
+          >
+            <Code size={18} />
+            <span>{project.links.extra.label}</span>
+          </a>
+        )}
+      </div>
+    </div>
+  </motion.div>
 );
 
 export default Projects;

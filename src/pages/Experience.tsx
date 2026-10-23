@@ -1,104 +1,231 @@
 import React from "react";
-import PageHeader from "../components/ui/PageHeader";
-import { PopIn } from "../components/ui/Motion";
-import Doodle from "../components/ui/Doodle";
-import { employers, talks } from "../data/experience";
+import { motion } from "framer-motion";
+import { SquareCode, Blocks } from "lucide-react";
+import { pageTransition } from "../utils/animation";
 
-const roleColors = ["bg-gum", "bg-butter", "bg-mint", "bg-sky"];
-const talkColors = ["bg-sky-soft", "bg-tang-soft", "bg-grape-soft"];
+const experiences = [
+  {
+    role: "Data Projects Engineer, SE Strategy & Operations",
+    company: "Splunk",
+    location: "Remote, Chicago, IL",
+    period: "November 2022 - January 2024",
+    achievements: [
+      "Spearheaded analytics initiatives from ideation through implementation, ensuring alignment between stakeholder needs and technical solutions",
+      "Maintained critical data pipelines processing 50,000+ events/hour, ensuring reliable data flow from diverse sources",
+      "Developed comprehensive team performance dashboard, enabling data-driven management decisions through role-based views and expertise tracking",
+      "Built Google Drive analytics dashboard which correlated document engagement with sales outcomes, driving targeted improvements in sales enablement materials",
+      "Partnered with directors to identify key metrics and create executive-level dashboards for strategic decision-making",
+    ],
+    technologies: [
+      "React.js",
+      "SPL",
+      "Splunk",
+      "Data Analytics",
+      "Dashboard Development",
+      "Technical Documentation",
+      "API Integration",
+      "CI/CD",
+      "ETL",
+      "Project Management",
+    ],
+  },
+  {
+    role: "Data Analytics Developer, SE Strategy & Operations",
+    company: "Splunk",
+    location: "Remote, Chicago, IL",
+    period: "February 2020 - November 2022",
+    achievements: [
+      "Rapidly learned React.js to debug and maintain mission-critical sales activity logging application on day one",
+      "Cut Sales Engineer logging time by 50% through streamlined form inputs and Google Calendar integration",
+      "Maintained and enhanced existing dashboards based on user feedback and changing business needs",
+    ],
+    technologies: [
+      "React.js",
+      "SPL",
+      "Splunk",
+      "Data Analytics",
+      "Dashboard Development",
+      "Technical Documentation",
+      "API Integration",
+    ],
+  },
+  {
+    role: "Sales Engineer",
+    company: "Splunk",
+    location: "Dallas, TX",
+    period: "February 2019 - February 2020",
+    achievements: [
+      "Built and presented AI-driven data exploration project (Splunking Blackjack below) at .conf19 in Las Vegas, demonstrating live model training capabilities of Splunk's Machine Learning Toolkit (MLTK)",
+      "Spoke at Baylor University Women in STEM panel about industry experiences, inspiring female students to pursue tech careers",
+      "Delivered technical demonstrations to customer executives, showcasing data management and analysis solutions",
+    ],
+    technologies: [
+      "Machine Learning",
+      "Technical Presentations",
+      "Solution Architecture",
+    ],
+  },
+  {
+    role: "Sales Engineer Intern",
+    company: "Splunk",
+    location: "Dallas, TX",
+    period: "June 2018 - February 2019",
+    achievements: [
+      "Achieved Splunk Certified Administrator certification",
+      "Co-built and presented an IoT data visualization project with full-time Engineers at .conf18 in Orlando, FL",
+    ],
+    technologies: [
+      "Splunk",
+      "IoT",
+      "Data Visualization",
+      "Technical Presentations",
+      "Technical Sales",
+      "Solution Architecture",
+    ],
+  },
+];
 
-const Experience: React.FC = () => (
-  <div className="page">
-    <PageHeader
-      title="Experience"
-      color="#FFD43B"
-      intro="Splunk, 2018 to 2024: sales engineering first, then data analytics and data engineering for the sales engineering organization."
-      art={<Doodle name="chart" className="h-36 w-36" />}
-    />
+const projects = [
+  {
+    title: "Splunking Blackjack - Splunk .conf19",
+    description:
+      "Built and presented an innovative machine learning system at Splunk's annual conference, demonstrating the live model training capabilities of Splunk's Machine Learning Toolkit (MLTK). The project showcased practical applications of AI in data exploration and analysis.",
+    technologies: [
+      "Machine Learning",
+      "Splunk",
+      "Splunk MLTK",
+      "OpenCV",
+      "Real-time Processing",
+      "Data Analytics",
+    ],
+    impact:
+      "Successfully demonstrated advanced ML capabilities to conference attendees and showcased practical applications of Splunk's MLTK",
+  },
+  {
+    title: "Splunking Ping Pong - Splunk .conf18",
+    description:
+      "Co-developed an innovative IoT system that captured and visualized real-time data. Presented the project at Splunk's annual conference, demonstrating practical applications of IoT data collection and analysis.",
+    technologies: [
+      "IoT",
+      "Data Visualization",
+      "Computer Vision",
+      "GPU Programming",
+      "iOS Development",
+      "Real-time Analytics",
+      "Splunk",
+    ],
+    impact:
+      "Effectively showcased IoT capabilities and real-time data processing at conference",
+  },
+  {
+    title: "Women in STEM Panel Speaker - Baylor University",
+    description:
+      "Featured speaker at Baylor University's Women in STEM panel, sharing insights on technology careers and personal industry experiences. Focused on inspiring female students to pursue careers in technology and providing practical advice for success in the field.",
+    impact:
+      "Contributed to promoting diversity in tech and inspiring the next generation of women in STEM",
+  },
+];
 
-    {employers.map((employer) => (
-      <section key={employer.company} className="grid gap-10 lg:grid-cols-[17rem_1fr]">
-        <div className="lg:sticky lg:top-28 lg:self-start">
-          <div className="sticker bg-butter p-6">
-            <h2 className="text-4xl font-extrabold">{employer.company}</h2>
-            <p className="mt-1 font-semibold">
-              {employer.roles[employer.roles.length - 1].start} –{" "}
-              {employer.roles[0].end}
-            </p>
-            <p className="mt-3 text-[15px]">{employer.summary}</p>
+const Experience = () => {
+  return (
+    <motion.div {...pageTransition}>
+      <div className="space-y-8">
+        {/* Professional Experience Section */}
+        <section>
+          <div>
+            <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
+              Professional Experience
+              <SquareCode className="text-pink-500 ml-2 mt-[-4px]" size={20} />
+            </h2>
           </div>
-          <div className="mt-8">
-            <h3 className="text-xl font-bold">Tools and skills</h3>
-            <ul className="mt-3 flex flex-wrap gap-1.5">
-              {employer.skills.map((s) => (
-                <li key={s} className="chip">
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
 
-        <ol className="relative space-y-8 border-l-[3px] border-dashed border-ink/50 pl-8 sm:pl-10">
-          {employer.roles.map((role, i) => (
-            <li key={role.title} className="relative">
-              <span
-                aria-hidden
-                className={`absolute -left-[45px] top-5 h-6 w-6 rounded-full border-2 border-ink sm:-left-[53px] ${roleColors[i % 4]}`}
-              />
-              <PopIn>
-                <div className="sticker p-6">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                    <h3 className="text-2xl font-bold">{role.title}</h3>
-                    <span className={`w-fit shrink-0 rounded-full border-2 border-ink px-3 py-0.5 text-sm font-bold ${roleColors[i % 4]}`}>
-                      {role.start} – {role.end}
-                    </span>
+          <div className="grid gap-8">
+            {experiences.map((experience, index) => (
+              <div
+                key={index}
+                className="font-josefin p-6 rounded-2xl bg-white/90 shadow-md border border-purple-100 hover:shadow-lg transition-shadow backdrop-blur-xs"
+              >
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-4">
+                  <div>
+                    <h3 className="font-josefin text-xl font-semibold text-purple-500">
+                      {experience.role}
+                    </h3>
+                    <p className="font-josefin text-sm text-pink-400">
+                      {experience.company} • {experience.location}
+                    </p>
                   </div>
-                  <p className="mt-1 text-[15px] text-muted">
-                    {[role.team, role.location].filter(Boolean).join(", ")}
+                  <p className="font-josefin text-sm text-gray-500 mt-1 md:mt-0">
+                    {experience.period}
                   </p>
-                  <ul className="mt-4 space-y-2">
-                    {role.highlights.map((h) => (
-                      <li key={h} className="flex gap-3">
-                        <span aria-hidden className="mt-[0.55em] h-2 w-2 shrink-0 rotate-45 bg-gum" />
-                        <span>{h}</span>
-                      </li>
-                    ))}
-                  </ul>
                 </div>
-              </PopIn>
-            </li>
-          ))}
-        </ol>
-      </section>
-    ))}
-
-    <section className="mt-24">
-      <h2 className="section-title">Talks and conference projects</h2>
-      <div className="mt-8 grid gap-6 md:grid-cols-3">
-        {talks.map((t, i) => (
-          <PopIn key={t.title} className="h-full">
-            <div className={`sticker h-full p-6 ${talkColors[i % 3]}`}>
-              <p className="font-semibold text-grape-dark">
-                {t.venue}, {t.year}
-              </p>
-              <h3 className="mt-1 text-2xl font-bold">{t.title}</h3>
-              <p className="mt-2">{t.description}</p>
-              {t.skills && (
-                <ul className="mt-4 flex flex-wrap gap-1.5">
-                  {t.skills.map((s) => (
-                    <li key={s} className="chip">
-                      {s}
+                <ul className="font-josefin space-y-2 text-gray-600 mb-4">
+                  {experience.achievements.map((achievement, i) => (
+                    <li key={i} className="flex items-start">
+                      <span className="font-josefin text-purple-500 mr-2">
+                        •
+                      </span>
+                      {achievement}
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          </PopIn>
-        ))}
+                <div className="font-josefin flex flex-wrap gap-2">
+                  {experience.technologies.map((tech, i) => (
+                    <span
+                      key={i}
+                      className="font-josefin px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-500"
+                    >
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Projects Section */}
+        <section className="mt-12">
+          <div>
+            <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
+              Professional Projects & Speaking
+              <Blocks className="text-pink-500 ml-2 mt-[-4px]" size={20} />
+            </h2>
+          </div>
+
+          <div className="grid gap-8 md:grid-cols-2">
+            {projects.map((project, index) => (
+              <div
+                key={index}
+                className="font-josefin p-6 rounded-2xl bg-white/90 shadow-md border border-purple-100 hover:shadow-lg transition-shadow backdrop-blur-xs"
+              >
+                <h3 className="font-josefin text-xl font-semibold text-purple-500 mb-2">
+                  {project.title}
+                </h3>
+                <p className="font-josefin text-gray-600 mb-4">
+                  {project.description}
+                </p>
+                {project.technologies && (
+                  <div className="font-josefin flex flex-wrap gap-2 mb-4">
+                    {project.technologies.map((tech, i) => (
+                      <span
+                        key={i}
+                        className="font-josefin px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-500"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="font-josefin text-sm text-pink-400">
+                  {project.impact}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
-    </section>
-  </div>
-);
+    </motion.div>
+  );
+};
 
 export default Experience;

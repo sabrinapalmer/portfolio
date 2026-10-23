@@ -1,35 +1,17 @@
 import React from "react";
-import { BouncyText } from "./Motion";
-import { Squiggle } from "./Doodle";
 
 interface PageHeaderProps {
   title: string;
-  intro?: React.ReactNode;
-  color?: string;
-  art?: React.ReactNode;
-  children?: React.ReactNode;
+  emoji?: string;
 }
 
-const PageHeader: React.FC<PageHeaderProps> = ({
-  title,
-  intro,
-  color = "#FF5FA8",
-  art,
-  children,
-}) => (
-  <header className="relative pb-12 pt-12 sm:pt-16">
-    {art && (
-      <div className="pointer-events-none absolute right-0 top-10 hidden animate-bob md:block">
-        {art}
-      </div>
-    )}
-    <h1 className="text-[clamp(2rem,10vw,4.5rem)] font-extrabold">
-      <BouncyText text={title} />
-    </h1>
-    <Squiggle className="mt-2 h-4 w-44" color={color} />
-    {intro && <p className="mt-5 max-w-prose text-lg sm:text-xl">{intro}</p>}
-    {children}
-  </header>
+const PageHeader: React.FC<PageHeaderProps> = ({ title, emoji }) => (
+  <div className="relative">
+    <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+      {title} {emoji}
+    </h2>
+    <div className="font-josefin absolute -bottom-2 left-0 w-24 h-1 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full"></div>
+  </div>
 );
 
 export default PageHeader;
