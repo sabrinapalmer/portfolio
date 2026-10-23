@@ -471,7 +471,7 @@ const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE 
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
 document.body.classList.toggle('native', NATIVE);
-const FREE_OK = !NATIVE, API = NATIVE ? 'https://sabrinapalmer.com/api' : '/api';
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api';   // www: the bare domain redirects, and the app's requests cannot follow a redirect
 const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
@@ -1806,15 +1806,16 @@ function geoType(t) {   // Geoapify's maneuver name as Valhalla's maneuver numbe
 function geoParse(d) {
   return (d.features || []).filter(f => f.geometry && f.properties && f.properties.legs).map(f => {
     const pr = f.properties, lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
-    let coords = []; const steps = [];
+    let coords = []; const steps = [], segs = [], cc = i => ((pr.admin_areas || [])[i] || {}).country_code || '';
     pr.legs.forEach((leg, li) => {   // one leg per stop; joined into one line and one list of steps
       const c = (lines[li] || []).map(x => [x[1], x[0]]), off = coords.length ? coords.length - 1 : 0, last = li === pr.legs.length - 1;
       if (coords.length) c.shift();
       coords = coords.concat(c);
       // With road details, Geoapify splits the leg into road segments and only the segments where a maneuver happens
       // carry an instruction. Each maneuver becomes one step that runs until the next one.
-      const segs = leg.steps || [], groups = [];
-      segs.forEach(sg => { if (sg.instruction || !groups.length) groups.push({ head: sg, parts: [sg] }); else groups[groups.length - 1].parts.push(sg); });
+      const raw = leg.steps || [], groups = [];
+      raw.forEach(sg => segs.push({ a: sg.from_index + off, b: sg.to_index + off, dist: sg.distance || 0, cls: sg.road_class || '', surf: sg.surface || '', cc: (sg.admin_area || []).map(cc) }));
+      raw.forEach(sg => { if (sg.instruction || !groups.length) groups.push({ head: sg, parts: [sg] }); else groups[groups.length - 1].parts.push(sg); });
       groups.forEach(({ head, parts }) => {
         const sum = k => parts.reduce((n, x) => n + (x[k] || 0), 0), dist = sum('distance') || 1, share = f => parts.reduce((n, x) => n + (f(x) ? x.distance || 0 : 0), 0) / dist;
         const st = { from_index: head.from_index, to_index: parts[parts.length - 1].to_index, distance: sum('distance'), time: sum('time'), name: head.name,
@@ -1829,7 +1830,7 @@ function geoParse(d) {
           highway: /motorway|trunk/.test(st.road_class || ''), toll: !!st.toll, rough: /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(st.surface || ''), ferry: !!st.ferry });
       });
     });
-    return { time: pr.time, dist: pr.distance / 1609.34, coords, steps };
+    return { time: pr.time, dist: pr.distance / 1609.34, coords, steps, segs };
   });
 }
 function geoRigMode() {   // Geoapify has fixed truck classes instead of exact sizes: the smallest class the rig fits
@@ -1837,12 +1838,38 @@ function geoRigMode() {   // Geoapify has fixed truck classes instead of exact s
   return t <= 3.5 && h <= 3.5 ? 'light_truck' : t <= 7.5 ? 'medium_truck' : t <= 22 ? 'truck' : 'heavy_truck';
 }
 // Settings Geoapify cannot do. On the website a route that needs them uses the community router instead.
-const geoMissing = () => [prefs.noUnpaved && 'paved roads only', prefs.noAlleys && 'avoiding alleys', prefs.noBorders && 'avoiding border crossings', prefs.mode === 'rig' && 'exact rig size'].filter(Boolean);
+const geoMissing = () => [prefs.mode === 'rig' && 'exact rig size'].filter(Boolean);
+// Paved only, no alleys and no border crossings are not settings Geoapify takes. Instead each route is checked: the
+// stretches that break a setting are found from the road details, and the route is asked for again with them blocked.
+// The first and last few hundred metres are left alone (a car park or a dirt driveway at the destination is fine).
+const UNPAVED = /dirt|gravel|path|compacted|impassable|unpaved|ground|sand/;
+function geoBreaks(t) {   // [{ why, p: [lat, lon] }] for the stretches of a route that break the paved / alley / border settings
+  const out = [], segs = t.segs || [], motor = prefs.mode === 'auto' || prefs.mode === 'rig';
+  if (!segs.length) return out;
+  const total = segs.reduce((n, s) => n + s.dist, 0), keep = Math.min(400, total * 0.15);
+  let run = 0, inRun = null;
+  const mid = s => t.coords[Math.round((s.a + s.b) / 2)] || t.coords[s.a];
+  segs.forEach(s => {
+    const at = run; run += s.dist;
+    const inner = at > keep && run < total - keep;
+    const why = inner && prefs.noUnpaved && UNPAVED.test(s.surf) ? 'unpaved' : inner && prefs.noAlleys && motor && s.cls === 'service_other' ? 'alley' : '';
+    if (why && inRun !== why) { const p = mid(s); if (p) out.push({ why, p }); }   // one point per stretch: blocking one road on it forces a way around
+    inRun = why || null;
+  });
+  if (prefs.noBorders && motor) {   // only when start and end are in the same country, so a crossing is avoidable
+    const first = (segs[0].cc || [])[0], last = (segs[segs.length - 1].cc || []).slice(-1)[0];
+    if (first && first === last) segs.forEach((s, i) => {
+      const prev = i ? (segs[i - 1].cc || []).slice(-1)[0] : first;
+      if ((s.cc || []).some(c => c !== prev) || new Set(s.cc).size > 1) out.push({ why: 'border', p: t.coords[s.a] });
+    });
+  }
+  return out;
+}
 const geoRouting = () => (useGeo() || !FREE_OK) && !(FREE_OK && geoMissing().length);
 async function geoapifyRoutes(quiet) {
   const where = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
   const motor = prefs.mode === 'auto' || prefs.mode === 'rig';
-  const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details', units: 'metric', lang: 'en', format: 'geojson' };
+  const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details' + (prefs.noBorders && motor ? ',admin_areas' : ''), units: 'metric', lang: 'en', format: 'geojson' };
   if (motor && prefs.shortest) base.type = 'short'; else if (motor && prefs.simple) base.type = 'less_maneuvers';
   if (motor && prefs.relaxed) base.max_speed = 89;
   const rules = [prefs.noHwy && motor && 'highways:1', prefs.noToll && motor && 'tolls:1', prefs.noFerry && 'ferries:1'].filter(Boolean);
@@ -1863,30 +1890,35 @@ async function geoapifyRoutes(quiet) {
   if (!trips.length) { const e = new Error('No route found.'); e.noRoute = true; throw e; }
   valhallaRoutes.stuck = stuck; geoapifyRoutes.blocked = 0;   // the route card reads the stuck flag from here
   if (!quiet && !pts.via && motor && !prefs.shortest) { const alt = await ask({ type: 'short' }).catch(() => []); trips = trips.concat(alt); }
-  // Large areas (fires, "avoid this area"): block the roads the route used inside them and ask again, as with the community router
-  if (zones().length) {
+  // Areas to avoid (fires, "avoid this area") and the paved / alley / border settings: block the roads the route used
+  // that break them and ask again, up to three times. Each extra request costs a credit, so this only runs when needed.
+  const problems = t => {
+    const out = geoBreaks(t).map(x => x.p);
+    if (zones().length) { let last = null; zoneHits(t.coords).forEach(h => { if (!last || meters(last, h.p) > 400) { last = h.p; out.push(h.p); } }); }
+    return out.filter((p, i) => out.findIndex(q => q[0] === p[0] && q[1] === p[1]) === i);
+  };
+  if (zones().length || prefs.noUnpaved || prefs.noAlleys || prefs.noBorders) {
     const ex = [];
-    for (let pass = 0; pass < 4; pass++) {
-      const clean = trips.filter(t => !zoneHits(t.coords).length);
+    for (let pass = 0; pass < 3; pass++) {
+      const clean = trips.filter(t => !problems(t).length);
       if (clean.length) { trips = clean; break; }
-      const hits = zoneHits(trips[0].coords);
-      let step = 150, picked = [];
-      do { let last = null; picked = hits.filter(h => { if (!last || meters(last, h.p) > step) { last = h.p; return true; } return false; }); step *= 1.6; } while (ex.length + picked.length > 40 && step < 20000);
-      picked = picked.slice(0, 40 - ex.length);
-      if (!picked.length) break;
-      picked.forEach(h => ex.push('location:' + h.p[0].toFixed(6) + ',' + h.p[1].toFixed(6)));
-      const again = await ask({}, ex).catch(() => []);
-      if (!again.length) break;   // no way around: keep the last route; the warning comes from zoneNote()
+      const add = problems(trips[0]).filter(p => !ex.some(e => e[0] === p[0] && e[1] === p[1])).slice(0, 40 - ex.length);
+      if (!add.length) break;
+      ex.push(...add);
+      const again = await ask({}, ex.map(p => 'location:' + p[0].toFixed(6) + ',' + p[1].toFixed(6))).catch(() => []);
+      if (!again.length) break;   // no way around: keep the last route; the note below and zoneNote() say so
       trips = again; geoapifyRoutes.blocked = ex.length;
     }
   }
   // Every way uses tolls: ask once more with tolls avoided and offer that too (for example Mexico 1 libre next to the 1D)
   if (!quiet && motor && !prefs.noToll && trips.every(t => t.steps.some(st => st.toll))) {
-    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => !t.steps.some(st => st.toll) && !zoneHits(t.coords).length);
+    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => !t.steps.some(st => st.toll) && !problems(t).length);
     trips = trips.concat(free);
   }
-  const missing = geoMissing();
-  trips.note = missing.length ? 'Not available in this version: ' + missing.join(', ') + (prefs.mode === 'rig' ? ' (routes use the nearest truck class)' : '') + '.' : '';
+  const missing = geoMissing(), left = geoBreaks(trips[0]), said = { unpaved: 'unpaved road', alley: 'service road or alley', border: 'border crossing' };
+  const stuckOn = [...new Set(left.map(x => x.why))].map(w => said[w]);
+  trips.note = stuckOn.length ? 'No way around found: this route still has a ' + stuckOn.join(' and a ') + '.'
+    : missing.length ? 'Not available in this version: ' + missing.join(', ') + (prefs.mode === 'rig' ? ' (routes use the nearest truck class)' : '') + '.' : '';
   return trips;
 }
 
