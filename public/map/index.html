@@ -2365,7 +2365,8 @@ function draw(fit) {
   const flags = el('div', 'flags');
   flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? ', ' + rt.lefts + ' left' : '')));
   if (!rt.basic && rt.hwy >= 0.5) flags.appendChild(el('span', '', fmtDist(rt.hwy) + ' highway'));
-  if (rt.toll) flags.appendChild(el('span', 'warn', 'Has tolls'));
+  if (rt.toll && prefs.noToll && rt.tollBooths == null) flags.appendChild(el('span', '', 'Uses part of a toll road'));   // tolls avoided: what is left is a stretch the router could not avoid, often between booths
+  else if (rt.toll) flags.appendChild(el('span', 'warn', 'Has tolls'));
   else if (rt.freeToll) flags.appendChild(el('span', '', 'Free stretch of a toll road, no booth'));
   if (rt.ferry) flags.appendChild(el('span', 'warn', 'Uses a ferry'));
   if (rt.unpaved >= 0.1) flags.appendChild(el('span', 'warn', fmtDist(rt.unpaved) + ' unpaved'));
