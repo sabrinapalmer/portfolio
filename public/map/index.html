@@ -368,7 +368,7 @@
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
   <p>No ads, no sponsored places, no account. Your places and settings stay on this device. Maps and roads come from OpenStreetMap, which anyone can correct.</p>
-  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search by Photon and Nominatim, routing by Valhalla and OSRM. Traffic, when you add a key, &copy; TomTom. Search, when you add a key, powered by Geoapify. Search, when you add a key, powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>.</p>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search and routing <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Powered by Geoapify</a>; on the website, Photon, Nominatim, Valhalla and OSRM as a backup. Traffic, when you add a key, &copy; TomTom. Search, when you add a key, powered by Geoapify. Search, when you add a key, powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>.</p>
   <p><a id="report" target="_blank" rel="noopener">Report a map problem here</a></p>
 </div>
 
@@ -454,6 +454,10 @@ const $ = id => document.getElementById(id);
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
 const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE = plugin('KeepAwake');
+// The App Store app only uses services licensed for it: Geoapify (search, routing) through the site's own server,
+// which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
+// backup on the website only.
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://sabrinapalmer.com/api' : '/api';
 const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
@@ -929,39 +933,78 @@ function drawHours() {
   box.textContent = h.text; box.classList.toggle('warn', h.warn);
 }
 
-// ---------- Optional paid-tier search (Geoapify) ----------
-// With a key saved, typed searches and kind-of-place searches go to Geoapify first. Answers are reshaped to look like
-// the free server's, so the rest of the app does not care which one replied. Any failure falls back to the free servers.
+// ---------- Geoapify (search, places, routing) ----------
+// Requests go through the site's server (/api/geo), which adds the key. A key typed into Settings is used directly
+// instead. Answers are reshaped to look like the free servers', so the rest of the app does not care who replied.
 const GEO_CAT = { 'amenity:cafe': 'catering.cafe', 'amenity:restaurant': 'catering.restaurant', 'amenity:fast_food': 'catering.fast_food', 'amenity:bar': 'catering.bar', 'amenity:pub': 'catering.pub',
-  'amenity:ice_cream': 'catering.ice_cream', 'amenity:fuel': 'commercial.gas', 'shop:supermarket': 'commercial.supermarket', 'shop': 'commercial', 'amenity:pharmacy': 'healthcare.pharmacy', 'amenity:bank': 'service.financial.bank',
+  'amenity:ice_cream': 'catering.ice_cream', 'amenity:fuel': 'service.vehicle.fuel', 'shop:supermarket': 'commercial.supermarket', 'shop': 'commercial', 'amenity:pharmacy': 'healthcare.pharmacy', 'amenity:bank': 'service.financial.bank',
   'amenity:atm': 'service.financial.atm', 'amenity:hospital': 'healthcare.hospital', 'amenity:clinic': 'healthcare.clinic_or_praxis', 'leisure:park': 'leisure.park', 'leisure:playground': 'leisure.playground',
-  'tourism:hotel': 'accommodation.hotel', 'tourism:motel': 'accommodation.motel', 'amenity:parking': 'parking', 'shop:bakery': 'commercial.food_and_drink.bakery', 'amenity:post_office': 'service.post.office', 'amenity:library': 'education.library' };
-let geoDownUntil = 0;
-async function geoapify(path, signal) {   // null when this kind of lookup is not one Geoapify handles
-  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1)), key = '&apiKey=' + encodeURIComponent(prefs.geoKey);
-  let url;
+  'tourism:hotel': 'accommodation.hotel', 'tourism:motel': 'accommodation.motel', 'amenity:parking': 'parking', 'shop:bakery': 'commercial.food_and_drink.bakery', 'amenity:post_office': 'service.post.office', 'amenity:library': 'education.library',
+  'amenity:charging_station': 'service.vehicle.charging_station', 'amenity:toilets': 'amenity.toilet', 'shop:doityourself': 'commercial.houseware_and_hardware.doityourself', 'shop:hardware': 'commercial.houseware_and_hardware.hardware_and_tools',
+  'shop:greengrocer': 'commercial.food_and_drink.fruit_and_vegetable', 'tourism:camp_site': 'camping.camp_site', 'tourism:caravan_site': 'camping.caravan_site', 'amenity': 'catering,commercial,service' };
+const GEO_EP = { autocomplete: '/v1/geocode/autocomplete', search: '/v1/geocode/search', reverse: '/v1/geocode/reverse', places: '/v2/places', routing: '/v1/routing', matrix: '/v1/routematrix' };
+let geoDownUntil = 0, geoOff = false;   // geoOff: the site's server has no key set up (website only: the free servers are used)
+const useGeo = () => Date.now() > geoDownUntil && (!!prefs.geoKey || !geoOff);
+async function geoFetch(ep, params, signal, body) {
+  const qs = new URLSearchParams(params).toString();
+  const url = prefs.geoKey ? 'https://api.geoapify.com' + GEO_EP[ep] + '?' + qs + '&apiKey=' + encodeURIComponent(prefs.geoKey) : API + '/geo?ep=' + ep + (qs ? '&' + qs : '');
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal } : { signal };
+  let r;
+  try { r = await fetch(url, opt); } catch (e) { if (e.name !== 'AbortError') geoDownUntil = Date.now() + (FREE_OK ? 120000 : 10000); throw e; }
+  if (!r.ok) {
+    if (prefs.geoKey && (r.status === 401 || r.status === 403)) $('geoMsg').textContent = 'Geoapify did not accept that key.';
+    if (!prefs.geoKey && r.status === 503) geoOff = true;
+    if (r.status >= 500 || r.status === 429 || r.status === 401 || r.status === 403) geoDownUntil = Date.now() + (FREE_OK ? 120000 : 10000);
+    const e = new Error('geoapify ' + r.status); e.status = r.status; throw e;
+  }
+  return r.json();
+}
+function geoProps(x) {   // a Geoapify feature's properties in the free search server's shape
+  const p = x.properties || x, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || p.result_type || '';
+  return { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.town || p.village || p.county, state: p.state, country: p.country,
+    osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours };
+}
+const geoPhoton = d => ({ features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => ({ geometry: x.geometry, properties: geoProps(x) })) });
+const rectOf = (s, w, n, e) => 'rect:' + [Math.min(w, e), Math.min(s, n), Math.max(w, e), Math.max(s, n)].map(v => (+v).toFixed(5)).join(',');
+async function geoapify(path, signal) {   // a free-search-server style path answered by Geoapify; null when it is not a kind Geoapify handles
+  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1));
   if (path.startsWith('/api/')) {
-    url = 'https://api.geoapify.com/v1/geocode/autocomplete?format=geojson&lang=en&text=' + encodeURIComponent(q.get('q')) + '&limit=' + (q.get('limit') || 8)
-      + (q.get('lat') ? '&bias=proximity:' + q.get('lon') + ',' + q.get('lat') : '') + (q.get('bbox') ? '&filter=rect:' + q.get('bbox') : '');
-  } else if (path.startsWith('/reverse')) {
+    const p = { text: q.get('q'), lang: 'en', format: 'geojson', limit: q.get('limit') || 8 };
+    if (q.get('lat')) p.bias = 'proximity:' + q.get('lon') + ',' + q.get('lat');
+    if (q.get('bbox')) { const [w, s2, e, n] = q.get('bbox').split(','); p.filter = rectOf(s2, w, n, e); }
+    return geoPhoton(await geoFetch('autocomplete', p, signal));
+  }
+  if (path.startsWith('/reverse')) {
     const tags = q.getAll('osm_tag'), radius = +(q.get('radius') || 1);
-    if (!tags.length || radius < 0.5 || !tags.every(t => GEO_CAT[t])) return null;
-    url = 'https://api.geoapify.com/v2/places?lang=en&categories=' + tags.map(t => GEO_CAT[t]).join(',') + '&filter=circle:' + q.get('lon') + ',' + q.get('lat') + ',' + Math.round(radius * 1000)
-      + '&bias=proximity:' + q.get('lon') + ',' + q.get('lat') + '&limit=' + (q.get('limit') || 20);
-  } else return null;
-  const r = await fetch(url + key, { signal });
-  if (!r.ok) { if (r.status === 401 || r.status === 403) $('geoMsg').textContent = 'Geoapify did not accept that key. Using the free search.'; geoDownUntil = Date.now() + 120000; throw new Error('geoapify ' + r.status); }
-  const d = await r.json();
-  return { features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => {
-    const p = x.properties || {}, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || '';
-    return { geometry: x.geometry, properties: { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.county, state: p.state, country: p.country,
-      osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: cat.split('.').pop(), hours: raw.opening_hours } };
-  }) };
+    if (!tags.length) return geoPhoton(await geoFetch('reverse', { lat: q.get('lat'), lon: q.get('lon'), lang: 'en', format: 'geojson' }, signal));
+    if (!tags.every(t => GEO_CAT[t])) return FREE_OK ? null : { features: [] };
+    const at = q.get('lon') + ',' + q.get('lat');
+    return geoPhoton(await geoFetch('places', { categories: [...new Set(tags.map(t => GEO_CAT[t]).join(',').split(','))].join(','), filter: 'circle:' + at + ',' + Math.max(50, Math.round(radius * 1000)),
+      bias: 'proximity:' + at, limit: q.get('limit') || 20, lang: 'en' }, signal));
+  }
+  return null;
+}
+async function geoNomi(path, signal) {   // a Nominatim style path answered by Geoapify, in Nominatim's shape
+  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1));
+  const toNomi = d => (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => {
+    const p = geoProps(x);
+    return { lat: String(x.geometry.coordinates[1]), lon: String(x.geometry.coordinates[0]), name: p.name || '', display_name: [p.name, p.street, p.city].filter(Boolean).join(', '),
+      address: { house_number: p.housenumber, road: p.street, city: p.city, state: p.state, country: p.country }, osm_type: p.osm_type, osm_id: p.osm_id, type: p.osm_value,
+      extratags: p.hours ? { opening_hours: p.hours } : undefined };
+  });
+  if (path.startsWith('/search')) {
+    const p = { text: q.get('q'), lang: 'en', format: 'geojson', limit: q.get('limit') || 5 };
+    if (q.get('viewbox')) { const [w, n, e, s2] = q.get('viewbox').split(','); p[q.get('bounded') === '1' ? 'filter' : 'bias'] = rectOf(s2, w, n, e); }
+    return toNomi(await geoFetch('search', p, signal));
+  }
+  if (path.startsWith('/reverse')) { const d = toNomi(await geoFetch('reverse', { lat: q.get('lat'), lon: q.get('lon'), lang: 'en', format: 'geojson' }, signal)); return d[0] || { error: 'none' }; }
+  return [];   // /lookup (opening hours by map id): Geoapify results already carry hours where they are known
 }
 async function photon(path, signal) {
-  if (prefs.geoKey && Date.now() > geoDownUntil) {
-    try { const g = await geoapify(path, signal); if (g) return g; } catch (e) { if (e.name === 'AbortError') throw e; }
+  if (useGeo()) {
+    try { const g = await geoapify(path, signal); if (g) return g; } catch (e) { if (e.name === 'AbortError' || !FREE_OK) throw e; }
   }
+  if (!FREE_OK) throw new Error('search unavailable');
   if (Date.now() < photonDownUntil) throw new Error('search down');
   let r;
   try { r = await fetch(GEOCODER + path, { signal }); } catch (e) { if (e.name === 'AbortError') throw e; photonDownUntil = Date.now() + 120000; throw new Error('search unreachable'); }
@@ -969,7 +1012,12 @@ async function photon(path, signal) {
   if (r.status >= 500 || r.status === 429) photonDownUntil = Date.now() + 120000;
   throw new Error('search ' + r.status);
 }
-function nominatim(path, signal) {   // queued: one request at a time, at least 1.1 s apart
+function nominatim(path, signal) {
+  if (useGeo()) return geoNomi(path, signal).catch(e => { if (e.name === 'AbortError' || !FREE_OK) throw e; return nominatimFree(path, signal); });
+  if (!FREE_OK) return Promise.reject(new Error('search unavailable'));
+  return nominatimFree(path, signal);
+}
+function nominatimFree(path, signal) {   // queued: one request at a time, at least 1.1 s apart
   const run = async () => {
     if (signal && signal.aborted) throw new Error('search aborted');
     const wait = nomiLast + 1100 - Date.now(); if (wait > 0) await pause(wait);
@@ -1186,7 +1234,8 @@ async function search(which, q, now) {
       fetchHours(shown).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); });
     }
   }
-  get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
+  if (useGeo()) { near = []; pending--; }   // Geoapify: the close search plus the wide one (ranked by distance) cover this, and each request costs a credit
+  else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
   const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
   get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
@@ -1301,7 +1350,13 @@ function syncMeet() {
   const me = meetMe(); $('meetMe').textContent = me ? 'Starting from ' + me.label : 'Your location is off';
 }
 // A plain route between two points by one mode: total seconds and the line it follows
+const GEO_MODE = { auto: 'drive', rig: 'drive', bicycle: 'bicycle', pedestrian: 'walk' };
 async function quickRoute(a, b, mode) {
+  if (useGeo() || !FREE_OK) {
+    const r = geoParse(await geoFetch('routing', { waypoints: a.lat.toFixed(6) + ',' + a.lon.toFixed(6) + '|' + b.lat.toFixed(6) + ',' + b.lon.toFixed(6), mode: GEO_MODE[mode], format: 'geojson' }))[0];
+    if (!r) throw new Error('route');
+    return { time: r.time, coords: r.coords };
+  }
   const body = { locations: [{ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon }], costing: COST[mode], units: 'miles' };
   const d = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
   if (!d.trip) throw new Error(d.error || 'route');
@@ -1313,7 +1368,11 @@ const roughTime = (a, b, mode) => meters([a.lat, a.lon], [b.lat, b.lon]) * 1.3 /
 // so a hiccup on the routing server never leaves a place without a time.
 async function travelTimes(src, targets, mode) {
   let times = null;
-  try {
+  if (useGeo() || !FREE_OK) try {
+    const d = await geoFetch('matrix', {}, null, { mode: GEO_MODE[mode], sources: [{ location: [src.lon, src.lat] }], targets: targets.map(t => ({ location: [t.lon, t.lat] })) });
+    if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x && x.time != null ? x.time : null);
+  } catch (e) {}
+  if (!times && FREE_OK) try {
     const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
     const d = await (await fetch(`${ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
     if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x.time);
@@ -1322,7 +1381,7 @@ async function travelTimes(src, targets, mode) {
   let singles = 0;
   for (let i = 0; i < targets.length; i++) {
     if (times[i] != null) continue;
-    if (singles < 6) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
+    if (singles < 6 && (FREE_OK || useGeo())) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
     times[i] = roughTime(src, targets[i], mode); meet.rough = true;
   }
   return times;
@@ -1709,6 +1768,99 @@ async function osrmRoutes(quiet) {
   return out;
 }
 
+// Routes from Geoapify (a hosted Valhalla). Same output shape as the other routers. Each request costs a credit, so
+// alternatives are asked for only when the route is being planned (not on reroutes): the balanced route, the shortest
+// one, and a toll-free one when both of those use tolls.
+const GV = ['none', 'start', 'startright', 'startleft', 'destination', 'destinationright', 'destinationleft', 'becomes', 'continue', 'slightright', 'right', 'sharpright', 'uturnright', 'uturnleft', 'sharpleft', 'left', 'slightleft',
+  'rampstraight', 'rampright', 'rampleft', 'exitright', 'exitleft', 'staystraight', 'stayright', 'stayleft', 'merge', 'roundaboutenter', 'roundaboutexit', 'ferryenter', 'ferryexit'];
+function geoType(t) {   // Geoapify's maneuver name as Valhalla's maneuver number, so the same arrows and wording rules apply
+  const k = String(t || '').toLowerCase().replace(/[^a-z]/g, '').replace(/^k(?=[a-z])/, '');
+  const i = GV.indexOf(k); if (i >= 0) return i;
+  if (/^start/.test(k)) return /right/.test(k) ? 2 : /left/.test(k) ? 3 : 1;
+  if (/^destination|reached|arrive/.test(k)) return /right/.test(k) ? 5 : /left/.test(k) ? 6 : 4;
+  if (/^roundabout/.test(k)) return /exit/.test(k) ? 27 : 26;
+  if (/^continue|straight/.test(k)) return 8;
+  return 0;
+}
+function geoParse(d) {
+  return (d.features || []).filter(f => f.geometry && f.properties && f.properties.legs).map(f => {
+    const pr = f.properties, lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    let coords = []; const steps = [];
+    pr.legs.forEach((leg, li) => {   // one leg per stop; joined into one line and one list of steps
+      const c = (lines[li] || []).map(x => [x[1], x[0]]), off = coords.length ? coords.length - 1 : 0, last = li === pr.legs.length - 1;
+      if (coords.length) c.shift();
+      coords = coords.concat(c);
+      (leg.steps || []).forEach(st => {
+        const ins = st.instruction || {}, ty = geoType(ins.type), arriving = ty >= 4 && ty <= 6, stop = arriving && !last;
+        const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : ins.text || 'Continue.';
+        steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
+          sign: [ins.exitNumber && 'Exit ' + ins.exitNumber, ins.exitTowards && 'toward ' + [].concat(ins.exitTowards).join(' / ')].filter(Boolean).join(', '),
+          begin: st.from_index + off, end: st.to_index + off, length: (st.distance || 0) / 1609.34, time: st.time || 0, road: (ins.streets || [])[0] || st.name || '',
+          angle: V_ANGLE[ty] || 0, left: ty >= 13 && ty <= 15, kind: stop ? 'stop' : arriving ? 'arrive' : ty === 26 ? 'roundabout' : (ty >= 9 && ty <= 16) ? 'turn' : 'other',
+          highway: /motorway|trunk/.test(st.road_class || ''), toll: !!st.toll, rough: /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(st.surface || ''), ferry: !!st.ferry });
+      });
+    });
+    return { time: pr.time, dist: pr.distance / 1609.34, coords, steps };
+  });
+}
+function geoRigMode() {   // Geoapify has fixed truck classes instead of exact sizes: the smallest class the rig fits
+  const t = prefs.rig.w * 0.907, h = prefs.rig.h * 0.3048;
+  return t <= 3.5 && h <= 3.5 ? 'light_truck' : t <= 7.5 ? 'medium_truck' : t <= 22 ? 'truck' : 'heavy_truck';
+}
+// Settings Geoapify cannot do. On the website a route that needs them uses the community router instead.
+const geoMissing = () => [prefs.noUnpaved && 'paved roads only', prefs.noAlleys && 'avoiding alleys', prefs.noBorders && 'avoiding border crossings', prefs.mode === 'rig' && 'exact rig size'].filter(Boolean);
+const geoRouting = () => (useGeo() || !FREE_OK) && !(FREE_OK && geoMissing().length);
+async function geoapifyRoutes(quiet) {
+  const where = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
+  const motor = prefs.mode === 'auto' || prefs.mode === 'rig';
+  const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details', units: 'metric', lang: 'en', format: 'geojson' };
+  if (motor && prefs.shortest) base.type = 'short'; else if (motor && prefs.simple) base.type = 'less_maneuvers';
+  if (motor && prefs.relaxed) base.max_speed = 89;
+  const rules = [prefs.noHwy && motor && 'highways:1', prefs.noToll && motor && 'tolls:1', prefs.noFerry && 'ferries:1'].filter(Boolean);
+  // Avoided spots: the router takes points, and drops the road nearest each one
+  avoid.concat(tempAvoid ? [tempAvoid] : []).filter(a => (a.r || 120) <= 150).slice(0, 20).forEach(a => rules.push('location:' + a.lat.toFixed(6) + ',' + a.lon.toFixed(6)));
+  const ask = async (extra, more) => {
+    const p = Object.assign({}, base, extra), all = rules.concat(more || []);
+    if (all.length) p.avoid = all.join('|');
+    try { return geoParse(await geoFetch('routing', p)); }
+    catch (e) { if (e.status === 400) return []; throw e; }   // 400: no route with these rules
+  };
+  let trips = await ask({});
+  let stuck = false;
+  if (!trips.length && rules.some(r => r.startsWith('location:'))) {   // no way around the avoided spots: route through and say so
+    const keep = rules.filter(r => !r.startsWith('location:')); rules.length = 0; rules.push(...keep);
+    trips = await ask({}); stuck = trips.length > 0;
+  }
+  if (!trips.length) { const e = new Error('No route found.'); e.noRoute = true; throw e; }
+  valhallaRoutes.stuck = stuck; geoapifyRoutes.blocked = 0;   // the route card reads the stuck flag from here
+  if (!quiet && !pts.via && motor && !prefs.shortest) { const alt = await ask({ type: 'short' }).catch(() => []); trips = trips.concat(alt); }
+  // Large areas (fires, "avoid this area"): block the roads the route used inside them and ask again, as with the community router
+  if (zones().length) {
+    const ex = [];
+    for (let pass = 0; pass < 4; pass++) {
+      const clean = trips.filter(t => !zoneHits(t.coords).length);
+      if (clean.length) { trips = clean; break; }
+      const hits = zoneHits(trips[0].coords);
+      let step = 150, picked = [];
+      do { let last = null; picked = hits.filter(h => { if (!last || meters(last, h.p) > step) { last = h.p; return true; } return false; }); step *= 1.6; } while (ex.length + picked.length > 40 && step < 20000);
+      picked = picked.slice(0, 40 - ex.length);
+      if (!picked.length) break;
+      picked.forEach(h => ex.push('location:' + h.p[0].toFixed(6) + ',' + h.p[1].toFixed(6)));
+      const again = await ask({}, ex).catch(() => []);
+      if (!again.length) break;   // no way around: keep the last route; the warning comes from zoneNote()
+      trips = again; geoapifyRoutes.blocked = ex.length;
+    }
+  }
+  // Every way uses tolls: ask once more with tolls avoided and offer that too (for example Mexico 1 libre next to the 1D)
+  if (!quiet && motor && !prefs.noToll && trips.every(t => t.steps.some(st => st.toll))) {
+    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => !t.steps.some(st => st.toll) && !zoneHits(t.coords).length);
+    trips = trips.concat(free);
+  }
+  const missing = geoMissing();
+  trips.note = missing.length ? 'Not available in this version: ' + missing.join(', ') + (prefs.mode === 'rig' ? ' (routes use the nearest truck class)' : '') + '.' : '';
+  return trips;
+}
+
 async function route(quiet) {
   if (!pts.from || !pts.to) return false;
   if (!quiet) status('Finding routes...');
@@ -1724,12 +1876,16 @@ async function route(quiet) {
     }
     catch (e) { $('ttMsg').textContent = e.status === 403 || e.status === 401 ? 'TomTom did not accept that key. Using routes without traffic.' : 'Traffic routing failed (' + e.message + '). Using routes without traffic.'; }
   }
-  if (!found && !useBackup) {
+  if (!found && geoRouting()) {
+    try { found = await geoapifyRoutes(quiet); }
+    catch (e) { if (e.noRoute) { if (id === reqId) status(e.message); return false; } }
+  }
+  if (!found && FREE_OK && !useBackup) {
     try { found = await valhallaRoutes(quiet); }
     catch (e) { if (e.noRoute) { if (id === reqId) status(e.message); return false; } }
   }
   if (!found) {
-    try { found = await osrmRoutes(quiet); useBackup = Date.now(); }
+    try { if (!FREE_OK) throw new Error('Routing is unavailable right now. Try again in a moment.'); found = await osrmRoutes(quiet); useBackup = Date.now(); }
     catch (e) {
       const t = store('map.trip');   // no connection: fall back to the last route to this same place
       if (t && t.mode === prefs.mode && t.routes && meters([t.to.lat, t.to.lon], [pts.to.lat, pts.to.lon]) < 80) {
@@ -2148,7 +2304,7 @@ function enrich(step, rt, cum) {
   step._rich = true;
   const P = rt.coords[step.begin], t = cum[step.begin], at = d => rt.coords[Math.max(0, Math.min(rt.coords.length - 1, cum.findIndex(x => x >= d)))];
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (prefs.lanes && driving && !step.lanes) (async () => {
+  if (prefs.lanes && driving && !step.lanes && FREE_OK) (async () => {
     try {
       const A = at(Math.max(0, t - 180)), B = at(Math.min(cum[cum.length - 1], t + 90));
       const o = await (await fetch(`${ROUTER2}/routed-car/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?steps=true&overview=false`)).json();
