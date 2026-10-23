@@ -6,12 +6,26 @@ const ROOT = new URL('../../', import.meta.url).pathname, CHROME = process.env.C
 const html = fs.readFileSync(ROOT + 'public/map/index.html', 'utf8');
 const HERE = [32.355, -117.05];
 const errs = [], calls = [];
+let dirty = false;
 const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 
 // Geoapify-shaped answers
 const place = (name, lat, lon, city, country, cat) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] },
   properties: { name, city, country, categories: cat ? [cat] : [], result_type: 'amenity', datasource: { raw: { osm_type: 'n', osm_id: Math.round(lat * 1e5), opening_hours: 'Mo-Su 07:00-23:00' } } } });
 function geoRoute(q) {
+  const av = q.get('avoid') || '';
+  // A route with a dirt service road that dips across the border mid-way, unless that spot is blocked
+  if (q.get('dirty') !== null && !av.includes('location:')) {
+    const wp = q.get('waypoints').split('|').map(s => s.split(',').map(Number)), [A, B] = [wp[0], wp.at(-1)];
+    const m1 = [A[0] + (B[0] - A[0]) / 3, A[1] - 0.02], m2 = [A[0] + 2 * (B[0] - A[0]) / 3, A[1] - 0.02];
+    const seg = (from, to, d, extra) => Object.assign({ from_index: from, to_index: to, distance: d, time: d / 20, toll: false, ferry: false, road_class: 'primary', surface: 'paved_smooth' }, extra);
+    return { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'MultiLineString', coordinates: [[[A[1], A[0]], [m1[1], m1[0]], [m2[1], m2[0]], [B[1], B[0]]]] },
+      properties: { distance: 60000, time: 2800, toll: false, admin_areas: [{ country_code: 'mx' }, { country_code: 'us' }], legs: [{ distance: 60000, time: 2800, steps: [
+        seg(0, 1, 20000, { instruction: { text: 'Drive south.', type: 'StartAt' }, admin_area: [0] }),
+        seg(1, 2, 20000, { surface: 'dirt', road_class: 'service_other', admin_area: [0, 1] }),
+        seg(2, 3, 20000, { instruction: { text: 'Turn left.', type: 'Left' }, admin_area: [1, 0] }),
+        { from_index: 3, to_index: 3, distance: 0, time: 0, toll: false, ferry: false, instruction: { text: 'You have arrived.', type: 'DestinationReached' }, admin_area: [0] }] }] } }] };
+  }
   const wp = q.get('waypoints').split('|').map(s => s.split(',').map(Number)), [A, B] = [wp[0], wp.at(-1)];
   const avoidTolls = (q.get('avoid') || '').includes('tolls'), short = q.get('type') === 'short';
   const mid = avoidTolls ? [(A[0] + B[0]) / 2, A[1] + 0.06] : short ? [(A[0] + B[0]) / 2, A[1] + 0.02] : [(A[0] + B[0]) / 2, A[1] - 0.03];
@@ -47,15 +61,15 @@ await p.route('**/*', async r => {
   if (u.includes('maplibre-gl.min.css')) return r.fulfill({ contentType: 'text/css', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.css') });
   if (u.includes('openfreemap')) return J({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] });
   if (/photon|nominatim|openstreetmap\.de|census\.gov/.test(u)) { calls.push('COMMUNITY ' + u); return r.abort(); }
-  if (u.startsWith('https://sabrinapalmer.com/api/geo')) {
+  if (u.startsWith('https://www.sabrinapalmer.com/api/geo')) {
     const q = new URL(u).searchParams, ep = q.get('ep'); calls.push('geo ' + ep + (q.get('avoid') ? ' avoid=' + q.get('avoid') : '') + (q.get('type') ? ' type=' + q.get('type') : ''));
     if (ep === 'autocomplete') return J({ type: 'FeatureCollection', features: /walmart/i.test(q.get('text')) ? (q.get('filter') ? [place('Walmart', 32.37, -117.06, 'Rosarito', 'Mexico')] : [place('Walmart', 32.64, -117.08, 'Chula Vista', 'United States')]) : [place('Ensenada', 31.86, -116.6, 'Ensenada', 'Mexico')] });
     if (ep === 'search' || ep === 'reverse' || ep === 'places') return J({ type: 'FeatureCollection', features: [] });
-    if (ep === 'routing') return J(geoRoute(q));
+    if (ep === 'routing') { if (dirty) q.set('dirty', '1'); return J(geoRoute(q)); }
     if (ep === 'matrix') return J({ sources_to_targets: [[{ time: 600 }]] });
     return r.fulfill({ status: 404, body: '{}' });
   }
-  if (u.startsWith('https://sabrinapalmer.com/api/traffic')) {
+  if (u.startsWith('https://www.sabrinapalmer.com/api/traffic')) {
     calls.push('traffic ' + new URL(u).searchParams.get('ep'));
     if (new URL(u).searchParams.get('ep') === 'flow') return r.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') });
     return J({ routes: [{ summary: { travelTimeInSeconds: 3300, noTrafficTravelTimeInSeconds: 3000, lengthInMeters: 60000 }, legs: [{ points: [{ latitude: HERE[0], longitude: HERE[1] }, { latitude: 31.86, longitude: -116.6 }] }], guidance: { instructions: [] }, sections: [] }] });
@@ -89,6 +103,21 @@ await p.click('#premM'); await p.waitForTimeout(2500);
 check(await p.evaluate(() => premium.active && hasTraffic()), 'buying monthly turns Premium on');
 check(calls.some(c => c.startsWith('traffic')), 'traffic requested through the site server after buying');
 console.log('premium msg:', await p.innerText('#premMsg'));
+
+// Paved only + no alleys + no border crossings: the dirt, alley and border stretch gets blocked and the route asked again
+dirty = true;
+await p.click('#closePrefs').catch(() => {});
+const before = calls.length;
+await p.evaluate(async () => { prefs.noUnpaved = prefs.noAlleys = prefs.noBorders = true; prefs.trafficRoute = false; await route(); });
+await p.waitForTimeout(1500);
+const asks = calls.slice(before).filter(c => c.startsWith('geo routing'));
+console.log('routing asks with settings on:', asks);
+check(asks.some(c => /location:/.test(c)), 'unpaved / alley / border stretch blocked and asked again');
+check(await p.evaluate(() => routes.length && !geoBreaks(routes[0]).length), 'chosen route has no unpaved road, alley or border crossing');
+await p.evaluate(async () => { prefs.noUnpaved = false; prefs.noAlleys = false; prefs.noBorders = false; await route(); });
+await p.waitForTimeout(1000);
+check(await p.evaluate(() => routes[0].segs.some(s => s.surf === 'dirt')), 'with the settings off the quicker dirt route is used');
+dirty = false;
 
 const community = calls.filter(c => c.startsWith('COMMUNITY') || c.startsWith('OTHER'));
 console.log('geo calls:', calls.filter(c => c.startsWith('geo')).length, '| first few:', calls.filter(c => c.startsWith('geo')).slice(0, 8));
