@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Mail, Send } from "lucide-react";
+import { pageTransition } from "../utils/animation";
 import emailjs from "@emailjs/browser";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import PageHeader from "../components/ui/PageHeader";
-import Doodle, { Flower } from "../components/ui/Doodle";
-import { links } from "../config/navigation";
 
 interface FormState {
   name: string;
@@ -11,178 +12,203 @@ interface FormState {
   message: string;
 }
 
-type Status = "idle" | "sending" | "sent" | "error";
-
-const field =
-  "mt-1.5 block w-full rounded-2xl border-2 border-ink bg-white px-4 py-3 text-ink shadow-sticker transition-shadow focus:shadow-[4px_4px_0_0_#FF5FA8] focus:outline-none";
-
-const confettiColors = ["#7C4DFF", "#FF5FA8", "#FF9A3C", "#FFD43B", "#2FD0A0", "#4DB8FF"];
-
-const Confetti: React.FC = () => {
-  const pieces = Array.from({ length: 36 }, (_, i) => {
-    const angle = (i / 36) * Math.PI * 2;
-    const dist = 90 + (i % 5) * 28;
-    return {
-      x: Math.cos(angle) * dist,
-      y: Math.sin(angle) * dist - 40,
-      r: (i * 47) % 360,
-      c: confettiColors[i % confettiColors.length],
-      round: i % 3 === 0,
-    };
-  });
-  return (
-    <div className="pointer-events-none absolute left-1/2 top-1/2" aria-hidden>
-      {pieces.map((p, i) => (
-        <motion.span
-          key={i}
-          className={`absolute block h-2.5 w-2.5 border border-ink ${p.round ? "rounded-full" : ""}`}
-          style={{ background: p.c }}
-          initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 0.4 }}
-          animate={{ x: p.x, y: p.y + 120, opacity: 0, rotate: p.r, scale: 1 }}
-          transition={{ duration: 1.4, ease: [0.2, 0.7, 0.4, 1] }}
-        />
-      ))}
-    </div>
-  );
-};
+type SubmissionStatus = "idle" | "submitting" | "success" | "error";
 
 const Contact: React.FC = () => {
-  const [form, setForm] = useState<FormState>({ name: "", email: "", message: "" });
-  const [status, setStatus] = useState<Status>("idle");
-  const reduce = useReducedMotion();
-
+  // Initialize emailJS when component mounts
   useEffect(() => {
     emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY);
   }, []);
 
-  const onChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const [formState, setFormState] = useState<FormState>({
+    name: "",
+    email: "",
+    message: "",
+  });
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const [status, setStatus] = useState<SubmissionStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus("sending");
+    setStatus("submitting");
+    setErrorMessage("");
+
     try {
+      // Validate environment variables
       if (
         !import.meta.env.VITE_EMAILJS_SERVICE_ID ||
         !import.meta.env.VITE_EMAILJS_TEMPLATE_ID
       ) {
         throw new Error("Missing EmailJS configuration");
       }
+
+      const templateParams = {
+        from_name: formState.name,
+        from_email: formState.email,
+        message: formState.message,
+        to_name: import.meta.env.VITE_RECIPIENT_NAME || "Recipient",
+      };
+
       await emailjs.send(
         import.meta.env.VITE_EMAILJS_SERVICE_ID,
         import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
-        {
-          from_name: form.name,
-          from_email: form.email,
-          message: form.message,
-          to_name: import.meta.env.VITE_RECIPIENT_NAME || "Recipient",
-        }
+        templateParams
       );
-      setStatus("sent");
-      setForm({ name: "", email: "", message: "" });
-    } catch (err) {
-      console.error("Error sending email:", err);
+
+      setStatus("success");
+      setFormState({ name: "", email: "", message: "" });
+    } catch (error) {
+      console.error("Error sending email:", error);
       setStatus("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to send message"
+      );
     }
   };
 
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormState((prev) => ({ ...prev, [name]: value }));
+  };
+
   return (
-    <div className="page">
-      <PageHeader
-        title="Say hi"
-        color="#4DB8FF"
-        intro="For projects, collaborations, or access to one of my apps, send a message here or email me directly."
-        art={<Flower className="h-28 w-28" fill="#4DB8FF" />}
-      />
+    <motion.div {...pageTransition}>
+      <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
+        Contact Me
+        <Mail className="text-pink-500 ml-2 mt-[-4px]" size={20} />
+      </h2>
 
-      <div className="grid gap-12 md:grid-cols-[18rem_1fr] md:gap-14">
-        <div className="space-y-5">
-          <a
-            href={`mailto:${links.email}`}
-            className="sticker block bg-butter p-5 transition-transform hover:-translate-y-1"
-          >
-            <span className="text-sm font-semibold">Email</span>
-            <span className="block break-all font-display text-xl font-bold">{links.email}</span>
-          </a>
-          <a
-            href={links.github}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="sticker block bg-mint-soft p-5 transition-transform hover:-translate-y-1"
-          >
-            <span className="text-sm font-semibold">GitHub</span>
-            <span className="block font-display text-xl font-bold">sabrinapalmer</span>
-          </a>
-          <Doodle name="sparkle" className="mx-auto hidden h-24 w-24 animate-bob md:block" />
-        </div>
-
-        <form onSubmit={onSubmit} className="sticker max-w-2xl space-y-5 bg-sky-soft p-6 sm:p-8">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="block text-[15px] font-medium">
-              Name
-              <input
-                type="text"
-                name="name"
-                autoComplete="name"
-                value={form.name}
-                onChange={onChange}
-                className={field}
-                required
-              />
-            </label>
-            <label className="block text-[15px] font-medium">
-              Email
-              <input
-                type="email"
-                name="email"
-                autoComplete="email"
-                value={form.email}
-                onChange={onChange}
-                className={field}
-                required
-              />
-            </label>
-          </div>
-          <label className="block text-[15px] font-medium">
-            Message
-            <textarea
-              name="message"
-              rows={6}
-              value={form.message}
-              onChange={onChange}
-              className={field}
-              required
-            />
-          </label>
-
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative">
-              <AnimatePresence>{status === "sent" && !reduce && <Confetti />}</AnimatePresence>
-            <button
-              type="submit"
-              disabled={status === "sending"}
-              className="btn bg-gum disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {status === "sending" ? "Sending…" : "Send message"}
-            </button>
-            </div>
-            <p role="status" className="text-[15px]">
-              {status === "sent" && (
-                <span className="font-semibold text-emerald-700">
-                  Message sent. I'll reply by email.
-                </span>
-              )}
-              {status === "error" && (
-                <span className="text-red-700">
-                  The message didn't send. Email me at {links.email} instead.
-                </span>
-              )}
+      <div className="grid md:grid-cols-2 gap-12">
+        {/* Contact Information */}
+        <div className="space-y-8">
+          <div className="prose prose-purple">
+            <h3 className="font-josefin text-xl font-semibold text-purple-500 backdrop-blur-xs">
+              Let's Connect!
+            </h3>
+            <p className="font-josefin text-gray-600 backdrop-blur-xs">
+              I'm always interested in hearing about new projects and
+              opportunities. Feel free to reach out!
             </p>
           </div>
-        </form>
+
+          <div className="space-y-4">
+            <div className="flex items-start space-x-4">
+              <Mail
+                className="font-josefin text-purple-500 mt-1 backdrop-blur-xs"
+                size={20}
+              />
+              <div>
+                <h4 className="font-josefin font-medium text-purple-500 backdrop-blur-xs">
+                  Email
+                </h4>
+                <p className="font-josefin text-gray-600 backdrop-blur-xs">
+                  sabrinampalmer@gmail.com
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Contact Form */}
+        <div className="backdrop-blur-xs">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label
+                htmlFor="name"
+                className="font-josefin block text-sm font-medium text-purple-500"
+              >
+                Name
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={formState.name}
+                onChange={handleChange}
+                className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       backdrop-blur-xs
+                       focus:border-purple-500 focus:ring-purple-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="email"
+                className="font-josefin block text-sm font-medium text-purple-500"
+              >
+                Email
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formState.email}
+                onChange={handleChange}
+                className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       bg-white/50 backdrop-blur-xs
+                       focus:border-purple-500 focus:ring-purple-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="message"
+                className="font-josefin block text-sm font-medium text-purple-500"
+              >
+                Message
+              </label>
+              <textarea
+                id="message"
+                name="message"
+                rows={4}
+                value={formState.message}
+                onChange={handleChange}
+                className="font-josefin mt-1 block w-full rounded-md border border-purple-200 shadow-sm p-3 
+                       bg-white/50 backdrop-blur-xs
+                       focus:border-purple-500 focus:ring-purple-500"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={status === "submitting"}
+              className="font-josefin w-full flex items-center justify-center px-4 py-3 border border-transparent 
+                     rounded-md shadow-sm text-white bg-gradient-to-r from-purple-400 to-pink-400 
+                     hover:from-purple-400 hover:to-pink-400 focus:outline-none focus:ring-2 
+                     focus:ring-offset-2 focus:ring-purple-400 disabled:opacity-50 
+                     disabled:cursor-not-allowed backdrop-blur-xs"
+            >
+              {status === "submitting" ? (
+                "Sending..."
+              ) : (
+                <>
+                  Send Message
+                  <Send className="font-josefin ml-2" size={18} />
+                </>
+              )}
+            </button>
+
+            {status === "success" && (
+              <p className="font-josefin text-green-600 text-center">
+                Message sent successfully!
+              </p>
+            )}
+            {status === "error" && (
+              <p className="font-josefin text-red-600 text-center">
+                {errorMessage ||
+                  "There was an error sending your message. Please try again."}
+              </p>
+            )}
+          </form>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -1,103 +1,134 @@
-import React, { useEffect } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useCallback } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import Navigation from "./Navigation";
-import { links, navItems } from "../../config/navigation";
-import { Star } from "../ui/Doodle";
-import { ClickSparkles, FloatingDoodles } from "../ui/Whimsy";
-
-const footerLinks = [
-  { label: "Nearly Zero", url: "https://www.wearnearlyzero.com" },
-  { label: "Map", url: "/map" },
-  { label: "Net Worth Ledger", url: "/networth" },
-  { label: "The Curated Estates", url: "https://www.thecuratedestates.com" },
-  { label: "Playlist Customizer", url: "https://playlistcustomizer.sabrinapalmer.com/" },
-];
+import { Star, Heart, Sparkles, Moon, Cloud, Rainbow } from "lucide-react";
+import FloatingIcon from "../common/FloatingIcon";
 
 const Layout: React.FC = () => {
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState<string>("");
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const isHome = location.pathname === "/";
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-    const item = navItems.find((n) => n.path === pathname);
-    document.title = item ? `${item.title} | Sabrina Palmer` : "Sabrina Palmer";
-  }, [pathname]);
+    const path = location.pathname.substring(1);
+    setCurrentPage(path || "home");
+  }, [location]);
+
+  const backgroundElements = [
+    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Star, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Heart, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Sparkles, delay: 2, speed: 0.5, color: "text-purple-200" },
+    { Icon: Moon, delay: 0, speed: 0.5, color: "text-purple-300" },
+    { Icon: Cloud, delay: 1, speed: 0.5, color: "text-pink-300" },
+    { Icon: Rainbow, delay: 2, speed: 0.5, color: "text-purple-200" },
+  ];
+
+  const handleNavigation = useCallback(
+    (path: string) => {
+      if (isHome) {
+        setPendingPath(path);
+      } else {
+        navigate(path);
+      }
+    },
+    [isHome, navigate]
+  );
+
+  const handleExitComplete = useCallback(() => {
+    if (pendingPath) {
+      navigate(pendingPath);
+      setPendingPath(null);
+    }
+  }, [pendingPath, navigate]);
+
+  const topNavTransition = {
+    type: "spring",
+    stiffness: 260,
+    damping: 20,
+    duration: 0.2, // Slightly faster
+  };
+
+  const sideNavTransition = {
+    type: "tween",
+    duration: 0.3, // Reduced from 0.5 to 0.3
+    ease: [0.25, 0.1, 0.25, 1], // Modified easing for a snappier feel
+  };
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-clip">
-      <FloatingDoodles />
-      <ClickSparkles />
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-ink focus:px-4 focus:py-2 focus:text-paper"
-      >
-        Skip to content
-      </a>
-      <Navigation />
-      <main id="main" className="relative z-10 flex-1">
-        <Outlet />
-      </main>
-      <footer className="relative z-10 mt-28 bg-ink text-paper">
-        <div className="page grid gap-10 py-12 md:grid-cols-3">
-          <div>
-            <Link to="/" className="flex items-center gap-2">
-              <Star className="h-8 w-8 animate-spin-slow" />
-              <span className="font-display text-2xl font-bold text-paper">
-                Sabrina Palmer
-              </span>
-            </Link>
-            <p className="mt-3 max-w-xs text-paper/70">
-              Software engineer, film photographer, and maker of small useful
-              things.
-            </p>
+    <div className="fixed inset-0 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none">
+        {backgroundElements.map((element, index) => (
+          <FloatingIcon key={index} {...element} />
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {!isHome && (
+          <motion.div
+            className="fixed top-0 left-0 right-0 z-50"
+            initial={{ y: "-100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "-100%" }}
+            transition={topNavTransition}
+          >
+            <div className="bg-white shadow-sm">
+              <Navigation
+                currentPage={currentPage}
+                isHome={false}
+                onNavigate={handleNavigation}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {isHome ? (
+        <div className="fixed inset-0 flex flex-col md:flex-row">
+          <div className="fixed top-0 left-0 right-0 md:relative md:w-1/2 h-[45vh] md:h-full overflow-hidden">
+            <Outlet />
           </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-butter">Things I made</h2>
-            <ul className="mt-3 space-y-1.5">
-              {footerLinks.map((l) => (
-                <li key={l.url}>
-                  <a
-                    href={l.url}
-                    className="text-paper/85 underline-offset-4 hover:text-gum hover:underline"
-                    {...(l.url.startsWith("http")
-                      ? { target: "_blank", rel: "noopener noreferrer" }
-                      : {})}
-                  >
-                    {l.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-mint">Say hi</h2>
-            <ul className="mt-3 space-y-1.5">
-              <li>
-                <a className="text-paper/85 hover:text-gum" href={`mailto:${links.email}`}>
-                  {links.email}
-                </a>
-              </li>
-              <li>
-                <a
-                  className="text-paper/85 hover:text-gum"
-                  href={links.github}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  GitHub
-                </a>
-              </li>
-              <li>
-                <Link className="text-paper/85 hover:text-gum" to="/contact">
-                  Contact form
-                </Link>
-              </li>
-            </ul>
+
+          <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
+            {!pendingPath && (
+              <motion.div
+                key="home-nav"
+                className="fixed bottom-0 left-0 right-0 h-[45vh] md:h-full md:relative md:w-1/2 bg-white rounded-t-3xl md:rounded-none shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] md:shadow-none overflow-hidden"
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={sideNavTransition}
+              >
+                <Navigation
+                  currentPage={currentPage}
+                  isHome={true}
+                  onNavigate={handleNavigation}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <div className="pt-20 h-full overflow-auto">
+          <div className="container mx-auto px-4 py-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Outlet />
+            </motion.div>
           </div>
         </div>
-        <p className="page pb-8 text-sm text-paper/50">
-          © {new Date().getFullYear()} Sabrina Palmer
-        </p>
-      </footer>
+      )}
     </div>
   );
 };
