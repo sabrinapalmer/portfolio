@@ -50,7 +50,7 @@ await p.click('#routes button:nth-child(2)'); await p.waitForTimeout(300);
 console.log('why alt', (await p.innerText('#why')).replace(/\n/g,' / '));
 await p.click('#toggleSteps'); await p.waitForTimeout(200); await p.click('#toggleSteps');
 // prefs
-await p.click('#openPrefs'); await p.click('[data-pref=noHwy]'); await p.click('[data-pref=simple]'); await p.waitForTimeout(300); await p.click('#closePrefs');
+await p.click('#openRouteOpts'); await p.click('[data-pref=noHwy]'); await p.click('[data-pref=simple]'); await p.waitForTimeout(300); await p.click('#routeOpts [data-close]');
 await p.click('#mode [data-mode=rig]'); await p.waitForTimeout(500);
 console.log(reqs.slice(-2).join('\n'));
 // avoid a spot via map click
