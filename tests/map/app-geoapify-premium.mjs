@@ -134,6 +134,21 @@ await p.waitForTimeout(1000);
 check(await p.evaluate(() => routes[0].segs.some(s => s.surf === 'dirt')), 'with the settings off the quicker dirt route is used');
 dirty = false;
 
+// Several stops, the trip panel, and Home in the quick buttons
+await p.evaluate(async () => { await addStop({ lat: 32.30, lon: -117.03, name: 'Oxxo', label: 'Oxxo, Rosarito' }); await new Promise(r => setTimeout(r, 800)); await addStop({ lat: 32.10, lon: -116.90, name: 'Pemex', label: 'Pemex, La Mision' }); });
+await p.waitForTimeout(1500);
+check(await p.evaluate(() => pts.stops.map(s => s.name).join(',')) === 'Oxxo,Pemex', 'two stops kept in order along the way');
+check(await p.evaluate(() => /2 stops/.test($('tripStops').textContent) && $('tripStops').style.display !== 'none'), 'route card says 2 stops');
+await p.evaluate(() => openTrip()); await p.waitForTimeout(300);
+const tripRows = await p.$$eval('#tripList li', e => e.map(x => x.innerText.replace(/\n/g, ' ')));
+console.log('trip:', tripRows);
+check(tripRows.length === 4 && /Oxxo/.test(tripRows[1]) && /Pemex/.test(tripRows[2]), 'trip panel lists start, both stops and the destination');
+await p.click('#tripList li:nth-child(2) button.x'); await p.waitForTimeout(1200);
+check(await p.evaluate(() => pts.stops.length === 1 && pts.stops[0].name === 'Pemex'), 'a stop can be removed from the trip panel');
+await p.evaluate(() => { closeSheets(); savePlace('home', { lat: 32.0, lon: -116.9, label: 'La Salina, Baja California', name: 'La Salina' }); clearAll(); });
+await p.waitForTimeout(300);
+check((await p.$$eval('#quick button', e => e.map(x => x.className + ':' + x.innerText)))[0] === 'home:Home', 'Home is the first quick button');
+
 const community = calls.filter(c => c.startsWith('COMMUNITY') || c.startsWith('OTHER'));
 console.log('geo calls:', calls.filter(c => c.startsWith('geo')).length, '| first few:', calls.filter(c => c.startsWith('geo')).slice(0, 8));
 check(!community.length, 'no community servers or unknown hosts called' + (community.length ? ': ' + community.slice(0, 3).join(' ; ') : ''));

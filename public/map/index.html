@@ -77,7 +77,13 @@
   #quick { position:fixed; left:0; right:64px; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:9; display:flex; gap:6px; padding:6px 10px; overflow-x:auto; scrollbar-width:none; }
   #quick::-webkit-scrollbar { display:none; }
   #quick button { background:var(--card); box-shadow:0 2px 8px rgba(0,0,0,.14); flex:0 0 auto; max-width:140px; overflow:hidden; text-overflow:ellipsis; padding:6px 11px; font-size:12.5px; font-weight:600; }
-  #quick button.saved { color:var(--accent); }
+  #quick button.saved, #quick button.home, #quick button.work { color:var(--accent); }
+  #quick button { display:inline-flex; align-items:center; gap:5px; }
+  #quick button svg { width:15px; height:15px; flex:0 0 auto; stroke-width:2.2; }
+  #quick button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #quick button.add { color:var(--muted); }
+  .placeRow { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0; }
+  .placeRow b { width:48px; } .placeRow span { flex:1 1 140px; min-width:0; font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   body.dest #quick, body.nav #quick { display:none; }
 
   /* Route sheet */
@@ -389,6 +395,10 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>Extra guidance</h3>
   <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
+  <h3>Home and work</h3>
+  <p>They show first under the search box.</p>
+  <div class="placeRow"><b>Home</b><span id="homeNow"></span><button id="homeHere" class="pill">This place</button><button id="homeFind" class="pill">Search</button><button id="homeDel" class="ghost">Remove</button></div>
+  <div class="placeRow"><b>Work</b><span id="workNow"></span><button id="workHere" class="pill">This place</button><button id="workFind" class="pill">Search</button><button id="workDel" class="ghost">Remove</button></div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
   <h3>Offline map</h3>
@@ -616,6 +626,7 @@ const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/ca
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
+let places = store('map.places') || { home: null, work: null }, visits = store('map.visits') || {}, settingPlace = null;   // visits: how often you go to each place
 const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
 const tripPts = () => [pts.from, ...pts.stops, pts.to].filter(Boolean);
 const stopName = i => { const st = pts.stops[i]; return st ? st.name || (st.label || '').split(',')[0] : ''; };
@@ -700,7 +711,7 @@ const THEMES = {
   brina:    { group: 'BrinaMaps', label: 'Brina', ui: 'light', accent: '#8b5cf6', soft: '#ede7ff', bg: '#f7f4ff', land2: '#efeafb', water: '#9fd3f5', park: '#bfe8cc', building: '#e7e1f4', bldLine: '#d4cbea', casing: '#b6a8db',
               minor: '#ffffff', mid: '#fff0c4', major: '#ffd98a', motorway: '#c4a1ff', path: '#dbd2ef', rail: '#bdb0dc', text: '#2a1f4a', textRoad: '#463a6e', halo: '#fcfbff', boundary: '#a48ce0' },
   twilight: { group: 'BrinaMaps', label: 'Twilight', ui: 'dark', accent: '#b67cff', ink: '#1a1033', soft: '#382a5c', bg: '#1b1838', land2: '#211d44', water: '#123b6e', park: '#1e4a48', building: '#2a2550', bldLine: '#3b346e', casing: '#0f0d24',
-              minor: '#4f4790', mid: '#7466c9', major: '#a58cff', motorway: '#67e8f9', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
+              minor: '#4f4790', mid: '#7466c9', major: '#a58cff', motorway: '#e2d8ff', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
   blossom:  { group: 'Soft', label: 'Blossom', ui: 'light', accent: '#f0527f', soft: '#ffe6ec', bg: '#fbf4ea', land2: '#f5ebde', water: '#a5d6f0', park: '#bfe6b8', building: '#ece0d2', bldLine: '#dccbb9', casing: '#c9b6a6',
               minor: '#ffffff', mid: '#fff3c9', major: '#ffe08f', motorway: '#ffc278', path: '#e0cfc0', rail: '#c7b6ab', text: '#33262f', textRoad: '#5a4652', halo: '#fffaf4', boundary: '#c59db0' },
   sorbet:   { group: 'Soft', label: 'Sorbet', ui: 'light', accent: '#e8457c', soft: '#ffe1ea', bg: '#fff4f5', land2: '#fdeaed', water: '#b3e4f6', park: '#c4efd0', building: '#f5e1e4', bldLine: '#e8cdd3', casing: '#d9b3bf',
@@ -812,26 +823,30 @@ async function themedStyle() {
   }
   return restyle(await offlineStyle(JSON.parse(rawStyle)), theme());
 }
-// A route colour no street uses in that theme: a vivid magenta-pink (a deeper one on light maps), unless a theme sets its own
-const routeColor = t => t.route || (t.ui === 'dark' ? '#ff4fc8' : '#e0218a');
+// The route is a bright blue: a colour traffic never uses (red, orange, yellow, green), and one no street uses.
+const routeColor = t => t.route || (t.ui === 'dark' ? '#3d9bff' : '#1f6fff');
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
   map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
-  // The chosen route glows above the streets: a soft wide halo, a contrasting edge, the route colour, and a bright core.
-  // Widths grow with zoom so the route always stays wider than the streets under it.
+  // The chosen route glows above the streets: a wide soft halo and a tighter bright one under a thick line with a
+  // lighter centre, in a colour no street uses. Light maps get a thin white edge; dark maps let the glow do that.
+  // Widths grow with zoom so the route always stays wider than the biggest road under it.
   const t = theme(), dark = t.ui === 'dark', rc = routeColor(t), z = (a, b2) => ['interpolate', ['exponential', 1.5], ['zoom'], 8, a, 18, b2];
-  line('alt-casing', false, { 'line-color': dark ? '#0b0a18' : '#ffffff', 'line-width': z(7, 16), 'line-opacity': .9 });
-  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(4.5, 11), 'line-opacity': .95 });
-  line('glow', true, { 'line-color': rc, 'line-width': z(20, 44), 'line-blur': z(10, 22), 'line-opacity': dark ? .55 : .35 });
-  line('casing', true, { 'line-color': dark ? '#0b0a18' : '#ffffff', 'line-width': z(9.5, 22) });
-  line('sel', true, { 'line-color': rc, 'line-width': z(6, 15) });
-  line('core', true, { 'line-color': '#ffffff', 'line-width': z(1.4, 3.5), 'line-opacity': dark ? .75 : .55, 'line-blur': .5 });
+  const tint = (hex, f) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - f) + 255 * f).toString(16).padStart(2, '0')).join('');
+  line('alt-casing', false, { 'line-color': dark ? t.bg : '#ffffff', 'line-width': z(7, 18), 'line-opacity': .9 });
+  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(4.5, 12), 'line-opacity': .95 });
+  line('glow', true, { 'line-color': rc, 'line-width': z(28, 76), 'line-blur': z(15, 38), 'line-opacity': dark ? .5 : .4 });
+  line('glow2', true, { 'line-color': rc, 'line-width': z(14, 36), 'line-blur': z(5, 12), 'line-opacity': dark ? .85 : .6 });
+  if (!dark) line('casing', true, { 'line-color': '#ffffff', 'line-width': z(11, 29) });
+  line('sel', true, { 'line-color': rc, 'line-width': z(8, 23) });
+  line('core', true, { 'line-color': tint(rc, dark ? .55 : .4), 'line-width': z(2.6, 7.5), 'line-blur': z(1.2, 3.5), 'line-opacity': .9 });
   map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
-  map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
-  if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['==', ['get', 'kind'], 'fire'], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
+  map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
+  map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
+  map.addLayer({ id: 'fire-dot', type: 'circle', source: 'zones', filter: ['==', ['get', 'kind'], 'firept'], paint: { 'circle-color': '#e4572e', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 10, 9], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-blur': 0.05 } });
+  if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['all', ['==', ['get', 'kind'], 'fire'], ['==', ['geometry-type'], 'Polygon']], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
   drawZones();
   addTraffic();
 }
@@ -876,7 +891,7 @@ mapReady = (async () => {
   const v = store('map.view');
   map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false });
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
-  map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 6) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
+  map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 4.5) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
   map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
   map.on('dragstart', e => {
     if (!e.originalEvent) return;   // only your own drags, not the map's own moves
@@ -933,7 +948,7 @@ function openPop(lngLat, div, opts) {
 function onMapClick(e) {
   if (picking) { pickedStop(e.lngLat); return; }
   if (mapPop && Date.now() - mapPopAt > 500) { mapPop.remove(); mapPop = null; return; }
-  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures(e.point, { layers: ['zone-fill'] }).find(f => f.properties.kind === 'fire');
+  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ['fire-dot', 'zone-fill'] }).find(f => /^fire/.test(f.properties.kind));
   if (fire) {
     const p = fire.properties, div = el('div', 'pop');
     div.append(el('b', '', p.title), el('small', '', p.info), el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
@@ -1176,6 +1191,7 @@ function settleEnter() {   // after Return, once every source has answered: keep
 let debounce;
 ['from', 'to', 'friend'].forEach(which => {
   const input = $(which);
+  if (which === 'to') input.addEventListener('blur', () => setTimeout(() => { if (settingPlace && !input.value.trim()) { settingPlace = null; input.placeholder = 'Where to?'; } }, 400));
   input.addEventListener('focus', () => { if (input.value) input.select(); if (!input.value.trim()) requestAnimationFrame(() => setTimeout(() => { if (document.activeElement === input && !input.value.trim()) shortcuts(which); }, 0)); });
   input.addEventListener('input', () => {
     clearTimeout(debounce);
@@ -1400,6 +1416,10 @@ async function setPointFromLatLng(which, lat, lon) {
 }
 
 function setPoint(which, p) {
+  if (which === 'to' && settingPlace) {
+    const kind = settingPlace; settingPlace = null; $('to').placeholder = 'Where to?'; $('to').value = '';
+    savePlace(kind, p); status((kind === 'home' ? 'Home' : 'Work') + ' saved: ' + (p.name || p.label.split(',')[0]) + '.'); return;
+  }
   if (which === 'from' && !p.auto && !planning) setPlanning(true, true);   // a hand-picked start means you are planning
   if (which === 'to' && !planning && pts.from) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }   // never reuse an old start
   pts[which] = p;
@@ -1439,16 +1459,46 @@ function setPlanning(on, keep) {
 
 function remember(p) {
   if (p.raw || p.label === 'My location') return;
+  const v = visits[p.label] || { n: 0 }; v.n++; v.at = Date.now(); v.p = { lat: p.lat, lon: p.lon, label: p.label, name: p.name };
+  visits[p.label] = v;
+  const keys = Object.keys(visits); if (keys.length > 60) { keys.sort((a, b) => (visits[a].n + visits[a].at / 864e7) - (visits[b].n + visits[b].at / 864e7)).slice(0, keys.length - 60).forEach(k => delete visits[k]); }
+  store('map.visits', visits);
   recent = [p].concat(recent.filter(r => r.label !== p.label)).slice(0, 6).map(r => ({ lat: r.lat, lon: r.lon, label: r.label, name: r.name }));
   store('map.recent', recent); drawQuick();
 }
 const isSaved = p => p && saved.some(s => s.label === p.label);
 function syncSave() { $('save').classList.toggle('on', !!isSaved(pts.to)); }
+// Quick buttons: Home, Work, saved places, then where you go most; recent places only fill the gaps
+const ICON = { home: '<svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>', work: '<svg viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>', saved: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.600-7 10-7 10z"/></svg>' };
 function drawQuick() {
   const q = $('quick'); q.innerHTML = '';
-  const seen = new Set(saved.map(s => s.label));
-  saved.map(p => [p, 'saved']).concat(recent.filter(r => !seen.has(r.label)).map(p => [p, ''])).forEach(([p, cls]) => {
-    const b = el('button', cls, p.name || p.label.split(',')[0]); b.onclick = () => setPoint('to', p); q.appendChild(b);
+  const seen = new Set(), chips = [];
+  const push = (p, kind, title) => { if (!p || seen.has(p.label)) return; seen.add(p.label); chips.push([p, kind, title || p.name || p.label.split(',')[0]]); };
+  push(places.home, 'home', 'Home'); push(places.work, 'work', 'Work');
+  saved.forEach(p => push(p, 'saved'));
+  Object.values(visits).filter(v => v.n >= 2).sort((a, b) => b.n - a.n || b.at - a.at).slice(0, 6).forEach(v => push(v.p, 'often'));
+  recent.forEach(p => { if (chips.length < 8) push(p, 'recent'); });
+  chips.slice(0, 10).forEach(([p, kind, title]) => {
+    const b = el('button', kind); b.innerHTML = ICON[kind] || ''; b.appendChild(el('span', '', title)); b.title = p.label;
+    b.onclick = () => setPoint('to', p); q.appendChild(b);
+  });
+  if (!places.home && !places.work) { const b = el('button', 'add'); b.innerHTML = ICON.home; b.appendChild(el('span', '', 'Set home')); b.onclick = () => setPlaceBySearch('home'); q.appendChild(b); }
+}
+function setPlaceBySearch(kind) {
+  settingPlace = kind; closeSheets();
+  $('to').placeholder = kind === 'home' ? 'Search for your home address' : 'Search for your work address';
+  $('to').value = ''; $('to').focus(); status('Pick your ' + kind + ' from the results.');
+}
+function savePlace(kind, p) {
+  places[kind] = p ? { lat: p.lat, lon: p.lon, label: p.label, name: p.name } : null;
+  store('map.places', places); drawQuick(); drawPlaces();
+}
+function drawPlaces() {
+  ['home', 'work'].forEach(kind => {
+    const p = places[kind];
+    $(kind + 'Now').textContent = p ? p.label : 'Not set';
+    $(kind + 'Here').style.display = pts.to && !pts.to.raw ? '' : 'none';
+    $(kind + 'Del').style.display = p ? '' : 'none';
   });
 }
 function drawLists() {
@@ -1708,7 +1758,11 @@ function circleRing(c, r) { const out = []; for (let k = 0; k <= 32; k++) { cons
 function drawZones() {
   if (!map || !map.getSource('zones')) return;
   const feats = [];
-  if (prefs.fires) fires.forEach(f => feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } }));
+  if (prefs.fires) fires.forEach(f => {
+    feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
+    const c = f.c ? [f.c[1], f.c[0]] : [(f.box[0] + f.box[2]) / 2, (f.box[1] + f.box[3]) / 2];
+    if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Point', coordinates: c } });
+  });
   avoid.forEach(a => { if ((a.r || 120) > 300) feats.push({ type: 'Feature', properties: { kind: 'spot', active: true }, geometry: { type: 'Polygon', coordinates: [circleRing([a.lat, a.lon], a.r)] } }); });
   map.getSource('zones').setData({ type: 'FeatureCollection', features: feats });
 }
@@ -2991,8 +3045,13 @@ function drawOptsSum() {
   const parts = [on.length && 'Avoiding ' + on.join(', '), style.length && style.join(', ')].filter(Boolean);
   $('optsSum').textContent = (parts.length ? parts.join(' \u00b7 ') : 'No route options on') + '  \u203a  Change';
 }
+['home', 'work'].forEach(kind => {
+  $(kind + 'Here').onclick = () => { if (pts.to) savePlace(kind, pts.to); };
+  $(kind + 'Find').onclick = () => setPlaceBySearch(kind);
+  $(kind + 'Del').onclick = () => savePlace(kind, null);
+});
 $('openPrefs').onclick = () => {
-  drawLists(); drawThemes(); syncPrefs();
+  drawLists(); drawPlaces(); drawThemes(); syncPrefs();
   if (map) { const c = map.getCenter(); $('report').href = `https://www.openstreetmap.org/note/new#map=${Math.max(15, Math.round(map.getZoom()))}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`; }
   document.body.classList.add('prefs');
 };
