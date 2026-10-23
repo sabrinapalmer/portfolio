@@ -2,5 +2,14 @@
   "appId": "com.sabrinapalmer.map",
   "appName": "BrinaMaps",
   "webDir": "www",
-  "ios": { "contentInset": "never", "backgroundColor": "#1b1838" }
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#1b1838"
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "none",
+      "resizeOnFullScreen": false
+    }
+  }
 }
