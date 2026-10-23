@@ -1369,6 +1369,19 @@ async function search(which, q, now) {
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
   let near, close, far, exact = [], pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
+  const ql = q.toLowerCase(), mine = [];
+  [[places.home, 'Home'], [places.work, 'Work']].forEach(([pl, t]) => { if (pl && (t.toLowerCase().startsWith(ql) || (pl.label || '').toLowerCase().includes(ql))) mine.push(pl); });
+  saved.concat(Object.values(visits).sort((a, b) => b.n - a.n).map(v => v.p), recent).forEach(pl => { if (pl && ((pl.name || '').toLowerCase().includes(ql) || (pl.label || '').toLowerCase().split(',')[0].includes(ql)) && !mine.some(o => o.label === pl.label)) mine.push(pl); });
+  const own = mine.slice(0, 4).map(pl => {
+    const main = pl === places.home ? 'Home' : pl === places.work ? 'Work' : pl.name || pl.label.split(',')[0];
+    const parts = pl.label.split(','), sub = parts[0].trim() === main ? parts.slice(1).join(',').trim() : pl.label;
+    return { main, sub, lat: pl.lat, lon: pl.lon, mine: true };
+  });
+  if (own.length && which !== 'friend') {   // drawn right away; the full list replaces it when it arrives
+    list.innerHTML = ''; list.appendChild(el('li', 'head', 'Your places'));
+    own.forEach(p2 => list.appendChild(suggestion(which, p2.main, p2.sub, fmtDist(meters(ref, [p2.lat, p2.lon]) / 1609.34), { lat: p2.lat, lon: p2.lon, label: p2.sub ? p2.main + ', ' + p2.sub : p2.main, name: p2.main })));
+    list.style.display = 'block';
+  }
   let painted = false;
   function paint() {
     if (id !== searchId) return;
@@ -1388,7 +1401,7 @@ async function search(which, q, now) {
     // Street addresses: the exact match leads. Names (a store, a chain): everything near you in one list, closest first,
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
     if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
-    else add(exact.concat(close || [], near || [], far || []).sort(byDist));   // every server's answers in one list, nearest first
+    else { add(own); add(exact.concat(close || [], near || [], far || []).sort(byDist)); }   // your places first, then every server's answers nearest first
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 10);
     lastSearch = { which, q, items: shown, pending };
