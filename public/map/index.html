@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" id="themeColor" content="#f7f4ff">
+<script>
+  // Before anything draws: light or dark, so the app never flashes the wrong one while the map loads
+  (function () {
+    var p = {}; try { p = JSON.parse(localStorage.getItem('map.prefs')) || {}; } catch (e) {}
+    var h = new Date().getHours(), night = (p.autoNight !== false) && (h >= 19 || h < 6);
+    var name = night ? (p.nightTheme || 'twilight') : (p.theme || 'brina');
+    var dark = /^(twilight|night|mocha|nord|forest|neon)$/.test(name);
+    document.documentElement.dataset.ui = dark ? 'dark' : 'light';
+    document.documentElement.style.background = dark ? '#1b1838' : '#f7f4ff';
+    var m = document.getElementById('themeColor'); if (m) m.content = dark ? '#1b1838' : '#f7f4ff';
+  })();
+</script>
 <title>BrinaMaps</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -26,7 +38,7 @@
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { height:100%; margin:0; overflow:hidden; font:500 15px/1.35 var(--font, system-ui), system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
-  #map { position:fixed; inset:0; background:var(--bg); -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  #map { position:fixed; inset:0; background:var(--land, var(--bg)); -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; display:block; }
   .panel { position:fixed; left:10px; right:10px; z-index:10; max-width:440px; background:var(--card); border-radius:24px; box-shadow:var(--shadow); }
   @media (min-width:700px) { .panel { left:16px; right:auto; width:400px; } }
@@ -195,6 +207,7 @@
   button.pill { border:1.5px solid var(--accent); color:var(--accent); background:transparent; border-radius:999px; padding:7px 12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
   button.pill svg { width:16px; height:16px; stroke-width:2.8; }
   .stopBtns { display:flex; gap:6px; align-items:center; }
+  #why .border { margin-top:6px; font-size:13px; font-weight:600; }
   #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
   #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
   body.picking #pickBar { display:flex; } body.picking #top, body.picking #nav { visibility:hidden; }
@@ -345,6 +358,9 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <button data-pref="noAlleys">Alleys and service roads</button>
     <button data-pref="noBorders">Border crossings</button>
   </div>
+  <h3>My border lane (US-Mexico)</h3>
+  <p>Wait times are the US border agency's current numbers for cars entering the US.</p>
+  <div class="chips" data-set="lane"><button data-v="standard">Regular</button><button data-v="ready">Ready Lane</button><button data-v="sentri">SENTRI</button></div>
   <h3>Route style</h3>
   <div class="chips">
     <button data-pref="simple">Fewer turns, even if a bit slower</button>
@@ -624,7 +640,7 @@ const hasTraffic = () => !!prefs.ttKey || (premium.active && passOk());
 const tParam = () => passOk() ? '&t=' + encodeURIComponent(premium.pass.pass) : '';
 const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}${tParam()}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ lane: 'standard', fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 let places = store('map.places') || { home: null, work: null }, visits = store('map.visits') || {}, settingPlace = null;   // visits: how often you go to each place
 const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
@@ -775,7 +791,7 @@ const themeKey = () => prefs.autoNight && isNight() && THEMES[prefs.nightTheme] 
 const theme = () => THEMES[themeKey()];
 function applyUi() {   // buttons and highlights take the theme's accent colour
   const t = theme(), root = document.documentElement;
-  root.dataset.ui = t.ui;
+  root.dataset.ui = t.ui; root.style.setProperty('--land', t.bg); root.style.background = t.bg;
   root.style.setProperty('--accent', t.accent); root.style.setProperty('--soft', t.soft); root.style.setProperty('--accent-ink', t.ink || '#ffffff');
 }
 applyUi(); applyFont();
@@ -830,18 +846,15 @@ function addRouteLayers() {
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
   map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
-  // The chosen route glows above the streets: a wide soft halo and a tighter bright one under a thick line with a
-  // lighter centre, in a colour no street uses. Light maps get a thin white edge; dark maps let the glow do that.
-  // Widths grow with zoom so the route always stays wider than the biggest road under it.
+  // The chosen route: a clean blue line with a slightly darker edge, a little wider than the roads it follows.
+  // On dark maps a soft glow sits under it so it reads at night.
   const t = theme(), dark = t.ui === 'dark', rc = routeColor(t), z = (a, b2) => ['interpolate', ['exponential', 1.5], ['zoom'], 8, a, 18, b2];
-  const tint = (hex, f) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - f) + 255 * f).toString(16).padStart(2, '0')).join('');
-  line('alt-casing', false, { 'line-color': dark ? t.bg : '#ffffff', 'line-width': z(7, 18), 'line-opacity': .9 });
-  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(4.5, 12), 'line-opacity': .95 });
-  line('glow', true, { 'line-color': rc, 'line-width': z(28, 76), 'line-blur': z(15, 38), 'line-opacity': dark ? .5 : .4 });
-  line('glow2', true, { 'line-color': rc, 'line-width': z(14, 36), 'line-blur': z(5, 12), 'line-opacity': dark ? .85 : .6 });
-  if (!dark) line('casing', true, { 'line-color': '#ffffff', 'line-width': z(11, 29) });
-  line('sel', true, { 'line-color': rc, 'line-width': z(8, 23) });
-  line('core', true, { 'line-color': tint(rc, dark ? .55 : .4), 'line-width': z(2.6, 7.5), 'line-blur': z(1.2, 3.5), 'line-opacity': .9 });
+  const shade = (hex, f) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * f).toString(16).padStart(2, '0')).join('');
+  line('alt-casing', false, { 'line-color': dark ? t.bg : '#ffffff', 'line-width': z(5, 13), 'line-opacity': .9 });
+  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(3, 8.5), 'line-opacity': .95 });
+  if (dark) line('glow', true, { 'line-color': rc, 'line-width': z(12, 30), 'line-blur': z(6, 14), 'line-opacity': .45 });
+  line('casing', true, { 'line-color': shade(rc, dark ? .55 : .7), 'line-width': z(6, 14.5) });
+  line('sel', true, { 'line-color': rc, 'line-width': z(4, 10.5) });
   map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
   map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
@@ -853,7 +866,7 @@ function addRouteLayers() {
 let shownTheme = '';
 async function refreshStyle() {   // rebuild the map style from the current theme and map preferences
   applyUi(); shownTheme = themeKey();
-  $('themeColor').content = theme().ui === 'dark' ? '#221d27' : '#fffaf6';
+  $('themeColor').content = theme().bg || (theme().ui === 'dark' ? '#1b1838' : '#f7f4ff');
   await mapReady;
   let style; try { style = await themedStyle(); } catch (e) { return; }
   const again = () => { if (!map.isStyleLoaded()) { setTimeout(again, 80); return; } addRouteLayers(); if (routes.length) draw(false); };   // a new style drops the route layers
@@ -898,7 +911,18 @@ mapReady = (async () => {
     followMe = false; $('locate').classList.remove('on');
     if (nav) { nav.follow = false; document.body.classList.add('free'); }
   });
-  map.on('zoomend', e => { if (nav && e.originalEvent) { nav.userZoom = map.getZoom(); nav.zoomHold = Date.now() + 30000; } });   // a pinch is kept, not snapped back
+  map.on('zoomend', e => { if (nav && e.originalEvent) { nav.userZoom = map.getZoom(); nav.zoomHold = Date.now() + 30000; } });
+  map.on('moveend', e => {   // you moved the map during directions: the card shows the turn for the part of the route in view
+    if (!nav || nav.follow || !nav.live || !e.originalEvent) return;
+    const c = map.getCenter(), ctr = [c.lat, c.lng], co = nav.rt.coords;
+    let best = Infinity, bi = -1;
+    for (let i = 0; i < co.length; i += 2) { const d = meters(co[i], ctr); if (d < best) { best = d; bi = i; } }
+    if (best > 1500) return;
+    const steps = nav.rt.steps; let si = steps.length - 1;
+    for (let i = 0; i < steps.length; i++) if (steps[i].begin >= bi) { si = i; break; }
+    if (si < nav.live.next) return;
+    clearTimeout(peekTimer); nav.peek = si; nav.peekPan = true; $('nav').classList.add('peek'); drawPeek();
+  });   // a pinch is kept, not snapped back
   const touching = on => () => { if (nav) nav.touching = on; };
   map.getCanvasContainer().addEventListener('touchstart', touching(true), { passive: true });
   map.getCanvasContainer().addEventListener('touchend', touching(false), { passive: true });
@@ -1070,8 +1094,15 @@ const GEO_CAT = { 'amenity:cafe': 'catering.cafe', 'amenity:restaurant': 'cateri
 const GEO_EP = { autocomplete: '/v1/geocode/autocomplete', search: '/v1/geocode/search', reverse: '/v1/geocode/reverse', places: '/v2/places', routing: '/v1/routing', matrix: '/v1/routematrix' };
 let geoDownUntil = 0, geoOff = false;   // geoOff: the site's server has no key set up (website only: the free servers are used)
 const useGeo = () => Date.now() > geoDownUntil && (!!prefs.geoKey || !geoOff);
+const geoCache = new Map();
 async function geoFetch(ep, params, signal, body) {
-  const qs = new URLSearchParams(params).toString();
+  const qs = new URLSearchParams(params).toString(), ck = !body && ep !== 'routing' ? ep + '?' + qs : '';
+  if (ck && geoCache.has(ck) && Date.now() - geoCache.get(ck).at < 600000) return geoCache.get(ck).d;
+  const d = await geoFetchNet(ep, qs, signal, body);
+  if (ck) { geoCache.set(ck, { at: Date.now(), d }); if (geoCache.size > 300) geoCache.delete(geoCache.keys().next().value); }
+  return d;
+}
+async function geoFetchNet(ep, qs, signal, body) {
   const url = prefs.geoKey ? 'https://api.geoapify.com' + GEO_EP[ep] + '?' + qs + '&apiKey=' + encodeURIComponent(prefs.geoKey) : API + '/geo?ep=' + ep + (qs ? '&' + qs : '');
   const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal } : { signal };
   let r;
@@ -1310,7 +1341,7 @@ async function nominatimLookup(q, ref, signal) {   // addresses, streets and pla
 // Kept for 15 minutes per place, start (rounded to ~1 km) and mode, so retyping does not ask again.
 const etaCache = new Map(); let etaTimer = 0;
 const etaFrom = () => planning && pts.from ? [pts.from.lat, pts.from.lon] : here;
-const etaKey = p => { const f = etaFrom(); return f && [p.lat.toFixed(4), p.lon.toFixed(4), f[0].toFixed(2), f[1].toFixed(2), prefs.mode].join(','); };
+const etaKey = p => { const f = etaFrom(); return f && [p.lat.toFixed(4), p.lon.toFixed(4), f[0].toFixed(2), f[1].toFixed(2), prefs.mode, JSON.stringify(matrixOpts(prefs.mode))].join(','); };
 function etaOf(p) { const k = etaKey(p), e = k && etaCache.get(k); return e && Date.now() - e.at < 900000 ? e.t : null; }
 async function fillEtas(list) {
   const from = etaFrom(), need = list.filter(p => etaOf(p) == null && (p.d == null || p.d < 300000));
@@ -1336,10 +1367,13 @@ async function search(which, q, now) {
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
-  let near, close, far, exact = [], pending = 3 + (cat || deeper ? 1 : 0), backup = false, hoursAsked = false;
+  let near, close, far, exact = [], pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
+  let painted = false;
   function paint() {
     if (id !== searchId) return;
+    if (pending > 0 && painted) return;   // keep what is showing until everything is in, so the list does not jump
+    if (pending > 0 && !far && !exact.length) return;
     if (near === null && close === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
       backup = true; pending++;
       nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
@@ -1358,6 +1392,7 @@ async function search(which, q, now) {
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 10);
     lastSearch = { which, q, items: shown, pending };
+    painted = true;
     list.innerHTML = '';
     if (cat && exactNear.length) list.appendChild(el('li', 'head', cat.title + ' near you'));
     let split = false;
@@ -1385,11 +1420,21 @@ async function search(which, q, now) {
       fetchHours(shown).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); });
     }
   }
-  if (useGeo()) { near = []; pending--; }   // Geoapify: the close search plus the wide one (ranked by distance) cover this, and each request costs a credit
+  const geo = useGeo();
+  if (geo) { near = []; close = []; pending -= 2; }   // Geoapify: one search ranked around you does it all (each request costs time and a credit)
   else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
-  get(base + '&limit=' + (useGeo() ? 15 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
+  let deeperAsked = false;
+  const askDeeper = () => {   // addresses and street names from the address search
+    if (deeperAsked || id !== searchId) return; deeperAsked = true; pending++;
+    Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
+  };
+  get(base + '&limit=' + (geo ? 15 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => {
+    far = f;
+    if (geo && deeper && !isAddress && (!f || f.length < 3)) askDeeper();   // thin answer: try the address search too
+    pending--; paint();
+  });
   const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
-  get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
+  if (!geo) get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
   if (cat) setTimeout(() => {
     if (id !== searchId) return;
     nearbyKind(ref, cat).then(found => {
@@ -1399,10 +1444,7 @@ async function search(which, q, now) {
     });
   }, now ? 0 : 350);
   // Addresses and street names: asked as you type, once typing pauses for a moment (these free servers are rate limited)
-  if (deeper) setTimeout(() => {
-    if (id !== searchId) return;
-    Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
-  }, now ? 0 : 450);
+  if (deeper && (!geo || isAddress)) setTimeout(askDeeper, now ? 0 : 450);
 }
 
 async function setPointFromLatLng(which, lat, lon) {
@@ -1536,6 +1578,17 @@ function syncMeet() {
 }
 // A plain route between two points by one mode: total seconds and the line it follows
 const GEO_MODE = { auto: 'drive', rig: 'drive', bicycle: 'bicycle', pedestrian: 'walk' };
+// Travel-time lookups use the same route options as routes, so a time in a list matches the route you then get
+function matrixOpts(mode) {
+  const motor = mode === 'auto' || mode === 'rig', o = { mode: mode === 'rig' ? geoRigMode() : GEO_MODE[mode] || 'drive' };
+  if (motor) {
+    const avoid = [prefs.noToll && 'tolls', prefs.noHwy && 'highways', prefs.noFerry && 'ferries'].filter(Boolean).map(type => ({ type }));
+    if (avoid.length) o.avoid = avoid;
+    if (prefs.shortest) o.type = 'short'; else if (prefs.simple) o.type = 'less_maneuvers';
+    if (prefs.relaxed) o.max_speed = 89;
+  } else if (prefs.noFerry) o.avoid = [{ type: 'ferries' }];
+  return o;
+}
 async function quickRoute(a, b, mode) {
   if (useGeo() || !FREE_OK) {
     const r = geoParse(await geoFetch('routing', { waypoints: a.lat.toFixed(6) + ',' + a.lon.toFixed(6) + '|' + b.lat.toFixed(6) + ',' + b.lon.toFixed(6), mode: GEO_MODE[mode], format: 'geojson' }))[0];
@@ -1554,7 +1607,7 @@ const roughTime = (a, b, mode) => meters([a.lat, a.lon], [b.lat, b.lon]) * 1.3 /
 async function travelTimes(src, targets, mode, geoOnly) {   // geoOnly: no community-server fallbacks (search drive times)
   let times = null;
   if (useGeo() || !FREE_OK) try {
-    const d = await geoFetch('matrix', {}, null, { mode: GEO_MODE[mode], sources: [{ location: [src.lon, src.lat] }], targets: targets.map(t => ({ location: [t.lon, t.lat] })) });
+    const d = await geoFetch('matrix', {}, null, Object.assign(matrixOpts(mode), { sources: [{ location: [src.lon, src.lat] }], targets: targets.map(t => ({ location: [t.lon, t.lat] })) }));
     if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x && x.time != null ? x.time : null);
   } catch (e) {}
   if (!times && FREE_OK && !geoOnly) try {
@@ -2127,6 +2180,8 @@ async function route(quiet) {
   if (id !== reqId) return false;
   const fromSaved = !!found.saved;
   found.forEach(describe);
+  await Promise.all([checkTolls(found).catch(() => {}), checkBorder(found).catch(() => {})]);
+  if (id !== reqId) return false;
   if (!prefs.showAll) { const note = found.note; found = sensible(found); found.note = note; }
   routes = found; selected = 0;
   if (!fromSaved) store('map.trip', { at: Date.now(), mode: prefs.mode, from: pts.from, to: pts.to, stops: pts.stops, routes: [Object.assign({}, found[0], { _cells: undefined })] });
@@ -2205,6 +2260,95 @@ function why(rt) {   // one sentence comparing this option with the fastest
   return bits.length ? slow + ', with ' + bits.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.' : slow + ' by a different set of roads.';
 }
 
+// ---------- Tolls: a road can be tagged as a toll road all along, while you only pay at booths ----------
+const boothCache = new Map();   // grid cell -> booths [[lat, lon]] (or null while unknown)
+async function boothsIn(cell) {
+  if (boothCache.has(cell)) return boothCache.get(cell);
+  const [x, y] = cell.split(',').map(Number), box = [x * 0.25, y * 0.25, x * 0.25 + 0.25, y * 0.25 + 0.25];
+  const job = fetch(API + '/tolls?bbox=' + box.map(n => n.toFixed(2)).join(',')).then(r => r.ok ? r.json() : null).then(d => d ? d.booths : null).catch(() => null);
+  boothCache.set(cell, job);
+  const got = await job; if (got == null) boothCache.delete(cell); return got;
+}
+async function checkTolls(list) {   // marks each route's toll stretches as paid (a booth on them) or free
+  const tolled = list.filter(rt => rt.steps.some(st => st.toll));
+  if (!tolled.length) return;
+  const cells = new Set();
+  tolled.forEach(rt => rt.steps.filter(st => st.toll).forEach(st => { for (let i = st.begin; i <= st.end; i += 5) { const c = rt.coords[i]; cells.add(Math.floor(c[1] / 0.25) + ',' + Math.floor(c[0] / 0.25)); } }));
+  if (cells.size > 24) return;   // a long trip: keep the router's word rather than ask for many cells
+  const all = await Promise.race([Promise.all([...cells].map(boothsIn)), pause(3500).then(() => null)]);
+  if (!all || all.some(b => b == null)) return;   // booth data unknown: say "Has tolls" to be safe
+  const booths = [].concat(...all);
+  tolled.forEach(rt => {
+    rt.tollBooths = 0;
+    rt.steps.forEach(st => {
+      if (!st.toll) return;
+      let paid = false;
+      for (let i = st.begin; i <= st.end && !paid; i++) paid = booths.some(b => Math.abs(b[0] - rt.coords[i][0]) < 0.0012 && Math.abs(b[1] - rt.coords[i][1]) < 0.0014 && meters(b, rt.coords[i]) < 90);
+      if (paid) rt.tollBooths++; else { st.toll = false; st.freeToll = true; }
+    });
+    rt.toll = rt.tollBooths > 0; rt.freeToll = rt.steps.some(st => st.freeToll);
+  });
+}
+
+// ---------- Border crossings: the port, your lane, the wait now, and when you get there ----------
+// Passenger ports on the US-Mexico border; CBP's feed names them but gives no positions.
+const PORTS = [
+  ['San Ysidro', '', 32.5422, -117.0291], ['Otay Mesa', 'passenger', 32.5507, -116.9384], ['Tecate', '', 32.5764, -116.6275],
+  ['Calexico', 'west', 32.6646, -115.4988], ['Calexico', 'east', 32.6738, -115.3880], ['Andrade', '', 32.7180, -114.7286],
+  ['San Luis', 'san luis i', 32.4855, -114.7824], ['Lukeville', '', 31.8803, -112.8167], ['Sasabe', '', 31.4828, -111.5436],
+  ['Nogales', 'deconcini', 31.3330, -110.9425], ['Nogales', 'mariposa', 31.3348, -110.9750], ['Naco', '', 31.3346, -109.9481],
+  ['Douglas', '', 31.3343, -109.5603], ['Columbus', '', 31.7840, -107.6362], ['Santa Teresa', '', 31.7836, -106.6801],
+  ['El Paso', 'bridge of the americas', 31.7643, -106.4511], ['El Paso', 'paso del norte', 31.7550, -106.4843], ['El Paso', 'ysleta', 31.6739, -106.3368], ['El Paso', 'stanton', 31.7546, -106.4826],
+  ['Presidio', '', 29.5608, -104.3720], ['Del Rio', '', 29.3270, -100.9280], ['Eagle Pass', 'bridge i', 28.7080, -100.5110], ['Eagle Pass', 'bridge ii', 28.6950, -100.5060],
+  ['Laredo', 'bridge i', 27.4999, -99.5072], ['Laredo', 'bridge ii', 27.5050, -99.5025], ['Laredo', 'colombia', 27.7000, -99.7440],
+  ['Roma', '', 26.4060, -99.0190], ['Rio Grande City', '', 26.3700, -98.8080], ['Hidalgo', 'hidalgo', 26.0950, -98.2690], ['Hidalgo', 'pharr', 26.0920, -98.1980], ['Hidalgo', 'anzalduas', 26.1290, -98.3290],
+  ['Progreso', 'progreso', 26.0610, -97.9500], ['Progreso', 'donna', 26.0690, -98.0500], ['Brownsville', 'gateway', 25.9010, -97.4960], ['Brownsville', 'b&m', 25.8930, -97.5050], ['Brownsville', 'veterans', 25.8870, -97.4790], ['Brownsville', 'los indios', 26.0400, -97.7380]
+];
+const LANES = { standard: 'Regular lane', ready: 'Ready Lane', sentri: 'SENTRI' };
+let borderData = null, borderAt = 0;
+async function borderWaits() {
+  if (borderData && Date.now() - borderAt < 300000) return borderData;
+  try { const r = await fetch(API + '/border'); if (r.ok) { borderData = (await r.json()).ports; borderAt = Date.now(); } } catch (e) {}
+  return borderData;
+}
+function crossingOf(rt) {   // the port a route crosses at, which way, and how long until you get there
+  const c = rt.coords;
+  for (const [port, crossing, lat, lon] of PORTS) {
+    if (!c.some((q, i) => i % 3 === 0 && Math.abs(q[0] - lat) < 0.03 && Math.abs(q[1] - lon) < 0.03)) continue;
+    let best = Infinity, bi = -1;
+    c.forEach((q, i) => { const d = meters(q, [lat, lon]); if (d < best) { best = d; bi = i; } });
+    if (best > 600) continue;
+    const before = c[Math.max(0, bi - 40)], after = c[Math.min(c.length - 1, bi + 40)];
+    let t = 0; for (const st of rt.steps) { if (st.begin >= bi) break; t += st.time || 0; }
+    return { port, crossing, lat, lon, idx: bi, north: after[0] > before[0], eta: t };
+  }
+  return null;
+}
+async function checkBorder(list) {
+  const any = list.map(rt => (rt.border = crossingOf(rt))).some(b => b && b.north);
+  if (!any) return;
+  const ports = await Promise.race([borderWaits(), pause(3000).then(() => null)]);
+  if (!ports) return;
+  list.forEach(rt => {
+    const b = rt.border; if (!b || !b.north) return;
+    const lk = prefs.lane || 'standard', cand = ports.filter(p => p.port.toLowerCase().includes(b.port.toLowerCase()) && (!b.crossing || p.crossing.toLowerCase().includes(b.crossing)));
+    const hit = cand.find(p => p[lk] && p[lk].minutes != null) || cand.find(p => !/pending/i.test((p[lk] || {}).status || '')) || cand[0];   // skip duplicate entries with no numbers
+    if (!hit) return;
+    const l = hit[prefs.lane || 'standard'];
+    b.lane = LANES[prefs.lane || 'standard']; b.wait = l && l.minutes != null ? l.minutes : null; b.status = l ? l.status : ''; b.updated = l ? l.updated : '';
+    b.closed = /closed/i.test(hit.status) || /closed|n\/a/i.test(b.status || '');
+  });
+}
+function borderLine(rt) {
+  const b = rt && rt.border; if (!b) return '';
+  const clock = sec => new Date(Date.now() + sec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const name = b.port + (b.crossing && !/^passenger$/.test(b.crossing) ? ' (' + b.crossing.replace(/\b\w/g, m => m.toUpperCase()) + ')' : '');
+  const when = 'border in ' + fmtTime(b.eta) + ' (about ' + clock(b.eta) + ')';
+  if (!b.north) return 'Into Mexico at ' + name + ', ' + when + '.';
+  if (b.closed) return name + ': ' + (b.lane || 'your lane') + ' is closed now. ' + when.charAt(0).toUpperCase() + when.slice(1) + '.';
+  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + ' (US border agency).' : ': no wait time reported.');
+}
+
 function draw(fit) {
   if (!routes.length) return;
   map.getSource('routes').setData({ type: 'FeatureCollection', features: routes.map((rt, i) => ({ type: 'Feature', properties: { i, sel: i === selected }, geometry: { type: 'LineString', coordinates: rt.coords.map(c => [c[1], c[0]]) } })) });
@@ -2217,10 +2361,13 @@ function draw(fit) {
   });
   const w = $('why'); w.innerHTML = '';
   const text = why(rt); if (text) w.appendChild(el('div', '', text));
+  const bl = borderLine(rt); if (bl) w.appendChild(el('div', 'border', bl));
   const flags = el('div', 'flags');
   flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? ', ' + rt.lefts + ' left' : '')));
   if (!rt.basic && rt.hwy >= 0.5) flags.appendChild(el('span', '', fmtDist(rt.hwy) + ' highway'));
-  if (rt.toll) flags.appendChild(el('span', 'warn', 'Has tolls'));
+  if (rt.toll && prefs.noToll && rt.tollBooths == null) flags.appendChild(el('span', '', 'Uses part of a toll road'));   // tolls avoided: what is left is a stretch the router could not avoid, often between booths
+  else if (rt.toll) flags.appendChild(el('span', 'warn', 'Has tolls'));
+  else if (rt.freeToll) flags.appendChild(el('span', '', 'Free stretch of a toll road, no booth'));
   if (rt.ferry) flags.appendChild(el('span', 'warn', 'Uses a ferry'));
   if (rt.unpaved >= 0.1) flags.appendChild(el('span', 'warn', fmtDist(rt.unpaved) + ' unpaved'));
   if (prefs.mode === 'rig' && !rt.basic) flags.appendChild(el('span', '', 'Checked for ' + prefs.rig.h + ' ft tall, ' + prefs.rig.w + ' tons'));
@@ -2381,7 +2528,7 @@ function drawPeek() {
   $('navDist').textContent = 'In ' + fmtDist(dist / 1609.34);
   $('navText').textContent = st.instruction;
   $('navLanes').innerHTML = '';
-  $('navMore').textContent = 'Turn ' + (nav.peek - nav.live.next + 1) + ' from now \u00b7 swipe right to go back';
+  $('navMore').textContent = (nav.peek === nav.live.next ? 'Your next turn' : 'Turn ' + (nav.peek - nav.live.next + 1) + ' from now') + ' \u00b7 tap here to go back to now';
   $('navThen').textContent = '';
 }
 function peekTo(i) {
@@ -2390,7 +2537,7 @@ function peekTo(i) {
   i = Math.max(first, Math.min(last, i));
   clearTimeout(peekTimer);
   if (i === first) {   // back to now
-    nav.peek = null; $('nav').classList.remove('peek');
+    nav.peek = null; nav.peekPan = false; $('nav').classList.remove('peek'); nav.follow = true; document.body.classList.remove('free');
     if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
     return;
   }
@@ -2569,7 +2716,9 @@ function onFix(p) {
   $('navThen').textContent = level !== 'brief' && after ? 'Then: ' + (level === 'detailed' ? after.instruction : after.short) : '';
   }
   $('navArrive').textContent = arrive;
-  $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34);
+  const bd = rt.border && rt.border.idx > s.i ? rt.border : null;
+  let toBorder = 0; if (bd) { for (let i = cur; i < steps.length && steps[i].begin < bd.idx; i++) toBorder += i === cur ? (steps[i].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0) : steps[i].time || 0; }
+  $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
   // Closer in for a turn, further out at speed
   nav.zoom = toNext < 250 ? 17.2 : speed > 24 ? 14.8 : speed > 13 ? 15.7 : 16.5;
@@ -2813,7 +2962,7 @@ async function matrixTimes(srcs, tgts, mode) {   // seconds [source][target], or
   const m = mode === 'rig' ? 'auto' : mode;
   if (useGeo() || !FREE_OK) {
     try {
-      const d = await geoFetch('matrix', {}, null, { mode: GEO_MODE[m], sources: srcs.map(p => ({ location: [p.lon, p.lat] })), targets: tgts.map(p => ({ location: [p.lon, p.lat] })) });
+      const d = await geoFetch('matrix', {}, null, Object.assign(matrixOpts(mode), { sources: srcs.map(p => ({ location: [p.lon, p.lat] })), targets: tgts.map(p => ({ location: [p.lon, p.lat] })) }));
       if (d.sources_to_targets) return d.sources_to_targets.map(r => r.map(x => x && x.time != null ? x.time : null));
     } catch (e) {}
   }
@@ -2967,6 +3116,7 @@ document.querySelectorAll('[data-pref]').forEach(b => b.onclick = () => { prefs[
 document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
   const k = b.parentElement.dataset.set; prefs[k] = b.dataset.v === 'true' ? true : b.dataset.v === 'false' ? false : b.dataset.v;
   savePrefs(); syncPrefs(); if (prefs.voice === 'off' && window.speechSynthesis) speechSynthesis.cancel();
+  if (k === 'lane' && routes.length) { checkBorder(routes).then(() => draw(false)); }
   if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
 });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
