@@ -238,6 +238,8 @@
   .maplibregl-ctrl-attrib { font:500 10px/1.4 system-ui, sans-serif; }
   .maplibregl-ctrl-bottom-right { bottom:calc(var(--lift, 20px) + 54px + env(safe-area-inset-bottom)); right:4px; z-index:8; }
   body.nav .maplibregl-ctrl-bottom-right { bottom:calc(88px + env(safe-area-inset-bottom)); }
+body.native .webonly, body:not(.native) .apponly { display: none !important; }
+.fine { font-size: 12px; color: var(--muted); line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -357,18 +359,29 @@
   <div class="chips"><button id="offSave">Save the area on screen</button><button id="offClear">Remove saved areas</button></div>
   <div id="offMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <div id="offUse" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
+  <div class="webonly">
   <h3>More reliable search (optional)</h3>
   <p>Search uses free public servers that are sometimes slow or down. A free Geoapify key (no card) makes it steadier: create one at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and paste it here. It stays on this device. With a key, what you type in search is sent to Geoapify.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="geoKey" type="text" placeholder="Geoapify key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="geoSave">Save</button></div>
   <div id="geoMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
+  </div>
+  <div class="apponly">
+  <h3>Premium: live traffic</h3>
+  <p>Routes that steer around jams, arrival times that include traffic, and traffic colours on the map. Everything else in the app is free.</p>
+  <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
+  <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
+  <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://sabrinapalmer.com/map/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
+  </div>
+  <div class="webonly">
   <h3>Live traffic (optional)</h3>
   <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, driving routes come from TomTom and steer around jams, and your trip's start and end are sent to TomTom. Walking and biking are unchanged.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="ttKey" type="text" placeholder="TomTom key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="ttSave">Save</button></div>
+  </div>
   <div class="chips" style="margin-top:8px"><button data-traffic="trafficRoute">Route around traffic</button><button data-traffic="trafficLayer">Show traffic on the map</button></div>
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
   <p>No ads, no sponsored places, no account. Your places and settings stay on this device. Maps and roads come from OpenStreetMap, which anyone can correct.</p>
-  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search by Photon and Nominatim, routing by Valhalla and OSRM. Traffic, when you add a key, &copy; TomTom. Search, when you add a key, powered by Geoapify. Search, when you add a key, powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>.</p>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search and routing <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Powered by Geoapify</a>; on the website, Photon, Nominatim, Valhalla and OSRM as a backup. Traffic, when you add a key, &copy; TomTom. Search, when you add a key, powered by Geoapify. Search, when you add a key, powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>.</p>
   <p><a id="report" target="_blank" rel="noopener">Report a map problem here</a></p>
 </div>
 
@@ -454,6 +467,11 @@ const $ = id => document.getElementById(id);
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
 const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE = plugin('KeepAwake');
+// The App Store app only uses services licensed for it: Geoapify (search, routing) through the site's own server,
+// which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
+// backup on the website only.
+document.body.classList.toggle('native', NATIVE);
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://sabrinapalmer.com/api' : '/api';
 const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
@@ -534,6 +552,13 @@ function drawOffline() {
   $('offClear').style.display = areas.length ? '' : 'none';
 }
 async function clearAreas() { await idbDo('saved', 'readwrite', s => s.clear()); store('map.areas', []); $('offMsg').textContent = 'Saved areas removed.'; drawOffline(); }
+// ---------- Premium (live traffic) ----------
+// In the app, traffic is a subscription bought through the App Store; requests go through the site's server, which
+// holds the TomTom key. On the website, traffic still works with a TomTom key you paste into Settings.
+const PREMIUM = ['com.sabrinapalmer.map.premium.monthly', 'com.sabrinapalmer.map.premium.yearly'];
+const premium = { active: false, ready: false, msg: '' };
+const hasTraffic = () => !!prefs.ttKey || premium.active;
+const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
@@ -929,39 +954,78 @@ function drawHours() {
   box.textContent = h.text; box.classList.toggle('warn', h.warn);
 }
 
-// ---------- Optional paid-tier search (Geoapify) ----------
-// With a key saved, typed searches and kind-of-place searches go to Geoapify first. Answers are reshaped to look like
-// the free server's, so the rest of the app does not care which one replied. Any failure falls back to the free servers.
+// ---------- Geoapify (search, places, routing) ----------
+// Requests go through the site's server (/api/geo), which adds the key. A key typed into Settings is used directly
+// instead. Answers are reshaped to look like the free servers', so the rest of the app does not care who replied.
 const GEO_CAT = { 'amenity:cafe': 'catering.cafe', 'amenity:restaurant': 'catering.restaurant', 'amenity:fast_food': 'catering.fast_food', 'amenity:bar': 'catering.bar', 'amenity:pub': 'catering.pub',
-  'amenity:ice_cream': 'catering.ice_cream', 'amenity:fuel': 'commercial.gas', 'shop:supermarket': 'commercial.supermarket', 'shop': 'commercial', 'amenity:pharmacy': 'healthcare.pharmacy', 'amenity:bank': 'service.financial.bank',
+  'amenity:ice_cream': 'catering.ice_cream', 'amenity:fuel': 'service.vehicle.fuel', 'shop:supermarket': 'commercial.supermarket', 'shop': 'commercial', 'amenity:pharmacy': 'healthcare.pharmacy', 'amenity:bank': 'service.financial.bank',
   'amenity:atm': 'service.financial.atm', 'amenity:hospital': 'healthcare.hospital', 'amenity:clinic': 'healthcare.clinic_or_praxis', 'leisure:park': 'leisure.park', 'leisure:playground': 'leisure.playground',
-  'tourism:hotel': 'accommodation.hotel', 'tourism:motel': 'accommodation.motel', 'amenity:parking': 'parking', 'shop:bakery': 'commercial.food_and_drink.bakery', 'amenity:post_office': 'service.post.office', 'amenity:library': 'education.library' };
-let geoDownUntil = 0;
-async function geoapify(path, signal) {   // null when this kind of lookup is not one Geoapify handles
-  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1)), key = '&apiKey=' + encodeURIComponent(prefs.geoKey);
-  let url;
+  'tourism:hotel': 'accommodation.hotel', 'tourism:motel': 'accommodation.motel', 'amenity:parking': 'parking', 'shop:bakery': 'commercial.food_and_drink.bakery', 'amenity:post_office': 'service.post.office', 'amenity:library': 'education.library',
+  'amenity:charging_station': 'service.vehicle.charging_station', 'amenity:toilets': 'amenity.toilet', 'shop:doityourself': 'commercial.houseware_and_hardware.doityourself', 'shop:hardware': 'commercial.houseware_and_hardware.hardware_and_tools',
+  'shop:greengrocer': 'commercial.food_and_drink.fruit_and_vegetable', 'tourism:camp_site': 'camping.camp_site', 'tourism:caravan_site': 'camping.caravan_site', 'amenity': 'catering,commercial,service' };
+const GEO_EP = { autocomplete: '/v1/geocode/autocomplete', search: '/v1/geocode/search', reverse: '/v1/geocode/reverse', places: '/v2/places', routing: '/v1/routing', matrix: '/v1/routematrix' };
+let geoDownUntil = 0, geoOff = false;   // geoOff: the site's server has no key set up (website only: the free servers are used)
+const useGeo = () => Date.now() > geoDownUntil && (!!prefs.geoKey || !geoOff);
+async function geoFetch(ep, params, signal, body) {
+  const qs = new URLSearchParams(params).toString();
+  const url = prefs.geoKey ? 'https://api.geoapify.com' + GEO_EP[ep] + '?' + qs + '&apiKey=' + encodeURIComponent(prefs.geoKey) : API + '/geo?ep=' + ep + (qs ? '&' + qs : '');
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal } : { signal };
+  let r;
+  try { r = await fetch(url, opt); } catch (e) { if (e.name !== 'AbortError') geoDownUntil = Date.now() + (FREE_OK ? 120000 : 10000); throw e; }
+  if (!r.ok) {
+    if (prefs.geoKey && (r.status === 401 || r.status === 403)) $('geoMsg').textContent = 'Geoapify did not accept that key.';
+    if (!prefs.geoKey && r.status === 503) geoOff = true;
+    if (r.status >= 500 || r.status === 429 || r.status === 401 || r.status === 403) geoDownUntil = Date.now() + (FREE_OK ? 120000 : 10000);
+    const e = new Error('geoapify ' + r.status); e.status = r.status; throw e;
+  }
+  return r.json();
+}
+function geoProps(x) {   // a Geoapify feature's properties in the free search server's shape
+  const p = x.properties || x, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || p.result_type || '';
+  return { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.town || p.village || p.county, state: p.state, country: p.country,
+    osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours };
+}
+const geoPhoton = d => ({ features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => ({ geometry: x.geometry, properties: geoProps(x) })) });
+const rectOf = (s, w, n, e) => 'rect:' + [Math.min(w, e), Math.min(s, n), Math.max(w, e), Math.max(s, n)].map(v => (+v).toFixed(5)).join(',');
+async function geoapify(path, signal) {   // a free-search-server style path answered by Geoapify; null when it is not a kind Geoapify handles
+  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1));
   if (path.startsWith('/api/')) {
-    url = 'https://api.geoapify.com/v1/geocode/autocomplete?format=geojson&lang=en&text=' + encodeURIComponent(q.get('q')) + '&limit=' + (q.get('limit') || 8)
-      + (q.get('lat') ? '&bias=proximity:' + q.get('lon') + ',' + q.get('lat') : '') + (q.get('bbox') ? '&filter=rect:' + q.get('bbox') : '');
-  } else if (path.startsWith('/reverse')) {
+    const p = { text: q.get('q'), lang: 'en', format: 'geojson', limit: q.get('limit') || 8 };
+    if (q.get('lat')) p.bias = 'proximity:' + q.get('lon') + ',' + q.get('lat');
+    if (q.get('bbox')) { const [w, s2, e, n] = q.get('bbox').split(','); p.filter = rectOf(s2, w, n, e); }
+    return geoPhoton(await geoFetch('autocomplete', p, signal));
+  }
+  if (path.startsWith('/reverse')) {
     const tags = q.getAll('osm_tag'), radius = +(q.get('radius') || 1);
-    if (!tags.length || radius < 0.5 || !tags.every(t => GEO_CAT[t])) return null;
-    url = 'https://api.geoapify.com/v2/places?lang=en&categories=' + tags.map(t => GEO_CAT[t]).join(',') + '&filter=circle:' + q.get('lon') + ',' + q.get('lat') + ',' + Math.round(radius * 1000)
-      + '&bias=proximity:' + q.get('lon') + ',' + q.get('lat') + '&limit=' + (q.get('limit') || 20);
-  } else return null;
-  const r = await fetch(url + key, { signal });
-  if (!r.ok) { if (r.status === 401 || r.status === 403) $('geoMsg').textContent = 'Geoapify did not accept that key. Using the free search.'; geoDownUntil = Date.now() + 120000; throw new Error('geoapify ' + r.status); }
-  const d = await r.json();
-  return { features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => {
-    const p = x.properties || {}, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || '';
-    return { geometry: x.geometry, properties: { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.county, state: p.state, country: p.country,
-      osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: cat.split('.').pop(), hours: raw.opening_hours } };
-  }) };
+    if (!tags.length) return geoPhoton(await geoFetch('reverse', { lat: q.get('lat'), lon: q.get('lon'), lang: 'en', format: 'geojson' }, signal));
+    if (!tags.every(t => GEO_CAT[t])) return FREE_OK ? null : { features: [] };
+    const at = q.get('lon') + ',' + q.get('lat');
+    return geoPhoton(await geoFetch('places', { categories: [...new Set(tags.map(t => GEO_CAT[t]).join(',').split(','))].join(','), filter: 'circle:' + at + ',' + Math.max(50, Math.round(radius * 1000)),
+      bias: 'proximity:' + at, limit: q.get('limit') || 20, lang: 'en' }, signal));
+  }
+  return null;
+}
+async function geoNomi(path, signal) {   // a Nominatim style path answered by Geoapify, in Nominatim's shape
+  const q = new URLSearchParams(path.slice(path.indexOf('?') + 1));
+  const toNomi = d => (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => {
+    const p = geoProps(x);
+    return { lat: String(x.geometry.coordinates[1]), lon: String(x.geometry.coordinates[0]), name: p.name || '', display_name: [p.name, p.street, p.city].filter(Boolean).join(', '),
+      address: { house_number: p.housenumber, road: p.street, city: p.city, state: p.state, country: p.country }, osm_type: p.osm_type, osm_id: p.osm_id, type: p.osm_value,
+      extratags: p.hours ? { opening_hours: p.hours } : undefined };
+  });
+  if (path.startsWith('/search')) {
+    const p = { text: q.get('q'), lang: 'en', format: 'geojson', limit: q.get('limit') || 5 };
+    if (q.get('viewbox')) { const [w, n, e, s2] = q.get('viewbox').split(','); p[q.get('bounded') === '1' ? 'filter' : 'bias'] = rectOf(s2, w, n, e); }
+    return toNomi(await geoFetch('search', p, signal));
+  }
+  if (path.startsWith('/reverse')) { const d = toNomi(await geoFetch('reverse', { lat: q.get('lat'), lon: q.get('lon'), lang: 'en', format: 'geojson' }, signal)); return d[0] || { error: 'none' }; }
+  return [];   // /lookup (opening hours by map id): Geoapify results already carry hours where they are known
 }
 async function photon(path, signal) {
-  if (prefs.geoKey && Date.now() > geoDownUntil) {
-    try { const g = await geoapify(path, signal); if (g) return g; } catch (e) { if (e.name === 'AbortError') throw e; }
+  if (useGeo()) {
+    try { const g = await geoapify(path, signal); if (g) return g; } catch (e) { if (e.name === 'AbortError' || !FREE_OK) throw e; }
   }
+  if (!FREE_OK) throw new Error('search unavailable');
   if (Date.now() < photonDownUntil) throw new Error('search down');
   let r;
   try { r = await fetch(GEOCODER + path, { signal }); } catch (e) { if (e.name === 'AbortError') throw e; photonDownUntil = Date.now() + 120000; throw new Error('search unreachable'); }
@@ -969,7 +1033,12 @@ async function photon(path, signal) {
   if (r.status >= 500 || r.status === 429) photonDownUntil = Date.now() + 120000;
   throw new Error('search ' + r.status);
 }
-function nominatim(path, signal) {   // queued: one request at a time, at least 1.1 s apart
+function nominatim(path, signal) {
+  if (useGeo()) return geoNomi(path, signal).catch(e => { if (e.name === 'AbortError' || !FREE_OK) throw e; return nominatimFree(path, signal); });
+  if (!FREE_OK) return Promise.reject(new Error('search unavailable'));
+  return nominatimFree(path, signal);
+}
+function nominatimFree(path, signal) {   // queued: one request at a time, at least 1.1 s apart
   const run = async () => {
     if (signal && signal.aborted) throw new Error('search aborted');
     const wait = nomiLast + 1100 - Date.now(); if (wait > 0) await pause(wait);
@@ -1186,7 +1255,8 @@ async function search(which, q, now) {
       fetchHours(shown).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); });
     }
   }
-  get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
+  if (useGeo()) { near = []; pending--; }   // Geoapify: the close search plus the wide one (ranked by distance) cover this, and each request costs a credit
+  else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   get(base + '&limit=8&zoom=9&location_bias_scale=0.4').then(f => { far = f; pending--; paint(); });
   const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
   get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
@@ -1301,7 +1371,13 @@ function syncMeet() {
   const me = meetMe(); $('meetMe').textContent = me ? 'Starting from ' + me.label : 'Your location is off';
 }
 // A plain route between two points by one mode: total seconds and the line it follows
+const GEO_MODE = { auto: 'drive', rig: 'drive', bicycle: 'bicycle', pedestrian: 'walk' };
 async function quickRoute(a, b, mode) {
+  if (useGeo() || !FREE_OK) {
+    const r = geoParse(await geoFetch('routing', { waypoints: a.lat.toFixed(6) + ',' + a.lon.toFixed(6) + '|' + b.lat.toFixed(6) + ',' + b.lon.toFixed(6), mode: GEO_MODE[mode], format: 'geojson' }))[0];
+    if (!r) throw new Error('route');
+    return { time: r.time, coords: r.coords };
+  }
   const body = { locations: [{ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon }], costing: COST[mode], units: 'miles' };
   const d = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
   if (!d.trip) throw new Error(d.error || 'route');
@@ -1313,7 +1389,11 @@ const roughTime = (a, b, mode) => meters([a.lat, a.lon], [b.lat, b.lon]) * 1.3 /
 // so a hiccup on the routing server never leaves a place without a time.
 async function travelTimes(src, targets, mode) {
   let times = null;
-  try {
+  if (useGeo() || !FREE_OK) try {
+    const d = await geoFetch('matrix', {}, null, { mode: GEO_MODE[mode], sources: [{ location: [src.lon, src.lat] }], targets: targets.map(t => ({ location: [t.lon, t.lat] })) });
+    if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x && x.time != null ? x.time : null);
+  } catch (e) {}
+  if (!times && FREE_OK) try {
     const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
     const d = await (await fetch(`${ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`)).json();
     if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x.time);
@@ -1322,7 +1402,7 @@ async function travelTimes(src, targets, mode) {
   let singles = 0;
   for (let i = 0; i < targets.length; i++) {
     if (times[i] != null) continue;
-    if (singles < 6) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
+    if (singles < 6 && (FREE_OK || useGeo())) { singles++; try { times[i] = (await quickRoute(src, targets[i], mode)).time; continue; } catch (e) {} }
     times[i] = roughTime(src, targets[i], mode); meet.rough = true;
   }
   return times;
@@ -1634,11 +1714,11 @@ function tomtomShort(m) {
 async function tomtomRoutes(quiet) {
   const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
   const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
-    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2), 'key=' + encodeURIComponent(prefs.ttKey)];
+    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2)];
   if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
   if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
-  let url = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + q.join('&');
+  let url = ttRoute(locs, q.join('&'));
   const tb = tripBox(), near = z => { const bx = z.c ? [z.c[1], z.c[0], z.c[1], z.c[0]] : z.box; return bx[2] > tb[0] - 1 && bx[0] < tb[2] + 1 && bx[3] > tb[1] - 1 && bx[1] < tb[3] + 1; };
   const skip = zones().filter(near).slice(0, 10).map(z => z.c ? { lat: z.c[0], lon: z.c[1], r: z.r } : { box: z.box, pad: z.pad });
   const box = a => { if (a.box) { const d = a.pad / 111320, k = Math.cos(a.box[1] * Math.PI / 180); return { southWestCorner: { latitude: a.box[1] - d, longitude: a.box[0] - d / k }, northEastCorner: { latitude: a.box[3] + d, longitude: a.box[2] + d / k } }; } const dLat = (a.r || 120) / 111320, dLon = dLat / Math.cos(a.lat * Math.PI / 180); return { southWestCorner: { latitude: a.lat - dLat, longitude: a.lon - dLon }, northEastCorner: { latitude: a.lat + dLat, longitude: a.lon + dLon } }; };
@@ -1709,6 +1789,107 @@ async function osrmRoutes(quiet) {
   return out;
 }
 
+// Routes from Geoapify (a hosted Valhalla). Same output shape as the other routers. Each request costs a credit, so
+// alternatives are asked for only when the route is being planned (not on reroutes): the balanced route, the shortest
+// one, and a toll-free one when both of those use tolls.
+const GV = ['none', 'start', 'startright', 'startleft', 'destination', 'destinationright', 'destinationleft', 'becomes', 'continue', 'slightright', 'right', 'sharpright', 'uturnright', 'uturnleft', 'sharpleft', 'left', 'slightleft',
+  'rampstraight', 'rampright', 'rampleft', 'exitright', 'exitleft', 'staystraight', 'stayright', 'stayleft', 'merge', 'roundaboutenter', 'roundaboutexit', 'ferryenter', 'ferryexit'];
+function geoType(t) {   // Geoapify's maneuver name as Valhalla's maneuver number, so the same arrows and wording rules apply
+  const k = String(t || '').toLowerCase().replace(/[^a-z]/g, '').replace(/^k(?=[a-z])/, '');
+  const i = GV.indexOf(k); if (i >= 0) return i;
+  if (/^start/.test(k)) return /right/.test(k) ? 2 : /left/.test(k) ? 3 : 1;
+  if (/^destination|reached|arrive/.test(k)) return /right/.test(k) ? 5 : /left/.test(k) ? 6 : 4;
+  if (/^roundabout/.test(k)) return /exit/.test(k) ? 27 : 26;
+  if (/^continue|straight/.test(k)) return 8;
+  return 0;
+}
+function geoParse(d) {
+  return (d.features || []).filter(f => f.geometry && f.properties && f.properties.legs).map(f => {
+    const pr = f.properties, lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    let coords = []; const steps = [];
+    pr.legs.forEach((leg, li) => {   // one leg per stop; joined into one line and one list of steps
+      const c = (lines[li] || []).map(x => [x[1], x[0]]), off = coords.length ? coords.length - 1 : 0, last = li === pr.legs.length - 1;
+      if (coords.length) c.shift();
+      coords = coords.concat(c);
+      // With road details, Geoapify splits the leg into road segments and only the segments where a maneuver happens
+      // carry an instruction. Each maneuver becomes one step that runs until the next one.
+      const segs = leg.steps || [], groups = [];
+      segs.forEach(sg => { if (sg.instruction || !groups.length) groups.push({ head: sg, parts: [sg] }); else groups[groups.length - 1].parts.push(sg); });
+      groups.forEach(({ head, parts }) => {
+        const sum = k => parts.reduce((n, x) => n + (x[k] || 0), 0), dist = sum('distance') || 1, share = f => parts.reduce((n, x) => n + (f(x) ? x.distance || 0 : 0), 0) / dist;
+        const st = { from_index: head.from_index, to_index: parts[parts.length - 1].to_index, distance: sum('distance'), time: sum('time'), name: head.name,
+          toll: parts.some(x => x.toll), ferry: parts.some(x => x.ferry), road_class: share(x => /motorway|trunk/.test(x.road_class || '')) > 0.5 ? 'motorway' : head.road_class,
+          surface: share(x => /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(x.surface || '')) > 0.5 ? 'unpaved' : 'paved', instruction: head.instruction };
+        const ins = st.instruction || {}, ty = geoType(ins.type), arriving = ty >= 4 && ty <= 6, stop = arriving && !last;
+        const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : ins.text || 'Continue.';
+        steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
+          sign: [ins.exitNumber && 'Exit ' + ins.exitNumber, ins.exitTowards && 'toward ' + [].concat(ins.exitTowards).join(' / ')].filter(Boolean).join(', '),
+          begin: st.from_index + off, end: st.to_index + off, length: (st.distance || 0) / 1609.34, time: st.time || 0, road: (ins.streets || [])[0] || st.name || '',
+          angle: V_ANGLE[ty] || 0, left: ty >= 13 && ty <= 15, kind: stop ? 'stop' : arriving ? 'arrive' : ty === 26 ? 'roundabout' : (ty >= 9 && ty <= 16) ? 'turn' : 'other',
+          highway: /motorway|trunk/.test(st.road_class || ''), toll: !!st.toll, rough: /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(st.surface || ''), ferry: !!st.ferry });
+      });
+    });
+    return { time: pr.time, dist: pr.distance / 1609.34, coords, steps };
+  });
+}
+function geoRigMode() {   // Geoapify has fixed truck classes instead of exact sizes: the smallest class the rig fits
+  const t = prefs.rig.w * 0.907, h = prefs.rig.h * 0.3048;
+  return t <= 3.5 && h <= 3.5 ? 'light_truck' : t <= 7.5 ? 'medium_truck' : t <= 22 ? 'truck' : 'heavy_truck';
+}
+// Settings Geoapify cannot do. On the website a route that needs them uses the community router instead.
+const geoMissing = () => [prefs.noUnpaved && 'paved roads only', prefs.noAlleys && 'avoiding alleys', prefs.noBorders && 'avoiding border crossings', prefs.mode === 'rig' && 'exact rig size'].filter(Boolean);
+const geoRouting = () => (useGeo() || !FREE_OK) && !(FREE_OK && geoMissing().length);
+async function geoapifyRoutes(quiet) {
+  const where = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
+  const motor = prefs.mode === 'auto' || prefs.mode === 'rig';
+  const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details', units: 'metric', lang: 'en', format: 'geojson' };
+  if (motor && prefs.shortest) base.type = 'short'; else if (motor && prefs.simple) base.type = 'less_maneuvers';
+  if (motor && prefs.relaxed) base.max_speed = 89;
+  const rules = [prefs.noHwy && motor && 'highways:1', prefs.noToll && motor && 'tolls:1', prefs.noFerry && 'ferries:1'].filter(Boolean);
+  // Avoided spots: the router takes points, and drops the road nearest each one
+  avoid.concat(tempAvoid ? [tempAvoid] : []).filter(a => (a.r || 120) <= 150).slice(0, 20).forEach(a => rules.push('location:' + a.lat.toFixed(6) + ',' + a.lon.toFixed(6)));
+  const ask = async (extra, more) => {
+    const p = Object.assign({}, base, extra), all = rules.concat(more || []);
+    if (all.length) p.avoid = all.join('|');
+    try { return geoParse(await geoFetch('routing', p)); }
+    catch (e) { if (e.status === 400) return []; throw e; }   // 400: no route with these rules
+  };
+  let trips = await ask({});
+  let stuck = false;
+  if (!trips.length && rules.some(r => r.startsWith('location:'))) {   // no way around the avoided spots: route through and say so
+    const keep = rules.filter(r => !r.startsWith('location:')); rules.length = 0; rules.push(...keep);
+    trips = await ask({}); stuck = trips.length > 0;
+  }
+  if (!trips.length) { const e = new Error('No route found.'); e.noRoute = true; throw e; }
+  valhallaRoutes.stuck = stuck; geoapifyRoutes.blocked = 0;   // the route card reads the stuck flag from here
+  if (!quiet && !pts.via && motor && !prefs.shortest) { const alt = await ask({ type: 'short' }).catch(() => []); trips = trips.concat(alt); }
+  // Large areas (fires, "avoid this area"): block the roads the route used inside them and ask again, as with the community router
+  if (zones().length) {
+    const ex = [];
+    for (let pass = 0; pass < 4; pass++) {
+      const clean = trips.filter(t => !zoneHits(t.coords).length);
+      if (clean.length) { trips = clean; break; }
+      const hits = zoneHits(trips[0].coords);
+      let step = 150, picked = [];
+      do { let last = null; picked = hits.filter(h => { if (!last || meters(last, h.p) > step) { last = h.p; return true; } return false; }); step *= 1.6; } while (ex.length + picked.length > 40 && step < 20000);
+      picked = picked.slice(0, 40 - ex.length);
+      if (!picked.length) break;
+      picked.forEach(h => ex.push('location:' + h.p[0].toFixed(6) + ',' + h.p[1].toFixed(6)));
+      const again = await ask({}, ex).catch(() => []);
+      if (!again.length) break;   // no way around: keep the last route; the warning comes from zoneNote()
+      trips = again; geoapifyRoutes.blocked = ex.length;
+    }
+  }
+  // Every way uses tolls: ask once more with tolls avoided and offer that too (for example Mexico 1 libre next to the 1D)
+  if (!quiet && motor && !prefs.noToll && trips.every(t => t.steps.some(st => st.toll))) {
+    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => !t.steps.some(st => st.toll) && !zoneHits(t.coords).length);
+    trips = trips.concat(free);
+  }
+  const missing = geoMissing();
+  trips.note = missing.length ? 'Not available in this version: ' + missing.join(', ') + (prefs.mode === 'rig' ? ' (routes use the nearest truck class)' : '') + '.' : '';
+  return trips;
+}
+
 async function route(quiet) {
   if (!pts.from || !pts.to) return false;
   if (!quiet) status('Finding routes...');
@@ -1716,7 +1897,7 @@ async function route(quiet) {
   let found = null;
   if (prefs.fires) { await loadFires(tripBox()).catch(() => {}); if (id !== reqId) return false; }
   if (useBackup && Date.now() - useBackup > 300000) useBackup = false;   // try the main router again after 5 minutes
-  if (prefs.ttKey && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
+  if (hasTraffic() && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
     try {
       found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.';
       const ok = found.filter(rt => !zoneHits(rt.coords).length);   // a traffic route that still enters an avoided area is dropped
@@ -1724,12 +1905,16 @@ async function route(quiet) {
     }
     catch (e) { $('ttMsg').textContent = e.status === 403 || e.status === 401 ? 'TomTom did not accept that key. Using routes without traffic.' : 'Traffic routing failed (' + e.message + '). Using routes without traffic.'; }
   }
-  if (!found && !useBackup) {
+  if (!found && geoRouting()) {
+    try { found = await geoapifyRoutes(quiet); }
+    catch (e) { if (e.noRoute) { if (id === reqId) status(e.message); return false; } }
+  }
+  if (!found && FREE_OK && !useBackup) {
     try { found = await valhallaRoutes(quiet); }
     catch (e) { if (e.noRoute) { if (id === reqId) status(e.message); return false; } }
   }
   if (!found) {
-    try { found = await osrmRoutes(quiet); useBackup = Date.now(); }
+    try { if (!FREE_OK) throw new Error('Routing is unavailable right now. Try again in a moment.'); found = await osrmRoutes(quiet); useBackup = Date.now(); }
     catch (e) {
       const t = store('map.trip');   // no connection: fall back to the last route to this same place
       if (t && t.mode === prefs.mode && t.routes && meters([t.to.lat, t.to.lon], [pts.to.lat, pts.to.lon]) < 80) {
@@ -2148,7 +2333,7 @@ function enrich(step, rt, cum) {
   step._rich = true;
   const P = rt.coords[step.begin], t = cum[step.begin], at = d => rt.coords[Math.max(0, Math.min(rt.coords.length - 1, cum.findIndex(x => x >= d)))];
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (prefs.lanes && driving && !step.lanes) (async () => {
+  if (prefs.lanes && driving && !step.lanes && FREE_OK) (async () => {
     try {
       const A = at(Math.max(0, t - 180)), B = at(Math.min(cum[cum.length - 1], t + 90));
       const o = await (await fetch(`${ROUTER2}/routed-car/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?steps=true&overview=false`)).json();
@@ -2191,20 +2376,21 @@ function addTraffic() {
   if (!map || !map.isStyleLoaded()) return;
   if (map.getLayer('traffic')) map.removeLayer('traffic');
   if (map.getSource('traffic')) map.removeSource('traffic');
-  if (!prefs.ttKey || !prefs.trafficLayer) return;
+  if (!hasTraffic() || !prefs.trafficLayer) return;
   map.addSource('traffic', { type: 'raster', tileSize: 256, maxzoom: 20, attribution: '&copy; TomTom',
-    tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(prefs.ttKey)}`] });
+    tiles: [prefs.ttKey ? `https://api.tomtom.com/traffic/map/4/tile/flow/${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(prefs.ttKey)}`
+      : `${API}/traffic?ep=flow&style=${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}&z={z}&x={x}&y={y}`] });
   map.addLayer({ id: 'traffic', type: 'raster', source: 'traffic', minzoom: 6, paint: { 'raster-opacity': 0.85 } }, map.getLayer('alt') ? 'alt' : undefined);
 }
 let trafficFor = '', traffic = null;   // traffic: { delay (s), total (s) } for the trip currently shown
 async function loadTraffic() {
   traffic = null;
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (!prefs.ttKey || !driving || !pts.from || !pts.to || (routes[0] && routes[0].live)) { trafficFor = ''; return; }
+  if (!hasTraffic() || !driving || !pts.from || !pts.to || (routes[0] && routes[0].live)) { trafficFor = ''; return; }
   const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':'), key = locs + prefs.mode;
   trafficFor = key;
   try {
-    const r = await fetch(`https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?traffic=true&computeTravelTimeFor=all&travelMode=${prefs.mode === 'rig' ? 'truck' : 'car'}&key=${encodeURIComponent(prefs.ttKey)}`);
+    const r = await fetch(ttRoute(locs, `traffic=true&computeTravelTimeFor=all&travelMode=${prefs.mode === 'rig' ? 'truck' : 'car'}`));
     if (!r.ok) { $('ttMsg').textContent = r.status === 403 || r.status === 401 ? 'TomTom did not accept that key.' : 'Traffic is unavailable right now (' + r.status + ').'; return; }
     const sm = (await r.json()).routes[0].summary;
     if (trafficFor !== key) return;
@@ -2397,6 +2583,40 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
 });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
 document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
+function syncPremium() {
+  const C = window.CdvPurchase, S = C && C.store, price = id => { const pr = S && S.get(id) && S.get(id).pricing; return pr ? pr.price : ''; };
+  $('premM').textContent = 'Monthly' + (price(PREMIUM[0]) ? ' ' + price(PREMIUM[0]) : '');
+  $('premY').textContent = 'Yearly' + (price(PREMIUM[1]) ? ' ' + price(PREMIUM[1]) : '');
+  $('premM').style.display = $('premY').style.display = premium.active ? 'none' : '';
+  $('premMsg').textContent = premium.msg || (premium.active ? 'Premium is on. Traffic is included in your routes.' : !premium.ready ? 'Connecting to the App Store...' : '');
+  document.querySelectorAll('[data-traffic]').forEach(b => { b.style.display = hasTraffic() ? '' : 'none'; });
+}
+function setupStore() {
+  const C = window.CdvPurchase;
+  if (!NATIVE || !C) return;
+  if (window.Capacitor && Capacitor.Plugins && !Capacitor.Plugins.PurchasePlugin && Capacitor.registerPlugin) Capacitor.Plugins.PurchasePlugin = Capacitor.registerPlugin('PurchasePlugin');
+  const S = C.store;
+  premium.active = !!store('map.premium');   // last known state, so traffic works offline and before the App Store answers
+  S.register(PREMIUM.map(id => ({ id, type: C.ProductType.PAID_SUBSCRIPTION, platform: C.Platform.APPLE_APPSTORE })));
+  const check = () => {
+    const own = PREMIUM.some(id => S.owned(id));
+    if (premium.ready || own) { const was = premium.active; premium.active = own; store('map.premium', own ? 1 : 0); if (was !== own) { premium.msg = ''; addTraffic(); if (pts.from && pts.to) route(true); } }
+    syncPremium();
+  };
+  S.when().productUpdated(check).receiptUpdated(check).approved(t => t.finish()).finished(check);
+  S.error(e => { premium.msg = e && e.code === C.ErrorCode.PAYMENT_CANCELLED ? '' : 'App Store: ' + ((e && e.message) || 'something went wrong'); syncPremium(); });
+  S.initialize([C.Platform.APPLE_APPSTORE]).then(() => { premium.ready = true; check(); }, () => { premium.ready = true; syncPremium(); });
+  const buy = id => () => {
+    const pr = S.get(id), offer = pr && pr.getOffer();
+    if (!offer) { premium.msg = 'This subscription is not available right now.'; syncPremium(); return; }
+    premium.msg = 'Opening the App Store...'; syncPremium();
+    offer.order().then(err => { premium.msg = err && err.code !== C.ErrorCode.PAYMENT_CANCELLED ? 'The purchase did not go through. ' + (err.message || '') : ''; syncPremium(); });
+  };
+  $('premM').onclick = buy(PREMIUM[0]); $('premY').onclick = buy(PREMIUM[1]);
+  $('premRestore').onclick = () => { premium.msg = 'Checking your purchases...'; syncPremium(); S.restorePurchases().then(() => { premium.msg = ''; check(); if (!premium.active) { premium.msg = 'No active subscription found on this Apple ID.'; syncPremium(); } }); };
+  syncPremium();
+}
+if (NATIVE) { if (window.CdvPurchase) setupStore(); else document.addEventListener('deviceready', setupStore, { once: true }); }
 document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
 $('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();
 $('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };

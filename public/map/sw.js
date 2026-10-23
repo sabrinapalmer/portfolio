@@ -12,7 +12,7 @@ const keep = (req, res) => { if (res && (res.ok || res.type === 'opaque')) { con
 self.addEventListener('fetch', e => {
   const req = e.request, u = new URL(req.url);
   if (req.method !== 'GET') return;
-  if (req.mode === 'navigate' && u.origin === location.origin) {   // the page: newest when online, saved copy when not
+  if (req.mode === 'navigate' && u.origin === location.origin && /^\/map(\/|\/index\.html)?$/.test(u.pathname)) {   // the map page itself: newest when online, saved copy when not
     e.respondWith(fetch(req).then(r => { if (r.ok) { const copy = r.clone(); caches.open(SHELL).then(c => c.put('/map', copy)); } return r; }).catch(() => caches.match('/map')));
     return;
   }
