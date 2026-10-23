@@ -1,6 +1,8 @@
 // Forwards map search and routing requests to Geoapify with the key kept on the server.
 // The page and the iPhone app call  /api/geo?ep=<endpoint>&<Geoapify parameters>  without a key.
 // Only the endpoints the map uses are allowed through. GEOAPIFY_KEY is set in the Vercel project settings.
+// Runs on Vercel's edge network: close to the person searching and with no slow first start.
+export const config = { runtime: 'edge' };
 
 const ENDPOINTS = {
   autocomplete: { path: '/v1/geocode/autocomplete', cache: 86400 },
@@ -9,49 +11,41 @@ const ENDPOINTS = {
   places: { path: '/v2/places', cache: 3600 },
   details: { path: '/v2/place-details', cache: 86400 },
   routing: { path: '/v1/routing', cache: 0 },
-  matrix: { path: '/v1/routematrix', cache: 0, post: true },   // travel times for meet in the middle
+  matrix: { path: '/v1/routematrix', cache: 0, post: true },   // travel times: search results, stops, meet in the middle
 };
 
 // Pages allowed to call this: the website and the iPhone app (Capacitor serves the app page from capacitor://localhost)
 const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
 
-export default async function handler(req, res) {
-  const origin = req.headers.origin || '';
-  if (origin && ORIGINS.some(o => o.test(origin))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  } else if (origin) {
-    res.status(403).json({ error: 'origin not allowed' });
-    return;
-  }
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    res.status(204).end();
-    return;
-  }
+const json = (status, obj, headers) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, headers) });
+
+export default async function handler(req) {
+  const origin = req.headers.get('origin') || '';
+  const cors = {};
+  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
+  else if (origin) return json(403, { error: 'origin not allowed' });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' }, cors) });
 
   const key = process.env.GEOAPIFY_KEY;
-  if (!key) { res.status(503).json({ error: 'search is not configured' }); return; }
+  if (!key) return json(503, { error: 'search is not configured' }, cors);
 
-  const url = new URL(req.url, 'http://local');
+  const url = new URL(req.url);
   const ep = ENDPOINTS[url.searchParams.get('ep')];
-  if (!ep) { res.status(404).json({ error: 'unknown endpoint' }); return; }
-  if (req.method !== (ep.post ? 'POST' : 'GET')) { res.status(405).json({ error: 'wrong method' }); return; }
+  if (!ep) return json(404, { error: 'unknown endpoint' }, cors);
+  if (req.method !== (ep.post ? 'POST' : 'GET')) return json(405, { error: 'wrong method' }, cors);
   let body;
   if (ep.post) {
-    body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
-    if (body.length > 20000) { res.status(413).json({ error: 'request too large' }); return; }
-    try { const b = JSON.parse(body); if ((b.sources || []).length * (b.targets || []).length > 100) { res.status(413).json({ error: 'too many points' }); return; } }
-    catch (e) { res.status(400).json({ error: 'bad body' }); return; }
+    body = await req.text();
+    if (body.length > 20000) return json(413, { error: 'request too large' }, cors);
+    try { const b = JSON.parse(body); if ((b.sources || []).length * (b.targets || []).length > 100) return json(413, { error: 'too many points' }, cors); }
+    catch (e) { return json(400, { error: 'bad body' }, cors); }
   }
 
   const out = new URLSearchParams();
   for (const [k, v] of url.searchParams) {
     if (k === 'ep' || k.toLowerCase() === 'apikey' || k.startsWith('_vercel')) continue;
-    if (v.length > 4000) { res.status(414).json({ error: 'parameter too long' }); return; }
+    if (v.length > 4000) return json(414, { error: 'parameter too long' }, cors);
     out.append(k, v);
   }
   out.set('apiKey', key);
@@ -60,14 +54,12 @@ export default async function handler(req, res) {
   try {
     r = await fetch('https://api.geoapify.com' + ep.path + '?' + out.toString(), ep.post ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(12000) } : { signal: AbortSignal.timeout(12000) });
   } catch (e) {
-    res.status(502).json({ error: 'map service unreachable' });
-    return;
+    return json(502, { error: 'map service unreachable' }, cors);
   }
-  const text = await r.text();
-  res.setHeader('Content-Type', r.headers.get('content-type') || 'application/json');
-  if (r.ok && ep.cache) res.setHeader('Cache-Control', `public, s-maxage=${ep.cache}, max-age=300`);
-  else res.setHeader('Cache-Control', 'no-store');
   // Never pass Geoapify's own auth errors through as-is: they can echo the request URL, which holds the key
-  if (r.status === 401 || r.status === 403) { res.status(502).json({ error: 'map service rejected the server key' }); return; }
-  res.status(r.status).send(text.split(key).join(''));
+  if (r.status === 401 || r.status === 403) return json(502, { error: 'map service rejected the server key' }, cors);
+  const text = (await r.text()).split(key).join('');
+  const headers = Object.assign({ 'Content-Type': r.headers.get('content-type') || 'application/json',
+    'Cache-Control': r.ok && ep.cache ? `public, s-maxage=${ep.cache}, max-age=300` : 'no-store' }, cors);
+  return new Response(text, { status: r.status, headers });
 }

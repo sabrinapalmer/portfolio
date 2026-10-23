@@ -6,7 +6,7 @@ const ROOT = new URL('../../', import.meta.url).pathname, CHROME = process.env.C
 const html = fs.readFileSync(ROOT + 'public/map/index.html', 'utf8');
 const HERE = [32.355, -117.05];
 const errs = [], calls = [];
-let dirty = false;
+let dirty = false, tollBooths = [];
 const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 
 // Geoapify-shaped answers
@@ -63,12 +63,14 @@ await p.route('**/*', async r => {
   if (/photon|nominatim|openstreetmap\.de|census\.gov/.test(u)) { calls.push('COMMUNITY ' + u); return r.abort(); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/geo')) {
     const q = new URL(u).searchParams, ep = q.get('ep'); calls.push('geo ' + ep + (q.get('avoid') ? ' avoid=' + q.get('avoid') : '') + (q.get('type') ? ' type=' + q.get('type') : ''));
-    if (ep === 'autocomplete') return J({ type: 'FeatureCollection', features: /walmart/i.test(q.get('text')) ? (q.get('filter') ? [place('Walmart', 32.37, -117.06, 'Rosarito', 'Mexico')] : [place('Walmart', 32.64, -117.08, 'Chula Vista', 'United States'), place('Walmart Supercenter', 32.47, -117.00, 'Tijuana', 'Mexico'), place('Walmart Pharmacy', 32.6401, -117.0801, 'Chula Vista', 'United States')]) : [place('Ensenada', 31.86, -116.6, 'Ensenada', 'Mexico')] });
+    if (ep === 'autocomplete') return J({ type: 'FeatureCollection', features: /walmart/i.test(q.get('text')) ? [place('Walmart', 32.64, -117.08, 'Chula Vista', 'United States'), place('Walmart Supercenter', 32.47, -117.00, 'Tijuana', 'Mexico'), place('Walmart Pharmacy', 32.6401, -117.0801, 'Chula Vista', 'United States'), place('Walmart', 32.37, -117.06, 'Rosarito', 'Mexico')] : [place('Ensenada', 31.86, -116.6, 'Ensenada', 'Mexico')] });
     if (ep === 'search' || ep === 'reverse' || ep === 'places') return J({ type: 'FeatureCollection', features: [] });
     if (ep === 'routing') { if (dirty) q.set('dirty', '1'); return J(geoRoute(q)); }
     if (ep === 'matrix') { const b = JSON.parse(r.request().postData() || '{}'); return J({ sources_to_targets: [b.targets.map((t, i) => ({ time: 600 + 300 * i, distance: 1000 }))] }); }
     return r.fulfill({ status: 404, body: '{}' });
   }
+  if (u.startsWith('https://www.sabrinapalmer.com/api/tolls')) { calls.push('tolls'); return J({ booths: tollBooths }); }
+  if (u.startsWith('https://www.sabrinapalmer.com/api/border')) { calls.push('border'); return J({ at: Date.now(), ports: [{ port: 'San Ysidro', crossing: '', status: 'Open', standard: { minutes: 75, status: 'delay' }, ready: { minutes: 45, status: 'delay' }, sentri: { minutes: 15, status: 'no delay' } }] }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/premium')) {
     const body = JSON.parse(r.request().postData() || '{}'); calls.push('premium ' + body.transaction);
     return J({ pass: 'test-pass.sig', expires: Date.now() + 30 * 864e5 });
@@ -89,6 +91,7 @@ await p.fill('#to', 'walmart'); await p.waitForTimeout(2500);
 const list = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
 console.log('walmart list:', list);
 check(list.length && /Rosarito/.test(list[0]), 'search via Geoapify lists the Rosarito Walmart first');
+check(calls.filter(c => c === 'geo autocomplete').length <= 2, 'one search request per query (was three)');
 check(list.length === 3 && /Supercenter/.test(list[1]) && /Chula Vista/.test(list[2]), 'all results in one list nearest first, the Supercenter included, the pharmacy folded into its store');
 await p.waitForTimeout(1200);
 const timed = await p.$$eval('#suggest li:not(.head) em', e => e.map(x => x.innerText));
@@ -148,6 +151,27 @@ check(await p.evaluate(() => pts.stops.length === 1 && pts.stops[0].name === 'Pe
 await p.evaluate(() => { closeSheets(); savePlace('home', { lat: 32.0, lon: -116.9, label: 'La Salina, Baja California', name: 'La Salina' }); clearAll(); });
 await p.waitForTimeout(300);
 check((await p.$$eval('#quick button', e => e.map(x => x.className + ':' + x.innerText)))[0] === 'home:Home', 'Home is the first quick button');
+
+// Tolls: a toll-tagged road with no booth on the way is a free stretch; with a booth it has tolls
+await p.evaluate(() => { closeSheets(); prefs.trafficRoute = false; });
+tollBooths = [];
+await p.evaluate(async () => { clearAll(); pts.from = { lat: 32.355, lon: -117.05, label: 'My location', auto: true }; setPoint('to', { lat: 31.86, lon: -116.6, label: 'Ensenada', name: 'Ensenada' }); await new Promise(r => setTimeout(r, 2500)); });
+const free = await p.evaluate(() => routes.map(r => [!!r.toll, !!r.freeToll]));
+console.log('no booths:', JSON.stringify(free));
+check(free.length && free.every(([t]) => !t) && free.some(([, f]) => f), 'toll road without a booth on the way does not count as tolls');
+check(await p.evaluate(() => /Free stretch of a toll road/.test($('why').innerText) && !/Has tolls/.test($('why').innerText)), 'route card says free stretch, not Has tolls');
+tollBooths = [[32.1075, -117.08]];
+await p.evaluate(async () => { boothCache.clear(); await route(); });
+await p.waitForTimeout(1500);
+check(await p.evaluate(() => routes.some(r => r.toll)), 'a booth on the way does count as tolls');
+// Border: a route north through San Ysidro shows the port, the chosen lane's wait and when you get there
+const bline = await p.evaluate(async () => {
+  prefs.lane = 'ready';
+  const rt = { coords: [[32.50, -117.03], [32.52, -117.03], [32.5422, -117.0291], [32.56, -117.04], [32.60, -117.05]], steps: [{ begin: 0, end: 2, time: 1200 }, { begin: 2, end: 4, time: 600 }] };
+  await checkBorder([rt]); return borderLine(rt);
+});
+console.log('border:', bline);
+check(/San Ysidro/.test(bline) && /Ready Lane wait now: 45 min/.test(bline) && /border in 20 min/.test(bline), 'border line names the port, your lane, its wait and when you reach it');
 
 const community = calls.filter(c => c.startsWith('COMMUNITY') || c.startsWith('OTHER'));
 console.log('geo calls:', calls.filter(c => c.startsWith('geo')).length, '| first few:', calls.filter(c => c.startsWith('geo')).slice(0, 8));
