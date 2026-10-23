@@ -50,7 +50,7 @@ export default async function handler(req, res) {
 
   const out = new URLSearchParams();
   for (const [k, v] of url.searchParams) {
-    if (k === 'ep' || k.toLowerCase() === 'apikey') continue;
+    if (k === 'ep' || k.toLowerCase() === 'apikey' || k.startsWith('_vercel')) continue;
     if (v.length > 4000) { res.status(414).json({ error: 'parameter too long' }); return; }
     out.append(k, v);
   }

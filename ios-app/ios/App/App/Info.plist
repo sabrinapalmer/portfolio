@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Map</string>
+	<string>BrinaMaps</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,9 +25,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Map uses your location to keep giving directions while the screen is locked.</string>
+	<string>BrinaMaps uses your location to keep giving directions while the screen is locked.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Map uses your location to show where you are, search nearby, and give directions.</string>
+	<string>BrinaMaps uses your location to show where you are, search nearby, and give directions.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

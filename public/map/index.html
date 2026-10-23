@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" id="themeColor" content="#fffaf6">
-<title>Map</title>
+<meta name="theme-color" id="themeColor" content="#f7f4ff">
+<title>BrinaMaps</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Map">
+<meta name="apple-mobile-web-app-title" content="BrinaMaps">
 <link rel="apple-touch-icon" href="/map/icon-180.png">
 <link rel="manifest" href="/map/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,13 +15,13 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
 <style>
   :root {
-    --bg:#fffaf6; --card:#ffffff; --fg:#3a2e3d; --muted:#8c7f8e; --line:#f3e6e8;
-    --accent:#ff6f91; --accent-ink:#ffffff; --soft:#ffe9ee; --alt:#b9aec2;
+    --bg:#f7f4ff; --card:#ffffff; --fg:#2a1f4a; --muted:#857c9e; --line:#e8e2f6;
+    --accent:#8b5cf6; --accent-ink:#ffffff; --soft:#ede7ff; --alt:#b3a9cf;
     --start:#3fc49c; --me:#4c9dff; --warn:#f2a341; --shadow:0 8px 26px rgba(120,70,90,.2);
   }
   :root[data-ui="dark"] {
-    --bg:#221d27; --card:#2c2532; --fg:#f7eef5; --muted:#b0a1b4; --line:#40364a;
-    --accent:#ff8fab; --accent-ink:#2a1820; --soft:#44313c; --alt:#8b7f93;
+    --bg:#1b1838; --card:#262150; --fg:#f4f0ff; --muted:#aca3cf; --line:#3a3366;
+    --accent:#b67cff; --accent-ink:#1a1033; --soft:#382a5c; --alt:#8a80b3;
     --start:#5fd6b2; --me:#77b8ff; --warn:#f5b860; --shadow:0 8px 26px rgba(0,0,0,.5);
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -560,7 +560,7 @@ const premium = { active: false, ready: false, msg: '' };
 const hasTraffic = () => !!prefs.ttKey || premium.active;
 const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 const pts = { from: null, to: null, via: null }, markers = { from: null, to: null, via: null };   // via: one optional stop on the way
 let tempAvoid = null;   // a point to route around for this trip only
@@ -630,6 +630,10 @@ const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9
 // land and from each other; labels have strong contrast; the accent used for the route is never close to a road colour.
 // Rosé Pine, Catppuccin, Nord and Solarized are adapted from those open-source palettes.
 const THEMES = {
+  brina:    { group: 'BrinaMaps', label: 'Brina', ui: 'light', accent: '#8b5cf6', soft: '#ede7ff', bg: '#f7f4ff', land2: '#efeafb', water: '#9fd3f5', park: '#bfe8cc', building: '#e7e1f4', bldLine: '#d4cbea', casing: '#b6a8db',
+              minor: '#ffffff', mid: '#fff0c4', major: '#ffd98a', motorway: '#c4a1ff', path: '#dbd2ef', rail: '#bdb0dc', text: '#2a1f4a', textRoad: '#463a6e', halo: '#fcfbff', boundary: '#a48ce0' },
+  twilight: { group: 'BrinaMaps', label: 'Twilight', ui: 'dark', accent: '#b67cff', ink: '#1a1033', soft: '#382a5c', bg: '#1b1838', land2: '#211d44', water: '#123b6e', park: '#1e4a48', building: '#2a2550', bldLine: '#3b346e', casing: '#0f0d24',
+              minor: '#4f4790', mid: '#7466c9', major: '#a58cff', motorway: '#67e8f9', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
   blossom:  { group: 'Soft', label: 'Blossom', ui: 'light', accent: '#f0527f', soft: '#ffe6ec', bg: '#fbf4ea', land2: '#f5ebde', water: '#a5d6f0', park: '#bfe6b8', building: '#ece0d2', bldLine: '#dccbb9', casing: '#c9b6a6',
               minor: '#ffffff', mid: '#fff3c9', major: '#ffe08f', motorway: '#ffc278', path: '#e0cfc0', rail: '#c7b6ab', text: '#33262f', textRoad: '#5a4652', halo: '#fffaf4', boundary: '#c59db0' },
   sorbet:   { group: 'Soft', label: 'Sorbet', ui: 'light', accent: '#e8457c', soft: '#ffe1ea', bg: '#fff4f5', land2: '#fdeaed', water: '#b3e4f6', park: '#c4efd0', building: '#f5e1e4', bldLine: '#e8cdd3', casing: '#d9b3bf',
@@ -689,7 +693,7 @@ function applyFont() {
   document.documentElement.style.setProperty('--font', f.css);
 }
 const isNight = () => { const h = new Date().getHours(); return h >= 19 || h < 6; };
-const themeKey = () => prefs.autoNight && isNight() && THEMES[prefs.nightTheme] ? prefs.nightTheme : (THEMES[prefs.theme] ? prefs.theme : 'blossom');
+const themeKey = () => prefs.autoNight && isNight() && THEMES[prefs.nightTheme] ? prefs.nightTheme : (THEMES[prefs.theme] ? prefs.theme : 'brina');
 const theme = () => THEMES[themeKey()];
 function applyUi() {   // buttons and highlights take the theme's accent colour
   const t = theme(), root = document.documentElement;
@@ -2719,7 +2723,7 @@ function startWatch(precise) {
     const opts = { requestPermissions: true, stale: false, distanceFilter: nav ? 3 : 10 };
     if (nav) Object.assign(opts, { backgroundTitle: 'Directions are running', backgroundMessage: 'Map is using your location to guide you.' });
     bgWatch = BG.addWatcher(opts, (loc, err) => {
-      if (err) { if (err.code === 'NOT_AUTHORIZED') { locState = 'blocked'; drawStrip(); if (nav) $('navText').textContent = 'Location is off. Allow location for Map in Settings.'; } return; }
+      if (err) { if (err.code === 'NOT_AUTHORIZED') { locState = 'blocked'; drawStrip(); if (nav) $('navText').textContent = 'Location is off. Allow location for BrinaMaps in Settings.'; } return; }
       if (!loc) return;
       locState = 'ok'; document.body.classList.remove('loc');
       onFix({ coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy || 0, speed: loc.speed, heading: loc.bearing == null ? -1 : loc.bearing } });
