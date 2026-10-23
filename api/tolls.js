@@ -2,12 +2,12 @@
 // toll road everywhere from the stretches where you actually pay. The app asks with boxes snapped to a 0.25° grid,
 // so answers are shared and cached at the edge for a week (booths rarely move).
 //   /api/tolls?bbox=west,south,east,north
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs', maxDuration: 30 };   // a regular server: the public Overpass servers turn away edge-network requests
 
 const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
 
-export default async function handler(req) {
+export async function GET(req) {
   const origin = req.headers.get('origin') || '', cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
   else if (origin) return new Response('{"error":"origin not allowed"}', { status: 403, headers: { 'Content-Type': 'application/json' } });
@@ -21,7 +21,7 @@ export default async function handler(req) {
   let d, why = '';
   for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']) {
     try {
-      const r = await fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+      const r = await fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.timeout(13000) });
       if (!r.ok) { why += host + ' ' + r.status + '; '; continue; }
       d = await r.json(); break;
     } catch (err) { why += host + ' ' + (err.name || 'error') + '; '; }
