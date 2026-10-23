@@ -1811,7 +1811,15 @@ function geoParse(d) {
       const c = (lines[li] || []).map(x => [x[1], x[0]]), off = coords.length ? coords.length - 1 : 0, last = li === pr.legs.length - 1;
       if (coords.length) c.shift();
       coords = coords.concat(c);
-      (leg.steps || []).forEach(st => {
+      // With road details, Geoapify splits the leg into road segments and only the segments where a maneuver happens
+      // carry an instruction. Each maneuver becomes one step that runs until the next one.
+      const segs = leg.steps || [], groups = [];
+      segs.forEach(sg => { if (sg.instruction || !groups.length) groups.push({ head: sg, parts: [sg] }); else groups[groups.length - 1].parts.push(sg); });
+      groups.forEach(({ head, parts }) => {
+        const sum = k => parts.reduce((n, x) => n + (x[k] || 0), 0), dist = sum('distance') || 1, share = f => parts.reduce((n, x) => n + (f(x) ? x.distance || 0 : 0), 0) / dist;
+        const st = { from_index: head.from_index, to_index: parts[parts.length - 1].to_index, distance: sum('distance'), time: sum('time'), name: head.name,
+          toll: parts.some(x => x.toll), ferry: parts.some(x => x.ferry), road_class: share(x => /motorway|trunk/.test(x.road_class || '')) > 0.5 ? 'motorway' : head.road_class,
+          surface: share(x => /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(x.surface || '')) > 0.5 ? 'unpaved' : 'paved', instruction: head.instruction };
         const ins = st.instruction || {}, ty = geoType(ins.type), arriving = ty >= 4 && ty <= 6, stop = arriving && !last;
         const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : ins.text || 'Continue.';
         steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
