@@ -9,6 +9,14 @@
       "destination": "/map/index.html"
     },
     {
+      "source": "/map/privacy",
+      "destination": "/map/privacy.html"
+    },
+    {
+      "source": "/map/support",
+      "destination": "/map/support.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

@@ -238,6 +238,8 @@
   .maplibregl-ctrl-attrib { font:500 10px/1.4 system-ui, sans-serif; }
   .maplibregl-ctrl-bottom-right { bottom:calc(var(--lift, 20px) + 54px + env(safe-area-inset-bottom)); right:4px; z-index:8; }
   body.nav .maplibregl-ctrl-bottom-right { bottom:calc(88px + env(safe-area-inset-bottom)); }
+body.native .webonly, body:not(.native) .apponly { display: none !important; }
+.fine { font-size: 12px; color: var(--muted); line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -357,13 +359,24 @@
   <div class="chips"><button id="offSave">Save the area on screen</button><button id="offClear">Remove saved areas</button></div>
   <div id="offMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <div id="offUse" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
+  <div class="webonly">
   <h3>More reliable search (optional)</h3>
   <p>Search uses free public servers that are sometimes slow or down. A free Geoapify key (no card) makes it steadier: create one at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and paste it here. It stays on this device. With a key, what you type in search is sent to Geoapify.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="geoKey" type="text" placeholder="Geoapify key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="geoSave">Save</button></div>
   <div id="geoMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
+  </div>
+  <div class="apponly">
+  <h3>Premium: live traffic</h3>
+  <p>Routes that steer around jams, arrival times that include traffic, and traffic colours on the map. Everything else in the app is free.</p>
+  <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
+  <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
+  <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://sabrinapalmer.com/map/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
+  </div>
+  <div class="webonly">
   <h3>Live traffic (optional)</h3>
   <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, driving routes come from TomTom and steer around jams, and your trip's start and end are sent to TomTom. Walking and biking are unchanged.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="ttKey" type="text" placeholder="TomTom key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="ttSave">Save</button></div>
+  </div>
   <div class="chips" style="margin-top:8px"><button data-traffic="trafficRoute">Route around traffic</button><button data-traffic="trafficLayer">Show traffic on the map</button></div>
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
@@ -457,6 +470,7 @@ const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE 
 // The App Store app only uses services licensed for it: Geoapify (search, routing) through the site's own server,
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
+document.body.classList.toggle('native', NATIVE);
 const FREE_OK = !NATIVE, API = NATIVE ? 'https://sabrinapalmer.com/api' : '/api';
 const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
@@ -538,6 +552,13 @@ function drawOffline() {
   $('offClear').style.display = areas.length ? '' : 'none';
 }
 async function clearAreas() { await idbDo('saved', 'readwrite', s => s.clear()); store('map.areas', []); $('offMsg').textContent = 'Saved areas removed.'; drawOffline(); }
+// ---------- Premium (live traffic) ----------
+// In the app, traffic is a subscription bought through the App Store; requests go through the site's server, which
+// holds the TomTom key. On the website, traffic still works with a TomTom key you paste into Settings.
+const PREMIUM = ['com.sabrinapalmer.map.premium.monthly', 'com.sabrinapalmer.map.premium.yearly'];
+const premium = { active: false, ready: false, msg: '' };
+const hasTraffic = () => !!prefs.ttKey || premium.active;
+const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'blossom', nightTheme: 'night', autoNight: false, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
@@ -1693,11 +1714,11 @@ function tomtomShort(m) {
 async function tomtomRoutes(quiet) {
   const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
   const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
-    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2), 'key=' + encodeURIComponent(prefs.ttKey)];
+    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2)];
   if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
   if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
-  let url = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + q.join('&');
+  let url = ttRoute(locs, q.join('&'));
   const tb = tripBox(), near = z => { const bx = z.c ? [z.c[1], z.c[0], z.c[1], z.c[0]] : z.box; return bx[2] > tb[0] - 1 && bx[0] < tb[2] + 1 && bx[3] > tb[1] - 1 && bx[1] < tb[3] + 1; };
   const skip = zones().filter(near).slice(0, 10).map(z => z.c ? { lat: z.c[0], lon: z.c[1], r: z.r } : { box: z.box, pad: z.pad });
   const box = a => { if (a.box) { const d = a.pad / 111320, k = Math.cos(a.box[1] * Math.PI / 180); return { southWestCorner: { latitude: a.box[1] - d, longitude: a.box[0] - d / k }, northEastCorner: { latitude: a.box[3] + d, longitude: a.box[2] + d / k } }; } const dLat = (a.r || 120) / 111320, dLon = dLat / Math.cos(a.lat * Math.PI / 180); return { southWestCorner: { latitude: a.lat - dLat, longitude: a.lon - dLon }, northEastCorner: { latitude: a.lat + dLat, longitude: a.lon + dLon } }; };
@@ -1868,7 +1889,7 @@ async function route(quiet) {
   let found = null;
   if (prefs.fires) { await loadFires(tripBox()).catch(() => {}); if (id !== reqId) return false; }
   if (useBackup && Date.now() - useBackup > 300000) useBackup = false;   // try the main router again after 5 minutes
-  if (prefs.ttKey && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
+  if (hasTraffic() && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
     try {
       found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.';
       const ok = found.filter(rt => !zoneHits(rt.coords).length);   // a traffic route that still enters an avoided area is dropped
@@ -2347,20 +2368,21 @@ function addTraffic() {
   if (!map || !map.isStyleLoaded()) return;
   if (map.getLayer('traffic')) map.removeLayer('traffic');
   if (map.getSource('traffic')) map.removeSource('traffic');
-  if (!prefs.ttKey || !prefs.trafficLayer) return;
+  if (!hasTraffic() || !prefs.trafficLayer) return;
   map.addSource('traffic', { type: 'raster', tileSize: 256, maxzoom: 20, attribution: '&copy; TomTom',
-    tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(prefs.ttKey)}`] });
+    tiles: [prefs.ttKey ? `https://api.tomtom.com/traffic/map/4/tile/flow/${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(prefs.ttKey)}`
+      : `${API}/traffic?ep=flow&style=${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}&z={z}&x={x}&y={y}`] });
   map.addLayer({ id: 'traffic', type: 'raster', source: 'traffic', minzoom: 6, paint: { 'raster-opacity': 0.85 } }, map.getLayer('alt') ? 'alt' : undefined);
 }
 let trafficFor = '', traffic = null;   // traffic: { delay (s), total (s) } for the trip currently shown
 async function loadTraffic() {
   traffic = null;
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (!prefs.ttKey || !driving || !pts.from || !pts.to || (routes[0] && routes[0].live)) { trafficFor = ''; return; }
+  if (!hasTraffic() || !driving || !pts.from || !pts.to || (routes[0] && routes[0].live)) { trafficFor = ''; return; }
   const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':'), key = locs + prefs.mode;
   trafficFor = key;
   try {
-    const r = await fetch(`https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?traffic=true&computeTravelTimeFor=all&travelMode=${prefs.mode === 'rig' ? 'truck' : 'car'}&key=${encodeURIComponent(prefs.ttKey)}`);
+    const r = await fetch(ttRoute(locs, `traffic=true&computeTravelTimeFor=all&travelMode=${prefs.mode === 'rig' ? 'truck' : 'car'}`));
     if (!r.ok) { $('ttMsg').textContent = r.status === 403 || r.status === 401 ? 'TomTom did not accept that key.' : 'Traffic is unavailable right now (' + r.status + ').'; return; }
     const sm = (await r.json()).routes[0].summary;
     if (trafficFor !== key) return;
@@ -2553,6 +2575,40 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
 });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
 document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
+function syncPremium() {
+  const C = window.CdvPurchase, S = C && C.store, price = id => { const pr = S && S.get(id) && S.get(id).pricing; return pr ? pr.price : ''; };
+  $('premM').textContent = 'Monthly' + (price(PREMIUM[0]) ? ' ' + price(PREMIUM[0]) : '');
+  $('premY').textContent = 'Yearly' + (price(PREMIUM[1]) ? ' ' + price(PREMIUM[1]) : '');
+  $('premM').style.display = $('premY').style.display = premium.active ? 'none' : '';
+  $('premMsg').textContent = premium.msg || (premium.active ? 'Premium is on. Traffic is included in your routes.' : !premium.ready ? 'Connecting to the App Store...' : '');
+  document.querySelectorAll('[data-traffic]').forEach(b => { b.style.display = hasTraffic() ? '' : 'none'; });
+}
+function setupStore() {
+  const C = window.CdvPurchase;
+  if (!NATIVE || !C) return;
+  if (window.Capacitor && Capacitor.Plugins && !Capacitor.Plugins.PurchasePlugin && Capacitor.registerPlugin) Capacitor.Plugins.PurchasePlugin = Capacitor.registerPlugin('PurchasePlugin');
+  const S = C.store;
+  premium.active = !!store('map.premium');   // last known state, so traffic works offline and before the App Store answers
+  S.register(PREMIUM.map(id => ({ id, type: C.ProductType.PAID_SUBSCRIPTION, platform: C.Platform.APPLE_APPSTORE })));
+  const check = () => {
+    const own = PREMIUM.some(id => S.owned(id));
+    if (premium.ready || own) { const was = premium.active; premium.active = own; store('map.premium', own ? 1 : 0); if (was !== own) { premium.msg = ''; addTraffic(); if (pts.from && pts.to) route(true); } }
+    syncPremium();
+  };
+  S.when().productUpdated(check).receiptUpdated(check).approved(t => t.finish()).finished(check);
+  S.error(e => { premium.msg = e && e.code === C.ErrorCode.PAYMENT_CANCELLED ? '' : 'App Store: ' + ((e && e.message) || 'something went wrong'); syncPremium(); });
+  S.initialize([C.Platform.APPLE_APPSTORE]).then(() => { premium.ready = true; check(); }, () => { premium.ready = true; syncPremium(); });
+  const buy = id => () => {
+    const pr = S.get(id), offer = pr && pr.getOffer();
+    if (!offer) { premium.msg = 'This subscription is not available right now.'; syncPremium(); return; }
+    premium.msg = 'Opening the App Store...'; syncPremium();
+    offer.order().then(err => { premium.msg = err && err.code !== C.ErrorCode.PAYMENT_CANCELLED ? 'The purchase did not go through. ' + (err.message || '') : ''; syncPremium(); });
+  };
+  $('premM').onclick = buy(PREMIUM[0]); $('premY').onclick = buy(PREMIUM[1]);
+  $('premRestore').onclick = () => { premium.msg = 'Checking your purchases...'; syncPremium(); S.restorePurchases().then(() => { premium.msg = ''; check(); if (!premium.active) { premium.msg = 'No active subscription found on this Apple ID.'; syncPremium(); } }); };
+  syncPremium();
+}
+if (NATIVE) { if (window.CdvPurchase) setupStore(); else document.addEventListener('deviceready', setupStore, { once: true }); }
 document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
 $('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();
 $('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };

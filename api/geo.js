@@ -9,6 +9,7 @@ const ENDPOINTS = {
   places: { path: '/v2/places', cache: 3600 },
   details: { path: '/v2/place-details', cache: 86400 },
   routing: { path: '/v1/routing', cache: 0 },
+  matrix: { path: '/v1/routematrix', cache: 0, post: true },   // travel times for meet in the middle
 };
 
 // Pages allowed to call this: the website and the iPhone app (Capacitor serves the app page from capacitor://localhost)
@@ -25,12 +26,12 @@ export default async function handler(req, res) {
     return;
   }
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Max-Age', '86400');
     res.status(204).end();
     return;
   }
-  if (req.method !== 'GET') { res.status(405).json({ error: 'GET only' }); return; }
 
   const key = process.env.GEOAPIFY_KEY;
   if (!key) { res.status(503).json({ error: 'search is not configured' }); return; }
@@ -38,6 +39,14 @@ export default async function handler(req, res) {
   const url = new URL(req.url, 'http://local');
   const ep = ENDPOINTS[url.searchParams.get('ep')];
   if (!ep) { res.status(404).json({ error: 'unknown endpoint' }); return; }
+  if (req.method !== (ep.post ? 'POST' : 'GET')) { res.status(405).json({ error: 'wrong method' }); return; }
+  let body;
+  if (ep.post) {
+    body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    if (body.length > 20000) { res.status(413).json({ error: 'request too large' }); return; }
+    try { const b = JSON.parse(body); if ((b.sources || []).length * (b.targets || []).length > 100) { res.status(413).json({ error: 'too many points' }); return; } }
+    catch (e) { res.status(400).json({ error: 'bad body' }); return; }
+  }
 
   const out = new URLSearchParams();
   for (const [k, v] of url.searchParams) {
@@ -49,16 +58,16 @@ export default async function handler(req, res) {
 
   let r;
   try {
-    r = await fetch('https://api.geoapify.com' + ep.path + '?' + out.toString(), { signal: AbortSignal.timeout(12000) });
+    r = await fetch('https://api.geoapify.com' + ep.path + '?' + out.toString(), ep.post ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(12000) } : { signal: AbortSignal.timeout(12000) });
   } catch (e) {
     res.status(502).json({ error: 'map service unreachable' });
     return;
   }
-  const body = await r.text();
+  const text = await r.text();
   res.setHeader('Content-Type', r.headers.get('content-type') || 'application/json');
   if (r.ok && ep.cache) res.setHeader('Cache-Control', `public, s-maxage=${ep.cache}, max-age=300`);
   else res.setHeader('Cache-Control', 'no-store');
   // Never pass Geoapify's own auth errors through as-is: they can echo the request URL, which holds the key
   if (r.status === 401 || r.status === 403) { res.status(502).json({ error: 'map service rejected the server key' }); return; }
-  res.status(r.status).send(body.split(key).join(''));
+  res.status(r.status).send(text.split(key).join(''));
 }

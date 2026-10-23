@@ -13,8 +13,8 @@ export default async function handler(req, res) {
   const from = origin || (referer ? new URL(referer).origin : '');
   if (from && ORIGINS.some(o => o.test(from))) { if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); } }
   else if (from) { res.status(403).json({ error: 'origin not allowed' }); return; }
-  if (req.method === 'OPTIONS') { res.setHeader('Access-Control-Allow-Methods', 'GET'); res.status(204).end(); return; }
-  if (req.method !== 'GET') { res.status(405).json({ error: 'GET only' }); return; }
+  if (req.method === 'OPTIONS') { res.setHeader('Access-Control-Allow-Methods', 'GET, POST'); res.setHeader('Access-Control-Allow-Headers', 'Content-Type'); res.status(204).end(); return; }
+  if (req.method !== 'GET' && !(req.method === 'POST' && new URL(req.url, 'http://local').searchParams.get('ep') === 'route')) { res.status(405).json({ error: 'wrong method' }); return; }
 
   const key = process.env.TOMTOM_KEY;
   if (!key) { res.status(503).json({ error: 'traffic is not configured' }); return; }
@@ -34,7 +34,13 @@ export default async function handler(req, res) {
   } else { res.status(404).json({ error: 'unknown endpoint' }); return; }
 
   let r;
-  try { r = await fetch(target, { signal: AbortSignal.timeout(12000) }); } catch (e) { res.status(502).json({ error: 'traffic service unreachable' }); return; }
+  let opt = { signal: AbortSignal.timeout(12000) };
+  if (req.method === 'POST') {   // a route that avoids areas sends them as a JSON body
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    if (body.length > 20000) { res.status(413).json({ error: 'request too large' }); return; }
+    opt = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: opt.signal };
+  }
+  try { r = await fetch(target, opt); } catch (e) { res.status(502).json({ error: 'traffic service unreachable' }); return; }
   if (r.status === 401 || r.status === 403) { res.status(502).json({ error: 'traffic service rejected the server key' }); return; }
   res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
   res.setHeader('Cache-Control', q.get('ep') === 'flow' && r.ok ? 'public, s-maxage=120, max-age=60' : 'no-store');
