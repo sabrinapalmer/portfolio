@@ -2295,14 +2295,14 @@ async function checkTolls(list) {   // marks each route's toll stretches as paid
 const PORTS = [
   ['San Ysidro', '', 32.5422, -117.0291], ['Otay Mesa', 'passenger', 32.5507, -116.9384], ['Tecate', '', 32.5764, -116.6275],
   ['Calexico', 'west', 32.6646, -115.4988], ['Calexico', 'east', 32.6738, -115.3880], ['Andrade', '', 32.7180, -114.7286],
-  ['San Luis', '', 32.4855, -114.7824], ['Lukeville', '', 31.8803, -112.8167], ['Sasabe', '', 31.4828, -111.5436],
+  ['San Luis', 'san luis i', 32.4855, -114.7824], ['Lukeville', '', 31.8803, -112.8167], ['Sasabe', '', 31.4828, -111.5436],
   ['Nogales', 'deconcini', 31.3330, -110.9425], ['Nogales', 'mariposa', 31.3348, -110.9750], ['Naco', '', 31.3346, -109.9481],
   ['Douglas', '', 31.3343, -109.5603], ['Columbus', '', 31.7840, -107.6362], ['Santa Teresa', '', 31.7836, -106.6801],
   ['El Paso', 'bridge of the americas', 31.7643, -106.4511], ['El Paso', 'paso del norte', 31.7550, -106.4843], ['El Paso', 'ysleta', 31.6739, -106.3368], ['El Paso', 'stanton', 31.7546, -106.4826],
   ['Presidio', '', 29.5608, -104.3720], ['Del Rio', '', 29.3270, -100.9280], ['Eagle Pass', 'bridge i', 28.7080, -100.5110], ['Eagle Pass', 'bridge ii', 28.6950, -100.5060],
   ['Laredo', 'bridge i', 27.4999, -99.5072], ['Laredo', 'bridge ii', 27.5050, -99.5025], ['Laredo', 'colombia', 27.7000, -99.7440],
-  ['Roma', '', 26.4060, -99.0190], ['Rio Grande City', '', 26.3700, -98.8080], ['Hidalgo', '', 26.0950, -98.2690], ['Pharr', '', 26.0920, -98.1980],
-  ['Progreso', '', 26.0610, -97.9500], ['Brownsville', 'gateway', 25.9010, -97.4960], ['Brownsville', 'b&m', 25.8930, -97.5050], ['Brownsville', 'veterans', 25.8870, -97.4790], ['Brownsville', 'los indios', 26.0400, -97.7380]
+  ['Roma', '', 26.4060, -99.0190], ['Rio Grande City', '', 26.3700, -98.8080], ['Hidalgo', 'hidalgo', 26.0950, -98.2690], ['Hidalgo', 'pharr', 26.0920, -98.1980], ['Hidalgo', 'anzalduas', 26.1290, -98.3290],
+  ['Progreso', 'progreso', 26.0610, -97.9500], ['Progreso', 'donna', 26.0690, -98.0500], ['Brownsville', 'gateway', 25.9010, -97.4960], ['Brownsville', 'b&m', 25.8930, -97.5050], ['Brownsville', 'veterans', 25.8870, -97.4790], ['Brownsville', 'los indios', 26.0400, -97.7380]
 ];
 const LANES = { standard: 'Regular lane', ready: 'Ready Lane', sentri: 'SENTRI' };
 let borderData = null, borderAt = 0;
@@ -2331,7 +2331,8 @@ async function checkBorder(list) {
   if (!ports) return;
   list.forEach(rt => {
     const b = rt.border; if (!b || !b.north) return;
-    const hit = ports.find(p => p.port.toLowerCase().includes(b.port.toLowerCase()) && (!b.crossing || p.crossing.toLowerCase().includes(b.crossing)));
+    const lk = prefs.lane || 'standard', cand = ports.filter(p => p.port.toLowerCase().includes(b.port.toLowerCase()) && (!b.crossing || p.crossing.toLowerCase().includes(b.crossing)));
+    const hit = cand.find(p => p[lk] && p[lk].minutes != null) || cand.find(p => !/pending/i.test((p[lk] || {}).status || '')) || cand[0];   // skip duplicate entries with no numbers
     if (!hit) return;
     const l = hit[prefs.lane || 'standard'];
     b.lane = LANES[prefs.lane || 'standard']; b.wait = l && l.minutes != null ? l.minutes : null; b.status = l ? l.status : ''; b.updated = l ? l.updated : '';

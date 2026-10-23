@@ -17,14 +17,16 @@ export default async function handler(req) {
   const [w, s, e, n] = b;
   if (e <= w || n <= s || e - w > 0.26 || n - s > 0.26) return bad();   // one grid cell at most
   const q = `[out:json][timeout:20];(node["barrier"="toll_booth"](${s},${w},${n},${e});node["highway"="toll_gantry"](${s},${w},${n},${e}););out body;`;
-  let d;
-  try {
-    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'BrinaMaps (sabrinapalmer.com/map)' }, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) throw new Error('status ' + r.status);
-    d = await r.json();
-  } catch (err) {
-    return new Response('{"error":"toll data unavailable"}', { status: 502, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, cors) });
+  // Two public Overpass servers; the second is tried when the first is busy
+  let d, why = '';
+  for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']) {
+    try {
+      const r = await fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+      if (!r.ok) { why += host + ' ' + r.status + '; '; continue; }
+      d = await r.json(); break;
+    } catch (err) { why += host + ' ' + (err.name || 'error') + '; '; }
   }
+  if (!d) return new Response(JSON.stringify({ error: 'toll data unavailable', why }), { status: 502, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, cors) });
   const booths = (d.elements || []).filter(x => x.type === 'node').map(x => [+x.lat.toFixed(6), +x.lon.toFixed(6)]);
   return new Response(JSON.stringify({ booths }), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'public, s-maxage=604800, max-age=86400' }, cors) });
 }
