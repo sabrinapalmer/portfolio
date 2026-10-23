@@ -16,12 +16,12 @@ export async function GET(req) {
   if (b.length !== 4 || b.some(n => !isFinite(n))) return bad();
   const [w, s, e, n] = b;
   if (e <= w || n <= s || e - w > 0.26 || n - s > 0.26) return bad();   // one grid cell at most
-  const q = `[out:json][timeout:20];(node["barrier"="toll_booth"](${s},${w},${n},${e});node["highway"="toll_gantry"](${s},${w},${n},${e}););out body;`;
+  const q = `[out:json][timeout:15];(node["barrier"="toll_booth"](${s},${w},${n},${e});node["highway"="toll_gantry"](${s},${w},${n},${e}););out skel qt;`;
   // Two public Overpass servers; the second is tried when the first is busy
   let d, why = '';
-  for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']) {
+  for (const host of ['https://overpass-api.de/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']) {
     try {
-      const r = await fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.timeout(13000) });
+      const r = await fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.timeout(14000) });
       if (!r.ok) { why += host + ' ' + r.status + '; '; continue; }
       d = await r.json(); break;
     } catch (err) { why += host + ' ' + (err.name || 'error') + '; '; }
