@@ -71,12 +71,19 @@
   /* Floating buttons */
   #fabs { position:fixed; right:10px; bottom:calc(var(--lift, 20px) + env(safe-area-inset-bottom)); z-index:9; display:flex; flex-direction:column; gap:8px; }
   #fabs button { background:var(--card); box-shadow:var(--shadow); width:48px; height:48px; }
+  #fabs #locate.on { color:var(--accent); box-shadow:var(--shadow), inset 0 0 0 2px var(--accent); }
 
   /* Saved and recent chips */
   #quick { position:fixed; left:0; right:64px; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:9; display:flex; gap:6px; padding:6px 10px; overflow-x:auto; scrollbar-width:none; }
   #quick::-webkit-scrollbar { display:none; }
   #quick button { background:var(--card); box-shadow:0 2px 8px rgba(0,0,0,.14); flex:0 0 auto; max-width:140px; overflow:hidden; text-overflow:ellipsis; padding:6px 11px; font-size:12.5px; font-weight:600; }
-  #quick button.saved { color:var(--accent); }
+  #quick button.saved, #quick button.home, #quick button.work { color:var(--accent); }
+  #quick button { display:inline-flex; align-items:center; gap:5px; }
+  #quick button svg { width:15px; height:15px; flex:0 0 auto; stroke-width:2.2; }
+  #quick button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #quick button.add { color:var(--muted); }
+  .placeRow { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0; }
+  .placeRow b { width:48px; } .placeRow span { flex:1 1 140px; min-width:0; font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   body.dest #quick, body.nav #quick { display:none; }
 
   /* Route sheet */
@@ -130,9 +137,9 @@
 
   /* Preferences sheet */
   #scrim { position:fixed; inset:0; z-index:19; background:rgba(40,20,30,.35); display:none; }
-  .sheet { z-index:20; top:auto; bottom:0; left:0; right:0; max-width:none; width:auto; border-radius:28px 28px 0 0; padding:8px 16px calc(18px + env(safe-area-inset-bottom)); max-height:86vh; overflow:auto; display:none; }
+  .sheet { z-index:20; top:auto; bottom:var(--kb, 0px); left:0; right:0; max-width:none; width:auto; border-radius:28px 28px 0 0; padding:8px 16px calc(18px + env(safe-area-inset-bottom)); max-height:calc(86vh - var(--kb, 0px)); overflow:auto; display:none; transition:bottom .2s; }
   @media (min-width:700px) { .panel.sheet { left:50%; right:auto; width:460px; transform:translateX(-50%); bottom:16px; border-radius:28px; } }
-  body.prefs #scrim, body.prefs #prefs, body.meet #scrim, body.meet #meet, body.steps #scrim, body.steps #navSteps, body.menu #scrim, body.menu #navMenu, body.stops #scrim, body.stops #stops, body.loc #scrim, body.loc #locSheet { display:block; }
+  body.prefs #scrim, body.prefs #prefs, body.meet #scrim, body.meet #meet, body.steps #scrim, body.steps #navSteps, body.menu #scrim, body.menu #navMenu, body.stops #stops, body.trip #scrim, body.trip #trip, body.ropts #scrim, body.ropts #routeOpts, body.loc #scrim, body.loc #locSheet { display:block; }
   #locSteps { margin:6px 0 14px; padding-left:20px; font-size:14px; }
   #locSteps li { margin-bottom:8px; }
   .sheet h2 { font-size:20px; font-weight:700; margin:10px 0 2px; display:flex; justify-content:space-between; align-items:center; }
@@ -182,9 +189,39 @@
   #nav, #navbar, #arrived, #recenter { display:none; }
   body.nav #top, body.nav #bottom, body.nav #fabs button:not(#fabStop) { display:none !important; }
   #fabStop { display:none; }
-  body.dest #fabStop, body.nav #fabStop { display:block; }
+  body.dest #fabStop, body.nav #fabStop { display:flex; }
+  #fabs #fabStop { width:auto; height:44px; padding:0 14px 0 10px; border-radius:22px; align-items:center; gap:6px; align-self:flex-end; font-weight:700; color:var(--accent); }
+  #fabStop svg { width:20px; height:20px; }
+  button.pill { border:1.5px solid var(--accent); color:var(--accent); background:transparent; border-radius:999px; padding:7px 12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
+  button.pill svg { width:16px; height:16px; stroke-width:2.8; }
+  .stopBtns { display:flex; gap:6px; align-items:center; }
+  #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
+  #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
+  body.picking #pickBar { display:flex; } body.picking #top, body.picking #nav { visibility:hidden; }
+  #pickBar span { flex:1; }
+  .stopOpt { min-width:24px; height:24px; padding:0 6px; border-radius:12px; background:var(--warn); color:#fff; border:2.5px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.35); font:800 12px/19px system-ui; text-align:center; cursor:pointer; }
+  #modeRow { gap:8px; align-items:center; }
+  #modeRow .seg { flex:1; }
+  #openRouteOpts { padding:6px 10px; font-size:13px; flex:0 0 auto; }
+  #optsSum { display:block; width:100%; text-align:left; font-size:12px; padding:2px 16px 6px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #tripList { padding:0; list-style:none; }
+  #tripList li { display:flex; align-items:center; gap:10px; padding:10px 6px; cursor:pointer; border-radius:14px; }
+  #tripList li:active { background:var(--soft); }
+  #tripList li > span { flex:1; min-width:0; font-weight:600; }
+  #tripList small { display:block; color:var(--muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #tripList em { font-style:normal; font-size:12px; color:var(--muted); text-align:right; }
+  #tripList i { flex:0 0 26px; height:26px; border-radius:50%; display:grid; place-items:center; font-style:normal; font-weight:800; font-size:13px; background:var(--warn); color:#fff; }
+  #tripList li.start i { background:var(--start); } #tripList li.end i { background:var(--accent); }
+  #tripList button.x { flex:0 0 32px; height:32px; border-radius:50%; background:var(--soft); color:var(--fg); font-size:18px; line-height:1; padding:0; }
+  #navEta { cursor:pointer; }
+  .chips button.on { background:var(--accent); color:var(--accent-ink); }
+  .chips button.busy { animation:busy 1s ease-in-out infinite; }
+  @keyframes busy { 50% { opacity:.55; } }
+  .pin.via { color:#fff; font:800 12px/1 system-ui; display:grid; place-items:center; }
   body.nav #fabs { bottom:calc(150px + env(safe-area-inset-bottom)); }
   #stopQ, #meetName { width:100%; box-sizing:border-box; }
+  #nav.peek { filter:saturate(.75) brightness(.95); }
+  #nav { touch-action:pan-y; user-select:none; -webkit-user-select:none; }
   body.nav #nav { display:flex; gap:14px; align-items:center; overflow:hidden; top:calc(36px + env(safe-area-inset-top)); padding:14px 18px; background:var(--accent); color:var(--accent-ink); }
   #navArrow svg { width:54px; height:54px; stroke-width:3.4; }
   #navDist { font-size:30px; font-weight:700; line-height:1.05; }
@@ -248,12 +285,12 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 
 <div id="top" class="panel">
   <div class="row">
-    <div class="field"><i class="to"></i><input id="to" type="text" placeholder="Where to?" autocomplete="off" enterkeyhint="search"><button id="toClear" class="x" aria-label="Clear">&times;</button></div>
+    <div class="field"><i class="to"></i><input id="to" type="text" placeholder="Where to?" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button id="toClear" class="x" aria-label="Clear">&times;</button></div>
     <button id="plan" class="round" title="Plan a route from somewhere else" aria-label="Plan a route from somewhere else"><svg viewBox="0 0 24 24"><circle cx="6" cy="18.500" r="2.300"/><circle cx="18" cy="5.500" r="2.300"/><path d="M8.300 18.500H14a3.500 3.500 0 0 0 0-7h-4a3.500 3.500 0 0 1 0-7h5.700"/></svg></button>
-    <button id="openPrefs" class="round" title="Preferences" aria-label="Preferences"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+    <button id="openPrefs" class="round" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
   </div>
   <div class="row" id="fromRow">
-    <div class="field"><i></i><input id="from" type="text" placeholder="Starting from..." autocomplete="off" enterkeyhint="search"></div>
+    <div class="field"><i></i><input id="from" type="text" placeholder="Starting from..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></div>
     <button id="swap" class="round" title="Swap start and destination" aria-label="Swap"><svg viewBox="0 0 24 24"><path d="M8 4v15M8 4L4 8M8 4l4 4M16 20V5M16 20l-4-4M16 20l4-4"/></svg></button>
   </div>
   <ul id="suggest"></ul>
@@ -264,13 +301,14 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
       <button data-mode="bicycle">Bike</button>
       <button data-mode="pedestrian">Walk</button>
     </div>
+    <button id="openRouteOpts" class="pill" title="Route options"><svg viewBox="0 0 24 24"><circle cx="6" cy="18.5" r="2.3"/><circle cx="18" cy="5.5" r="2.3"/><path d="M8.3 18.5H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.7"/></svg>Options</button>
   </div>
   <div id="status"></div>
 </div>
 
 <div id="quick"></div>
 <div id="fabs">
-  <button id="fabStop" class="round" title="Add a stop" aria-label="Add a stop"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.500-6-10a6 6 0 0 1 12 0c0 4.500-6 10-6 10z"/><path d="M12 8.500v5M9.500 11h5"/></svg></button>
+  <button id="fabStop" title="Add a stop on the way" aria-label="Add a stop on the way"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.500-6-10a6 6 0 0 1 12 0c0 4.500-6 10-6 10z"/><path d="M12 8.500v5M9.500 11h5"/></svg><span>Add stop</span></button>
   <button id="openMeet" class="round" title="Meet in the middle" aria-label="Meet in the middle"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c.5-3.500 2.500-5.500 5.500-5.500s5 2 5.500 5.500M14.500 14c3.200-.6 5.600 1 6.500 4.500"/></svg></button>
   <button id="locate" class="round" title="My location" aria-label="My location"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
 </div>
@@ -289,28 +327,15 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <div class="trow"><div class="seg" id="tmode"><button data-t="now" class="on">Leave now</button><button data-t="by">Arrive by</button></div><input id="arriveAt" type="time" aria-label="Arrive by"></div>
     <div class="trow" id="parkRow"><span id="parkNote"></span><button id="parkLess" class="round" aria-label="Less parking time">&minus;</button><b id="parkMin"></b><button id="parkMore" class="round" aria-label="More parking time">+</button></div>
   </div>
-  <div id="stepsHead"><button id="toggleSteps" class="ghost">Show steps</button><button id="addStop" class="ghost">Add a stop</button></div>
+  <button id="optsSum" class="ghost"></button>
+  <div id="stepsHead"><button id="toggleSteps" class="ghost">Show steps</button><span class="stopBtns"><button id="tripStops" class="pill">Stops</button><button id="addStop" class="pill add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add stop</button></span></div>
   <ol id="steps"></ol>
 </div>
 
 <div id="scrim"></div>
-<div id="prefs" class="panel sheet">
-  <h2>Preferences <button id="closePrefs" class="go">Done</button></h2>
-  <p>These stick. Every route follows them until you change them.</p>
-  <h3>Map colours</h3>
-  <div id="themes"></div>
-  <h3>Font</h3>
-  <div class="chips" id="fonts"></div>
-  <h3>Map details</h3>
-  <div class="chips">
-    <button data-map="showPois">Shop and cafe icons</button>
-    <button data-map="showBuildings">Buildings</button>
-    <button data-map="autoNight">Dark theme at night</button>
-  </div>
-  <h3>Label size</h3>
-  <div class="chips" data-mapset="labels"><button data-v="s">Small</button><button data-v="m">Standard</button><button data-v="l">Large</button></div>
-  <h3>Distances</h3>
-  <div class="chips" data-mapset="units"><button data-v="mi">Miles</button><button data-v="km">Kilometres</button></div>
+<div id="routeOpts" class="panel sheet">
+  <h2>Route options <button class="go" data-close>Done</button></h2>
+  <p>Every route follows these until you change them. Your current route updates as you tap.</p>
   <h3>Always avoid</h3>
   <div class="chips">
     <button data-pref="noHwy">Highways</button>
@@ -332,12 +357,6 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <button data-pref="bikeFlat">Avoid hills</button>
     <button data-pref="bikePaths">Prefer bike paths and quiet streets</button>
   </div>
-  <h3>Voice directions</h3>
-  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <h3>On-screen directions</h3>
-  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <h3>Extra guidance</h3>
-  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
   <h3>Wildfires</h3>
   <p>Active US wildfire areas from the national fire agencies (NIFC), updated a few times a day. Routes keep at least half a mile from fire areas that are not fully contained. This does not include evacuation zones or road closures: follow local officials.</p>
   <div class="chips"><button data-pref="fires">Show and avoid wildfires</button></div>
@@ -352,6 +371,34 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <label>Length (ft)<div class="field"><input id="rigL" type="number" inputmode="decimal" step="1" min="10" max="80"></div></label>
     <label>Weight (tons)<div class="field"><input id="rigW" type="number" inputmode="decimal" step="0.5" min="1" max="40"></div></label>
   </div>
+</div>
+<div id="prefs" class="panel sheet">
+  <h2>Settings <button id="closePrefs" class="go">Done</button></h2>
+  <p>How the app looks, talks and stores maps. Avoiding tolls, highways and the like is under Route options.</p>
+  <h3>Map colours</h3>
+  <div id="themes"></div>
+  <h3>Font</h3>
+  <div class="chips" id="fonts"></div>
+  <h3>Map details</h3>
+  <div class="chips">
+    <button data-map="showPois">Shop and cafe icons</button>
+    <button data-map="showBuildings">Buildings</button>
+    <button data-map="autoNight">Dark theme at night</button>
+  </div>
+  <h3>Label size</h3>
+  <div class="chips" data-mapset="labels"><button data-v="s">Small</button><button data-v="m">Standard</button><button data-v="l">Large</button></div>
+  <h3>Distances</h3>
+  <div class="chips" data-mapset="units"><button data-v="mi">Miles</button><button data-v="km">Kilometres</button></div>
+  <h3>Voice directions</h3>
+  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>On-screen directions</h3>
+  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>Extra guidance</h3>
+  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
+  <h3>Home and work</h3>
+  <p>They show first under the search box.</p>
+  <div class="placeRow"><b>Home</b><span id="homeNow"></span><button id="homeHere" class="pill">This place</button><button id="homeFind" class="pill">Search</button><button id="homeDel" class="ghost">Remove</button></div>
+  <div class="placeRow"><b>Work</b><span id="workNow"></span><button id="workHere" class="pill">This place</button><button id="workFind" class="pill">Search</button><button id="workDel" class="ghost">Remove</button></div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
   <h3>Offline map</h3>
@@ -387,7 +434,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 
 <div id="meet" class="panel sheet">
   <h2>Meet in the middle <button id="closeMeet" class="ghost">Close</button></h2>
-  <div class="field"><input id="friend" type="text" placeholder="Where is your friend?" autocomplete="off" enterkeyhint="search"></div>
+  <div class="field"><input id="friend" type="text" placeholder="Where is your friend?" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></div>
   <ul id="meetSuggest"></ul>
   <div class="who"><b>They will</b><div class="seg" data-meet="friendMode"><button data-v="auto">Drive</button><button data-v="bicycle">Bike</button><button data-v="pedestrian">Walk</button></div></div>
   <div class="who"><button id="meetGo" class="go" style="flex:1">Find a spot</button><button id="meetMore" class="ghost">Options</button></div>
@@ -396,7 +443,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <div class="chips" data-meet="kind">
       <button data-v="any">Anything</button><button data-v="coffee">Coffee</button><button data-v="food">Food</button><button data-v="drinks">Drinks</button><button data-v="park">A park</button>
     </div>
-    <div class="field"><input id="meetName" type="text" placeholder="Or a place name, like Starbucks" autocomplete="off" enterkeyhint="search"></div>
+    <div class="field"><input id="meetName" type="text" placeholder="Or a place name, like Starbucks" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></div>
     <small id="meetMe"></small>
   </div>
   <div id="meetMsg"></div>
@@ -443,11 +490,18 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 </div>
 <div id="stops" class="panel sheet">
   <h2>Add a stop <button class="go" data-close>Done</button></h2>
-  <div class="field"><input id="stopQ" type="text" placeholder="Search a place or address" autocomplete="off" enterkeyhint="search"></div>
-  <p>Or pick a kind of place close to your route.</p>
+  <div class="field"><input id="stopQ" type="text" placeholder="Search a place or address" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></div>
+  <p>Or pick a kind of place close to your route, or <button id="pickMap" class="pill">Pick on the map</button></p>
   <div class="chips" id="stopKinds"></div>
   <div id="stopMsg"></div>
   <ul id="stopList" class="list"></ul>
+</div>
+<div id="pickBar" class="panel"><span>Tap the map where you want to stop</span><button id="pickCancel" class="ghost">Cancel</button></div>
+<div id="trip" class="panel sheet">
+  <h2>Your trip <button class="go" data-close>Done</button></h2>
+  <p id="tripMsg"></p>
+  <ol id="tripList" class="list"></ol>
+  <div class="chips"><button id="tripAdd" class="pill add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add stop</button></div>
 </div>
 <div id="arrived" class="panel"><b>You made it!</b><p id="arrivedAt"></p><button id="arrivedOk" class="go">Done</button></div>
 
@@ -572,7 +626,10 @@ const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/ca
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
-const pts = { from: null, to: null, via: null }, markers = { from: null, to: null, via: null };   // via: one optional stop on the way
+let places = store('map.places') || { home: null, work: null }, visits = store('map.visits') || {}, settingPlace = null;   // visits: how often you go to each place
+const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
+const tripPts = () => [pts.from, ...pts.stops, pts.to].filter(Boolean);
+const stopName = i => { const st = pts.stops[i]; return st ? st.name || (st.label || '').split(',')[0] : ''; };
 let tempAvoid = null;   // a point to route around for this trip only
 let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBackup = false;
 let planning = false;   // false: every route starts from where you are now; true: you chose a starting point
@@ -584,10 +641,21 @@ const savePrefs = () => store('map.prefs', prefs);
 
 // ---------- Helpers ----------
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-function status(msg) { $('status').textContent = msg || ''; }
+// Messages under the search box go away on their own: 6 s for news, 15 s for warnings; "...in progress" lines stay
+// until something replaces them (20 s at most, so none can get stuck)
+let statusTimer = 0;
+function status(msg) {
+  clearTimeout(statusTimer);
+  $('status').textContent = msg || '';
+  if (!msg) return;
+  const ms = $('status').classList.contains('warn') ? 15000 : /\.\.\.$/.test(msg) ? 20000 : 6000;
+  statusTimer = setTimeout(() => { if ($('status').textContent === msg) { $('status').textContent = ''; $('status').classList.remove('warn'); } }, ms);
+}
 function fmtDist(mi) {
   if (prefs.units === 'km') { const km = mi * 1.60934; return km < 0.2 ? Math.max(10, Math.round(km * 100) * 10) + ' m' : (km < 10 ? km.toFixed(1) : Math.round(km)) + ' km'; }
-  return mi < 0.1 ? Math.max(10, Math.round(mi * 5280 / 10) * 10) + ' ft' : (mi < 10 ? mi.toFixed(1) : Math.round(mi)) + ' mi';
+  if (mi < 0.1) return Math.max(10, Math.round(mi * 5280 / 10) * 10) + ' ft';
+  const v = mi < 10 ? mi.toFixed(1) : String(Math.round(mi));
+  return v + (v === '1.0' || v === '1' ? ' mile' : ' miles');   // spelled out: "mi" read like minutes next to drive times
 }
 const fmtSpeed = mph => prefs.units === 'km' ? Math.round(mph * 1.60934) + ' km/h' : Math.round(mph) + ' mph';
 function fmtTime(s) { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
@@ -643,7 +711,7 @@ const THEMES = {
   brina:    { group: 'BrinaMaps', label: 'Brina', ui: 'light', accent: '#8b5cf6', soft: '#ede7ff', bg: '#f7f4ff', land2: '#efeafb', water: '#9fd3f5', park: '#bfe8cc', building: '#e7e1f4', bldLine: '#d4cbea', casing: '#b6a8db',
               minor: '#ffffff', mid: '#fff0c4', major: '#ffd98a', motorway: '#c4a1ff', path: '#dbd2ef', rail: '#bdb0dc', text: '#2a1f4a', textRoad: '#463a6e', halo: '#fcfbff', boundary: '#a48ce0' },
   twilight: { group: 'BrinaMaps', label: 'Twilight', ui: 'dark', accent: '#b67cff', ink: '#1a1033', soft: '#382a5c', bg: '#1b1838', land2: '#211d44', water: '#123b6e', park: '#1e4a48', building: '#2a2550', bldLine: '#3b346e', casing: '#0f0d24',
-              minor: '#4f4790', mid: '#7466c9', major: '#a58cff', motorway: '#67e8f9', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
+              minor: '#4f4790', mid: '#7466c9', major: '#a58cff', motorway: '#e2d8ff', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
   blossom:  { group: 'Soft', label: 'Blossom', ui: 'light', accent: '#f0527f', soft: '#ffe6ec', bg: '#fbf4ea', land2: '#f5ebde', water: '#a5d6f0', park: '#bfe6b8', building: '#ece0d2', bldLine: '#dccbb9', casing: '#c9b6a6',
               minor: '#ffffff', mid: '#fff3c9', major: '#ffe08f', motorway: '#ffc278', path: '#e0cfc0', rail: '#c7b6ab', text: '#33262f', textRoad: '#5a4652', halo: '#fffaf4', boundary: '#c59db0' },
   sorbet:   { group: 'Soft', label: 'Sorbet', ui: 'light', accent: '#e8457c', soft: '#ffe1ea', bg: '#fff4f5', land2: '#fdeaed', water: '#b3e4f6', park: '#c4efd0', building: '#f5e1e4', bldLine: '#e8cdd3', casing: '#d9b3bf',
@@ -755,26 +823,30 @@ async function themedStyle() {
   }
   return restyle(await offlineStyle(JSON.parse(rawStyle)), theme());
 }
-// A route colour no street uses in that theme: a vivid magenta-pink (a deeper one on light maps), unless a theme sets its own
-const routeColor = t => t.route || (t.ui === 'dark' ? '#ff4fc8' : '#e0218a');
+// The route is a bright blue: a colour traffic never uses (red, orange, yellow, green), and one no street uses.
+const routeColor = t => t.route || (t.ui === 'dark' ? '#3d9bff' : '#1f6fff');
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
   map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
-  // The chosen route glows above the streets: a soft wide halo, a contrasting edge, the route colour, and a bright core.
-  // Widths grow with zoom so the route always stays wider than the streets under it.
+  // The chosen route glows above the streets: a wide soft halo and a tighter bright one under a thick line with a
+  // lighter centre, in a colour no street uses. Light maps get a thin white edge; dark maps let the glow do that.
+  // Widths grow with zoom so the route always stays wider than the biggest road under it.
   const t = theme(), dark = t.ui === 'dark', rc = routeColor(t), z = (a, b2) => ['interpolate', ['exponential', 1.5], ['zoom'], 8, a, 18, b2];
-  line('alt-casing', false, { 'line-color': dark ? '#0b0a18' : '#ffffff', 'line-width': z(7, 16), 'line-opacity': .9 });
-  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(4.5, 11), 'line-opacity': .95 });
-  line('glow', true, { 'line-color': rc, 'line-width': z(20, 44), 'line-blur': z(10, 22), 'line-opacity': dark ? .55 : .35 });
-  line('casing', true, { 'line-color': dark ? '#0b0a18' : '#ffffff', 'line-width': z(9.5, 22) });
-  line('sel', true, { 'line-color': rc, 'line-width': z(6, 15) });
-  line('core', true, { 'line-color': '#ffffff', 'line-width': z(1.4, 3.5), 'line-opacity': dark ? .75 : .55, 'line-blur': .5 });
+  const tint = (hex, f) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - f) + 255 * f).toString(16).padStart(2, '0')).join('');
+  line('alt-casing', false, { 'line-color': dark ? t.bg : '#ffffff', 'line-width': z(7, 18), 'line-opacity': .9 });
+  line('alt', false, { 'line-color': css('--alt'), 'line-width': z(4.5, 12), 'line-opacity': .95 });
+  line('glow', true, { 'line-color': rc, 'line-width': z(28, 76), 'line-blur': z(15, 38), 'line-opacity': dark ? .5 : .4 });
+  line('glow2', true, { 'line-color': rc, 'line-width': z(14, 36), 'line-blur': z(5, 12), 'line-opacity': dark ? .85 : .6 });
+  if (!dark) line('casing', true, { 'line-color': '#ffffff', 'line-width': z(11, 29) });
+  line('sel', true, { 'line-color': rc, 'line-width': z(8, 23) });
+  line('core', true, { 'line-color': tint(rc, dark ? .55 : .4), 'line-width': z(2.6, 7.5), 'line-blur': z(1.2, 3.5), 'line-opacity': .9 });
   map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
-  map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
-  if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['==', ['get', 'kind'], 'fire'], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
+  map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
+  map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
+  map.addLayer({ id: 'fire-dot', type: 'circle', source: 'zones', filter: ['==', ['get', 'kind'], 'firept'], paint: { 'circle-color': '#e4572e', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 10, 9], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-blur': 0.05 } });
+  if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['all', ['==', ['get', 'kind'], 'fire'], ['==', ['geometry-type'], 'Polygon']], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
   drawZones();
   addTraffic();
 }
@@ -819,9 +891,18 @@ mapReady = (async () => {
   const v = store('map.view');
   map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false });
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
-  map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 6) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
+  map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 4.5) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
   map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
-  map.on('dragstart', () => { if (nav) { nav.follow = false; document.body.classList.add('free'); } });
+  map.on('dragstart', e => {
+    if (!e.originalEvent) return;   // only your own drags, not the map's own moves
+    followMe = false; $('locate').classList.remove('on');
+    if (nav) { nav.follow = false; document.body.classList.add('free'); }
+  });
+  map.on('zoomend', e => { if (nav && e.originalEvent) { nav.userZoom = map.getZoom(); nav.zoomHold = Date.now() + 30000; } });   // a pinch is kept, not snapped back
+  const touching = on => () => { if (nav) nav.touching = on; };
+  map.getCanvasContainer().addEventListener('touchstart', touching(true), { passive: true });
+  map.getCanvasContainer().addEventListener('touchend', touching(false), { passive: true });
+  map.getCanvasContainer().addEventListener('touchcancel', touching(false), { passive: true });
   map.on('click', onMapClick); watchHolds();
   await new Promise(r => map.once('load', r));
   addRouteLayers();
@@ -865,8 +946,9 @@ function openPop(lngLat, div, opts) {
   return mapPop;
 }
 function onMapClick(e) {
+  if (picking) { pickedStop(e.lngLat); return; }
   if (mapPop && Date.now() - mapPopAt > 500) { mapPop.remove(); mapPop = null; return; }
-  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures(e.point, { layers: ['zone-fill'] }).find(f => f.properties.kind === 'fire');
+  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ['fire-dot', 'zone-fill'] }).find(f => /^fire/.test(f.properties.kind));
   if (fire) {
     const p = fire.properties, div = el('div', 'pop');
     div.append(el('b', '', p.title), el('small', '', p.info), el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
@@ -1109,6 +1191,7 @@ function settleEnter() {   // after Return, once every source has answered: keep
 let debounce;
 ['from', 'to', 'friend'].forEach(which => {
   const input = $(which);
+  if (which === 'to') input.addEventListener('blur', () => setTimeout(() => { if (settingPlace && !input.value.trim()) { settingPlace = null; input.placeholder = 'Where to?'; } }, 400));
   input.addEventListener('focus', () => { if (input.value) input.select(); if (!input.value.trim()) requestAnimationFrame(() => setTimeout(() => { if (document.activeElement === input && !input.value.trim()) shortcuts(which); }, 0)); });
   input.addEventListener('input', () => {
     clearTimeout(debounce);
@@ -1333,6 +1416,10 @@ async function setPointFromLatLng(which, lat, lon) {
 }
 
 function setPoint(which, p) {
+  if (which === 'to' && settingPlace) {
+    const kind = settingPlace; settingPlace = null; $('to').placeholder = 'Where to?'; $('to').value = '';
+    savePlace(kind, p); status((kind === 'home' ? 'Home' : 'Work') + ' saved: ' + (p.name || p.label.split(',')[0]) + '.'); return;
+  }
   if (which === 'from' && !p.auto && !planning) setPlanning(true, true);   // a hand-picked start means you are planning
   if (which === 'to' && !planning && pts.from) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }   // never reuse an old start
   pts[which] = p;
@@ -1372,16 +1459,46 @@ function setPlanning(on, keep) {
 
 function remember(p) {
   if (p.raw || p.label === 'My location') return;
+  const v = visits[p.label] || { n: 0 }; v.n++; v.at = Date.now(); v.p = { lat: p.lat, lon: p.lon, label: p.label, name: p.name };
+  visits[p.label] = v;
+  const keys = Object.keys(visits); if (keys.length > 60) { keys.sort((a, b) => (visits[a].n + visits[a].at / 864e7) - (visits[b].n + visits[b].at / 864e7)).slice(0, keys.length - 60).forEach(k => delete visits[k]); }
+  store('map.visits', visits);
   recent = [p].concat(recent.filter(r => r.label !== p.label)).slice(0, 6).map(r => ({ lat: r.lat, lon: r.lon, label: r.label, name: r.name }));
   store('map.recent', recent); drawQuick();
 }
 const isSaved = p => p && saved.some(s => s.label === p.label);
 function syncSave() { $('save').classList.toggle('on', !!isSaved(pts.to)); }
+// Quick buttons: Home, Work, saved places, then where you go most; recent places only fill the gaps
+const ICON = { home: '<svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>', work: '<svg viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>', saved: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.600-7 10-7 10z"/></svg>' };
 function drawQuick() {
   const q = $('quick'); q.innerHTML = '';
-  const seen = new Set(saved.map(s => s.label));
-  saved.map(p => [p, 'saved']).concat(recent.filter(r => !seen.has(r.label)).map(p => [p, ''])).forEach(([p, cls]) => {
-    const b = el('button', cls, p.name || p.label.split(',')[0]); b.onclick = () => setPoint('to', p); q.appendChild(b);
+  const seen = new Set(), chips = [];
+  const push = (p, kind, title) => { if (!p || seen.has(p.label)) return; seen.add(p.label); chips.push([p, kind, title || p.name || p.label.split(',')[0]]); };
+  push(places.home, 'home', 'Home'); push(places.work, 'work', 'Work');
+  saved.forEach(p => push(p, 'saved'));
+  Object.values(visits).filter(v => v.n >= 2).sort((a, b) => b.n - a.n || b.at - a.at).slice(0, 6).forEach(v => push(v.p, 'often'));
+  recent.forEach(p => { if (chips.length < 8) push(p, 'recent'); });
+  chips.slice(0, 10).forEach(([p, kind, title]) => {
+    const b = el('button', kind); b.innerHTML = ICON[kind] || ''; b.appendChild(el('span', '', title)); b.title = p.label;
+    b.onclick = () => setPoint('to', p); q.appendChild(b);
+  });
+  if (!places.home && !places.work) { const b = el('button', 'add'); b.innerHTML = ICON.home; b.appendChild(el('span', '', 'Set home')); b.onclick = () => setPlaceBySearch('home'); q.appendChild(b); }
+}
+function setPlaceBySearch(kind) {
+  settingPlace = kind; closeSheets();
+  $('to').placeholder = kind === 'home' ? 'Search for your home address' : 'Search for your work address';
+  $('to').value = ''; $('to').focus(); status('Pick your ' + kind + ' from the results.');
+}
+function savePlace(kind, p) {
+  places[kind] = p ? { lat: p.lat, lon: p.lon, label: p.label, name: p.name } : null;
+  store('map.places', places); drawQuick(); drawPlaces();
+}
+function drawPlaces() {
+  ['home', 'work'].forEach(kind => {
+    const p = places[kind];
+    $(kind + 'Now').textContent = p ? p.label : 'Not set';
+    $(kind + 'Here').style.display = pts.to && !pts.to.raw ? '' : 'none';
+    $(kind + 'Del').style.display = p ? '' : 'none';
   });
 }
 function drawLists() {
@@ -1583,7 +1700,7 @@ function inZone(p, z) {
 }
 // Points of a route inside a zone the trip can actually avoid (not one its start, stop or end is in)
 function zoneHits(coords, list) {
-  const ends = [pts.from, pts.via, pts.to].filter(Boolean).map(q => [q.lat, q.lon]);
+  const ends = tripPts().map(q => [q.lat, q.lon]);
   const live = (list || zones()).filter(z => !ends.some(e => inZone(e, z)));
   const out = [];
   if (!live.length) return out;
@@ -1591,7 +1708,7 @@ function zoneHits(coords, list) {
   return out;
 }
 function zonesAround() {   // zones that contain a trip end, so the warning can say so
-  const ends = [pts.from, pts.via, pts.to].filter(Boolean).map(q => [q.lat, q.lon]);
+  const ends = tripPts().map(q => [q.lat, q.lon]);
   return zones().filter(z => ends.some(e => inZone(e, z)));
 }
 // Wildfire areas from NIFC (WFIGS): current perimeters, plus incident points for new fires with no perimeter yet
@@ -1641,12 +1758,16 @@ function circleRing(c, r) { const out = []; for (let k = 0; k <= 32; k++) { cons
 function drawZones() {
   if (!map || !map.getSource('zones')) return;
   const feats = [];
-  if (prefs.fires) fires.forEach(f => feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } }));
+  if (prefs.fires) fires.forEach(f => {
+    feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
+    const c = f.c ? [f.c[1], f.c[0]] : [(f.box[0] + f.box[2]) / 2, (f.box[1] + f.box[3]) / 2];
+    if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Point', coordinates: c } });
+  });
   avoid.forEach(a => { if ((a.r || 120) > 300) feats.push({ type: 'Feature', properties: { kind: 'spot', active: true }, geometry: { type: 'Polygon', coordinates: [circleRing([a.lat, a.lon], a.r)] } }); });
   map.getSource('zones').setData({ type: 'FeatureCollection', features: feats });
 }
 function tripBox() {
-  const q = [pts.from, pts.via, pts.to].filter(Boolean);
+  const q = tripPts();
   return [Math.min(...q.map(x => x.lon)), Math.min(...q.map(x => x.lat)), Math.max(...q.map(x => x.lon)), Math.max(...q.map(x => x.lat))];
 }
 async function valhallaRoutes(quiet) {
@@ -1659,8 +1780,8 @@ async function valhallaRoutes(quiet) {
     : costing === 'bicycle' ? { use_ferry: veh.use_ferry, avoid_bad_surfaces: prefs.noUnpaved ? 1 : 0.25, use_hills: prefs.bikeFlat ? 0.05 : 0.5, use_roads: prefs.bikePaths ? 0.1 : 0.5, shortest: !!prefs.shortest }
     : { use_ferry: veh.use_ferry, shortest: !!prefs.shortest };
   const body = {
-    locations: [pts.from, pts.via, pts.to].filter(Boolean).map(q => ({ lat: q.lat, lon: q.lon })),
-    costing, costing_options: { [costing]: opt }, alternates: quiet || pts.via ? 0 : 2, units: 'miles', language: 'en-US'
+    locations: tripPts().map(q => ({ lat: q.lat, lon: q.lon })),
+    costing, costing_options: { [costing]: opt }, alternates: quiet || pts.stops.length ? 0 : 2, units: 'miles', language: 'en-US'
   };
   // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
   // misses the spot whenever the tap lands a few metres off the road or on the other side of a divided road.
@@ -1714,7 +1835,7 @@ async function valhallaRoutes(quiet) {
       coords = coords.concat(c);
       leg.maneuvers.forEach(m => {
         const arriving = m.type >= 4 && m.type <= 6, stop = arriving && !last;
-        const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : m.instruction;
+        const text = stop ? 'Arrive at stop ' + (li + 1) + (stopName(li) ? ', ' + stopName(li) : '') + '.' : m.instruction;
         const sg = m.sign || {}, signs = k => (sg[k] || []).map(x => x.text).join(' / ');
         steps.push({ instruction: text, say: stop ? text : m.verbal_pre_transition_instruction || m.instruction, short: stop ? 'Arrive at your stop.' : m.verbal_succinct_transition_instruction || m.instruction, multi: !!m.verbal_multi_cue,
           sign: [signs('exit_number_elements') && 'Exit ' + signs('exit_number_elements'), signs('exit_toward_elements') && 'toward ' + signs('exit_toward_elements')].filter(Boolean).join(', '),
@@ -1759,9 +1880,9 @@ function tomtomShort(m) {
   return w ? w + '.' : m.message || 'Continue.';
 }
 async function tomtomRoutes(quiet) {
-  const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
+  const locs = tripPts().map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
   const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
-    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.via ? 0 : 2)];
+    'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.stops.length ? 0 : 2)];
   if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
   if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
@@ -1786,9 +1907,10 @@ async function tomtomRoutes(quiet) {
       let best = Infinity, bi = 0; coords.forEach((c, i) => { const d = meters(c, p); if (d < best) { best = d; bi = i; } }); return bi;
     };
     const at = ins.map(idx);
+    let wp = 0;
     const steps = ins.map((m, i) => {
-      const k = m.maneuver || '', nx = ins[i + 1], arriving = /^ARRIVE/.test(k), stop = /^WAYPOINT/.test(k);
-      const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : m.message || tomtomShort(m);
+      const k = m.maneuver || '', nx = ins[i + 1], arriving = /^ARRIVE/.test(k), stop = /^WAYPOINT/.test(k), si = stop ? wp++ : -1;
+      const text = stop ? 'Arrive at stop ' + (si + 1) + (stopName(si) ? ', ' + stopName(si) : '') + '.' : m.message || tomtomShort(m);
       return { instruction: text, say: text, short: stop ? 'Arrive at your stop.' : tomtomShort(m), multi: false,
         sign: [m.exitNumber && 'Exit ' + m.exitNumber, m.signpostText && 'toward ' + m.signpostText].filter(Boolean).join(', '),
         begin: at[i], end: nx ? at[i + 1] : at[i], length: nx ? (nx.routeOffsetInMeters - m.routeOffsetInMeters) / 1609.34 : 0, time: nx ? nx.travelTimeInSeconds - m.travelTimeInSeconds : 0,
@@ -1814,7 +1936,7 @@ async function tomtomRoutes(quiet) {
 }
 async function osrmRoutes(quiet) {
   const profile = { auto: 'car', rig: 'car', bicycle: 'bike', pedestrian: 'foot' }[prefs.mode];
-  const url = `${ROUTER2}/routed-${profile}/route/v1/driving/${[pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lon + ',' + q.lat).join(';')}?overview=false&steps=true&geometries=polyline6&alternatives=${quiet ? 'false' : 3}`;
+  const url = `${ROUTER2}/routed-${profile}/route/v1/driving/${tripPts().map(q => q.lon + ',' + q.lat).join(';')}?overview=false&steps=true&geometries=polyline6&alternatives=${quiet ? 'false' : 3}`;
   const data = await (await fetch(url)).json();
   if (data.code !== 'Ok') throw new Error(data.message || 'No route found.');
   const out = data.routes.map(rt => {
@@ -1869,7 +1991,7 @@ function geoParse(d) {
           toll: parts.some(x => x.toll), ferry: parts.some(x => x.ferry), road_class: share(x => /motorway|trunk/.test(x.road_class || '')) > 0.5 ? 'motorway' : head.road_class,
           surface: share(x => /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(x.surface || '')) > 0.5 ? 'unpaved' : 'paved', instruction: head.instruction };
         const ins = st.instruction || {}, ty = geoType(ins.type), arriving = ty >= 4 && ty <= 6, stop = arriving && !last;
-        const text = stop ? 'Arrive at your stop' + (pts.via && pts.via.name ? ', ' + pts.via.name : '') + '.' : ins.text || 'Continue.';
+        const text = stop ? 'Arrive at stop ' + (li + 1) + (stopName(li) ? ', ' + stopName(li) : '') + '.' : ins.text || 'Continue.';
         steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
           sign: [ins.exitNumber && 'Exit ' + ins.exitNumber, ins.exitTowards && 'toward ' + [].concat(ins.exitTowards).join(' / ')].filter(Boolean).join(', '),
           begin: st.from_index + off, end: st.to_index + off, length: (st.distance || 0) / 1609.34, time: st.time || 0, road: (ins.streets || [])[0] || st.name || '',
@@ -1914,7 +2036,7 @@ function geoBreaks(t) {   // [{ why, p: [lat, lon] }] for the stretches of a rou
 }
 const geoRouting = () => (useGeo() || !FREE_OK) && !(FREE_OK && geoMissing().length);
 async function geoapifyRoutes(quiet) {
-  const where = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
+  const where = tripPts().map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
   const motor = prefs.mode === 'auto' || prefs.mode === 'rig';
   const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details' + (prefs.noBorders && motor ? ',admin_areas' : ''), units: 'metric', lang: 'en', format: 'geojson' };
   if (motor && prefs.shortest) base.type = 'short'; else if (motor && prefs.simple) base.type = 'less_maneuvers';
@@ -1936,7 +2058,7 @@ async function geoapifyRoutes(quiet) {
   }
   if (!trips.length) { const e = new Error('No route found.'); e.noRoute = true; throw e; }
   valhallaRoutes.stuck = stuck; geoapifyRoutes.blocked = 0;   // the route card reads the stuck flag from here
-  if (!quiet && !pts.via && motor && !prefs.shortest) { const alt = await ask({ type: 'short' }).catch(() => []); trips = trips.concat(alt); }
+  if (!quiet && !pts.stops.length && motor && !prefs.shortest) { const alt = await ask({ type: 'short' }).catch(() => []); trips = trips.concat(alt); }
   // Areas to avoid (fires, "avoid this area") and the paved / alley / border settings: block the roads the route used
   // that break them and ask again, up to three times. Each extra request costs a credit, so this only runs when needed.
   const problems = t => {
@@ -2007,7 +2129,7 @@ async function route(quiet) {
   found.forEach(describe);
   if (!prefs.showAll) { const note = found.note; found = sensible(found); found.note = note; }
   routes = found; selected = 0;
-  if (!fromSaved) store('map.trip', { at: Date.now(), mode: prefs.mode, from: pts.from, to: pts.to, via: pts.via || null, routes: [Object.assign({}, found[0], { _cells: undefined })] });
+  if (!fromSaved) store('map.trip', { at: Date.now(), mode: prefs.mode, from: pts.from, to: pts.to, stops: pts.stops, routes: [Object.assign({}, found[0], { _cells: undefined })] });
   await mapReady;
   draw(!quiet);
   loadTraffic();
@@ -2052,6 +2174,7 @@ function sensible(list) {
 }
 
 function describe(rt) {
+  let n = 0; rt.steps.forEach(st => { if (st.kind === 'stop') st.stopRef = pts.stops[n++] || null; });
   rt.turns = rt.steps.filter(s => s.kind === 'turn' || s.kind === 'roundabout').length;
   const sum = k => rt.steps.reduce((n, s) => n + (s[k] ? s.length : 0), 0);
   rt.lefts = rt.steps.filter(s => s.left).length; rt.mph = rt.time ? rt.dist / (rt.time / 3600) : 0;
@@ -2168,7 +2291,7 @@ function drawTiming() {
     else w.append(el('b', '', 'Leave by ' + clock(leave) + (tomorrow ? ' tomorrow' : '')), el('span', '', (leave - now < 12 * 3600000 ? 'In ' + fmtTime((leave - now) / 1000) + '. ' : '') + sum + ' to arrive by ' + clock(target) + '.'));
   } else w.append(el('b', '', 'Arrive about ' + clock(now + total * 1000)), el('span', '', sum + '.'));
   stripRoute = (pts.to.name || pts.to.label.split(',')[0]) + '  \u00b7  ' + fmtTime(total) + '  \u00b7  ' + fmtDist(rt.dist) + '  \u00b7  ' + w.querySelector('b').textContent.toLowerCase();
-  $('addStop').textContent = pts.via ? 'Remove stop: ' + (pts.via.name || 'stop') : 'Add a stop';
+  drawTripBtn(); drawOptsSum();
   drawHours();
   drawStrip(); layout();
 }
@@ -2184,6 +2307,15 @@ $('timeEdit').onclick = () => { const open = $('timing').classList.toggle('open'
 $('parkLess').onclick = () => nudgePark(-1);
 $('parkMore').onclick = () => nudgePark(1);
 
+// Room the map must leave for what floats over it, so "centred" means centred in the part you can see
+function viewPad() {
+  const vis = e => e && e.offsetParent !== null && getComputedStyle(e).display !== 'none';
+  const top = vis($('top')) ? $('top').getBoundingClientRect().bottom + 12 : vis($('nav')) ? $('nav').getBoundingClientRect().bottom + 12 : 20;
+  const b = vis($('bottom')) ? innerHeight - $('bottom').getBoundingClientRect().top + 12 : vis($('navbar')) ? innerHeight - $('navbar').getBoundingClientRect().top + 12 : 20;
+  const room = innerHeight - 120, scale = top + b > room ? room / (top + b) : 1;   // never squeeze the visible part to nothing
+  return { top: Math.round(top * scale), bottom: Math.round(b * scale), left: 0, right: 0 };
+}
+let followMe = false;   // outside directions: keep the map on you after tapping the locate button, until you move the map
 function layout() {   // keep the floating button and map credit clear of the route sheet
   const open = $('bottom').style.display === 'block' && innerWidth < 700;
   if (open) document.body.style.setProperty('--lift', ($('bottom').offsetHeight + 20) + 'px'); else document.body.style.removeProperty('--lift');
@@ -2240,10 +2372,54 @@ function drawSpeed(ll, speed) {
   $('spdLim').innerHTML = lim ? 'LIMIT<span>' + lim + '</span>' : '';
   box.classList.toggle('over', lim > 0 && mph >= lim + 5);
 }
+// Swipe the direction card: left shows the turns after this one, right goes back; it returns to now after a few seconds
+let peekTimer = 0;
+function drawPeek() {
+  const rt = nav.rt, st = rt.steps[nav.peek]; if (!st) return;
+  const dist = Math.max(0, nav.cum[st.begin] - (nav.along || 0));
+  $('navArrow').innerHTML = arrow(st);
+  $('navDist').textContent = 'In ' + fmtDist(dist / 1609.34);
+  $('navText').textContent = st.instruction;
+  $('navLanes').innerHTML = '';
+  $('navMore').textContent = 'Turn ' + (nav.peek - nav.live.next + 1) + ' from now \u00b7 swipe right to go back';
+  $('navThen').textContent = '';
+}
+function peekTo(i) {
+  if (!nav || !nav.live) return;
+  const steps = nav.rt.steps, first = nav.live.next, last = steps.length - 1;
+  i = Math.max(first, Math.min(last, i));
+  clearTimeout(peekTimer);
+  if (i === first) {   // back to now
+    nav.peek = null; $('nav').classList.remove('peek');
+    if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
+    return;
+  }
+  nav.peek = i; $('nav').classList.add('peek'); drawPeek();
+  const c = nav.rt.coords[steps[i].begin];
+  map.stop(); map.easeTo({ center: [c[1], c[0]], zoom: 16.5, bearing: 0, pitch: 0, padding: viewPad(), duration: 500 });
+  peekTimer = setTimeout(() => peekTo(-1), 8000);
+}
+(() => {
+  let x0 = null, y0 = 0;
+  const card = $('nav');
+  card.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  card.addEventListener('touchend', e => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3 || !nav || !nav.live) return;
+    const at = nav.peek == null ? nav.live.next : nav.peek;
+    peekTo(dx < 0 ? at + 1 : at - 1);
+  });
+  card.addEventListener('click', () => { if (nav && nav.peek != null) peekTo(-1); });   // a tap on a peeked card returns to now
+  let mx = null;   // mouse drag, for the website
+  card.addEventListener('mousedown', e => { mx = e.clientX; });
+  addEventListener('mouseup', e => { if (mx == null) return; const dx = e.clientX - mx; mx = null; if (Math.abs(dx) > 40 && nav && nav.live) { const at = nav.peek == null ? nav.live.next : nav.peek; peekTo(dx < 0 ? at + 1 : at - 1); } });
+})();
 function loadNavRoute() {   // (re)build the progress tables for the current route
   const rt = routes[selected], cum = [0];
   for (let i = 1; i < rt.coords.length; i++) cum.push(cum[i - 1] + meters(rt.coords[i - 1], rt.coords[i]));
-  Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null });
+  Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null, peek: null, live: null });
+  $('nav').classList.remove('peek');
   loadLimits(rt);
 }
 function startNav() {
@@ -2327,16 +2503,28 @@ async function renav(sayIt, silent) {
   onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
   return ok;
 }
+let lastFixAt = 0, locFirstFollow = true;
 function onFix(p) {
   const ll = [p.coords.latitude, p.coords.longitude];
-  if (!nav) { showMe(ll); nameHere(); return; }
+  if (!nav) {
+    showMe(ll); nameHere();
+    if (followMe && !map.isMoving()) map.easeTo({ center: [ll[1], ll[0]], padding: viewPad(), duration: 600 });
+    else if (followMe && locFirstFollow) { locFirstFollow = false; map.easeTo({ center: [ll[1], ll[0]], zoom: Math.max(map.getZoom(), 15), padding: viewPad(), duration: 600 }); }
+    return;
+  }
   const s = snap(ll), acc = p.coords.accuracy || 0, c = nav.rt.coords, speed = p.coords.speed > 0 ? p.coords.speed : 0;
   const onRoute = s.d <= Math.max(50, acc);
   const head = onRoute && c[s.i + 1] ? bearing(c[s.i], c[s.i + 1]) : (p.coords.heading >= 0 && speed > 1 ? p.coords.heading : nav.head || 0);
   nav.head = head;
   showMe(ll, head);
   drawSpeed(ll, speed);
-  if (nav.follow) map.easeTo({ center: [ll[1], ll[0]], zoom: nav.zoom, bearing: prefs.northUp ? 0 : head, pitch: prefs.northUp ? 0 : 50, padding: { top: prefs.northUp ? 150 : 280, bottom: 70, left: 0, right: 0 }, duration: 900, easing: t => t });
+  // Follow you: each move lasts about as long as the gap between fixes, so moves join up instead of cutting each other off.
+  // Skipped while a finger is on the map, so a pinch or a look around is never fought.
+  const now = Date.now(), gap = lastFixAt ? Math.min(1200, Math.max(250, now - lastFixAt)) : 600; lastFixAt = now;
+  if (nav.follow && !nav.touching && nav.peek == null) {
+    const pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
+    map.easeTo({ center: [ll[1], ll[0]], zoom: nav.zoomHold > now ? nav.userZoom : nav.zoom, bearing: prefs.northUp ? 0 : head, pitch: prefs.northUp ? 0 : 50, padding: pad, duration: gap, easing: t => t });
+  }
   if (nav.busy) return;
   if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
   if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
@@ -2359,7 +2547,7 @@ function onFix(p) {
     return;
   }
   // Once you have passed the stop, forget it so a later reroute does not send you back
-  if (pts.via && steps.findIndex(x => x.kind === 'stop') >= 0 && cur >= steps.findIndex(x => x.kind === 'stop')) { pts.via = null; if (markers.via) { markers.via.remove(); markers.via = null; } }
+  steps.forEach((x, i) => { if (x.kind === 'stop' && x.stopRef && i <= cur && pts.stops.includes(x.stopRef)) removeStop(x.stopRef, true); });
 
   // Remaining time: the rest of this step, scaled by how much of it is left, plus all later steps
   const curLen = cum[steps[cur].end] - cum[steps[cur].begin];
@@ -2368,7 +2556,10 @@ function onFix(p) {
   const arrive = new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   if (next && toNext < 3000) enrich(next, rt, cum);   // look up lanes and a landmark for the coming turn
+  nav.live = { next: cur + 1, toNext };
   const level = prefs.banner, extras = next ? guidance(next) : { lanes: null, laneText: '', mark: '' };
+  if (nav.peek != null) { drawPeek(); }
+  else {
   $('navArrow').innerHTML = next ? arrow(next) : '';
   $('navDist').textContent = fmtDist(toNext / 1609.34);
   $('navText').textContent = !next ? 'Continue' : level === 'brief' ? next.short : withMark(next.instruction, extras.mark);
@@ -2376,6 +2567,7 @@ function onFix(p) {
   if (level !== 'brief' && extras.lanes && toNext < 1600) extras.lanes.forEach(l => lanesEl.appendChild(el('span', l.valid ? 'ok' : '', l.glyph)));
   $('navMore').textContent = level === 'detailed' && next ? [next.sign, next.road && next.kind !== 'arrive' && !next.instruction.includes(next.road) ? 'onto ' + next.road : '', next.length ? 'then ' + fmtDist(next.length) + ' on it' : ''].filter(Boolean).join('  \u00b7  ') : '';
   $('navThen').textContent = level !== 'brief' && after ? 'Then: ' + (level === 'detailed' ? after.instruction : after.short) : '';
+  }
   $('navArrive').textContent = arrive;
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34);
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
@@ -2466,7 +2658,7 @@ async function loadTraffic() {
   traffic = null;
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
   if (!hasTraffic() || !driving || !pts.from || !pts.to || (routes[0] && routes[0].live)) { trafficFor = ''; return; }
-  const locs = [pts.from, pts.via, pts.to].filter(Boolean).map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':'), key = locs + prefs.mode;
+  const locs = tripPts().map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':'), key = locs + prefs.mode;
   trafficFor = key;
   try {
     const r = await fetch(ttRoute(locs, `traffic=true&computeTravelTimeFor=all&travelMode=${prefs.mode === 'rig' ? 'truck' : 'car'}`));
@@ -2503,7 +2695,7 @@ async function nameHere() {   // the street or place you are at, refreshed after
 addEventListener('online', drawStrip); addEventListener('offline', drawStrip);
 
 // ---------- During a trip: all turns, options, stops ----------
-function closeSheets() { document.body.classList.remove('prefs', 'meet', 'steps', 'menu', 'stops', 'loc'); }
+function closeSheets() { if (document.body.classList.contains('stops')) clearStopOpts(); document.body.classList.remove('prefs', 'meet', 'steps', 'menu', 'stops', 'loc', 'trip', 'ropts'); }
 function drawNavSteps() {
   const ol = $('navStepList'); ol.innerHTML = '';
   if (!nav) return;
@@ -2537,13 +2729,45 @@ $('mOther').onclick = async () => {   // route around the stretch about a quarte
   if (!ok) { tempAvoid = null; $('menuMsg').textContent = 'No other way found.'; await renav(); } else closeSheets();
 };
 $('fabStop').onclick = () => openStops();
-$('mStop').onclick = $('addStop').onclick = () => {
-  if (pts.via && !nav) { dropVia(); route(); return; }
-  openStops();
-};
-function openStops() {   // on the route sheet the same button removes the stop
-  closeSheets(); $('stopMsg').textContent = pts.via ? 'Current stop: ' + (pts.via.name || pts.via.label) + '. Choosing another replaces it.' : ''; $('stopList').innerHTML = '';
+$('mStop').onclick = $('addStop').onclick = $('tripAdd').onclick = () => openStops();
+$('tripStops').onclick = () => openTrip();
+$('navEta').onclick = () => openTrip();
+function openStops() {
+  closeSheets(); $('stopMsg').textContent = pts.stops.length ? 'Your trip has ' + pts.stops.length + (pts.stops.length === 1 ? ' stop' : ' stops') + '. A new one goes where it fits best on the way.' : ''; $('stopList').innerHTML = '';
+  document.querySelectorAll('#stopKinds button').forEach(b => b.classList.remove('on', 'busy'));
   document.body.classList.add('stops'); $('stopQ').value = '';
+}
+function drawTripBtn() {
+  const n = pts.stops.length, b = $('tripStops');
+  b.style.display = n ? '' : 'none';
+  b.textContent = n + (n === 1 ? ' stop' : ' stops');
+}
+// Arrival time at each point of the trip: start, every stop in order, the destination
+function tripTimes() {
+  const rt = nav ? nav.rt : routes[selected]; if (!rt) return [];
+  const from = nav ? nav.cur || 0 : 0, out = []; let t = 0;
+  rt.steps.forEach((st, i) => { if (i < from) return; t += st.time || 0; if (st.kind === 'stop' || st.kind === 'arrive') out.push({ kind: st.kind, t, ref: st.stopRef }); });
+  return out;
+}
+function openTrip() {
+  if (!pts.to) return;
+  closeSheets(); document.body.classList.add('trip');
+  const ol = $('tripList'); ol.innerHTML = '';
+  const times = tripTimes(), clock = sec => new Date(Date.now() + sec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const row = (badge, cls, p, right, onRemove) => {
+    const li = el('li', cls), b = el('i', '', badge), text = el('span', '', p.name || (p.label || '').split(',')[0] || 'My location');
+    if (p.label && p.label !== text.textContent) text.appendChild(el('small', '', p.label));
+    li.append(b, text, el('em', '', right || ''));
+    if (onRemove) { const x = el('button', 'x', '\u00d7'); x.title = 'Remove this stop'; x.setAttribute('aria-label', 'Remove this stop'); x.onclick = e => { e.stopPropagation(); onRemove(); openTrip(); }; li.appendChild(x); }
+    li.onclick = () => { closeSheets(); if (nav) { nav.follow = false; document.body.classList.add('free'); } map.easeTo({ center: [p.lon, p.lat], zoom: 16, padding: viewPad() }); };
+    ol.appendChild(li);
+  };
+  const start = nav && here ? { lat: here[0], lon: here[1], name: 'You are here' } : pts.from || (here ? { lat: here[0], lon: here[1], name: 'My location' } : null);
+  if (start) row('', 'start', start, nav ? 'now' : '');
+  pts.stops.forEach((p, i) => { const tt = times.find(x => x.kind === 'stop' && x.ref === p); row(String(i + 1), 'stop', p, tt ? clock(tt.t) + ' \u00b7 ' + fmtTime(tt.t) : '', () => removeStop(p)); });
+  const end = times.find(x => x.kind === 'arrive');
+  row('', 'end', pts.to, end ? clock(end.t) + ' \u00b7 ' + fmtTime(end.t) : '');
+  $('tripMsg').textContent = pts.stops.length ? 'Tap a place to see it on the map. \u00d7 removes a stop.' : 'No stops yet.';
 }
 // Stop search: a kind of place ("gas") looks along the route; anything else is a name or address lookup
 let stopTimer = 0, stopId = 0;
@@ -2573,14 +2797,72 @@ async function searchStop() {
   if (!hits.length) { msg('No matches for "' + q + '".'); return; }
   offRoute(hits, rt, start);
   hits.sort((x, y) => x.off - y.off);
-  msg('Closest to your route first. Tap one to add it to your trip.');
-  hits.slice(0, 8).forEach(p => {
-    const li = el('li'), text = el('span', '', p.main);
+  msg('Closest to your route first. Working out how much time each adds...');
+  showDetours(hits.slice(0, 8), out, p => fmtDist(p.off / 1609.34) + ' off route', msg);
+  showStopOpts(hits.slice(0, 8));
+  hits.slice(0, 8).forEach((p, i) => {
+    const li = el('li'), text = el('span', '', (i + 1) + '. ' + p.main);
     if (p.sub) text.appendChild(el('small', '', p.sub));
-    li.append(text, el('em', '', fmtDist(p.off / 1609.34) + ' off route'));
-    li.onclick = () => { closeSheets(); setVia({ lat: p.lat, lon: p.lon, name: p.main, label: p.sub ? p.main + ', ' + p.sub : p.main }); };
+    li.append(text, p.em = el('em', '', fmtDist(p.off / 1609.34) + ' off route'));
+    li.onclick = () => { closeSheets(); addStop({ lat: p.lat, lon: p.lon, name: p.main, label: p.sub ? p.main + ', ' + p.sub : p.main }); };
     out.appendChild(li);
   });
+}
+// How much time a stop adds: (you -> stop) + (stop -> where you go next) - (you -> where you go next), from the router
+async function matrixTimes(srcs, tgts, mode) {   // seconds [source][target], or null
+  const m = mode === 'rig' ? 'auto' : mode;
+  if (useGeo() || !FREE_OK) {
+    try {
+      const d = await geoFetch('matrix', {}, null, { mode: GEO_MODE[m], sources: srcs.map(p => ({ location: [p.lon, p.lat] })), targets: tgts.map(p => ({ location: [p.lon, p.lat] })) });
+      if (d.sources_to_targets) return d.sources_to_targets.map(r => r.map(x => x && x.time != null ? x.time : null));
+    } catch (e) {}
+  }
+  return null;   // no Geoapify: the stops are listed without the extra time rather than loading the free community router
+}
+let stopMarkers = [];
+function clearStopOpts() { stopMarkers.forEach(m => m.remove()); stopMarkers = []; }
+function showStopOpts(list) {
+  clearStopOpts();
+  if (!map || !list.length) return;
+  const b = new maplibregl.LngLatBounds(); if (here) b.extend([here[1], here[0]]);
+  list.forEach((p, i) => {
+    const m = marker('stopOpt', [p.lat, p.lon]), dot = m.getElement();
+    dot.textContent = i + 1; dot.title = p.main;
+    dot.onclick = e => { e.stopPropagation(); closeSheets(); addStop({ lat: p.lat, lon: p.lon, name: p.main, label: p.sub ? p.main + ', ' + p.sub : p.main }); };
+    stopMarkers.push(m); b.extend([p.lon, p.lat]);
+  });
+  if (nav) { nav.follow = false; document.body.classList.add('free'); }
+  const pad = { top: 90, bottom: Math.round(($('stops').offsetHeight || innerHeight * 0.46) + 24), left: 40, right: 40 };
+  if (innerHeight - pad.top - pad.bottom < 120) pad.bottom = innerHeight - pad.top - 120;
+  map.fitBounds(b, { padding: pad, maxZoom: 15.5, bearing: 0, pitch: 0, duration: 600 });
+}
+// Pick on the map: the panel steps aside, the next tap on the map becomes a stop
+let picking = false;
+$('pickMap').onclick = () => { picking = true; closeSheets(); clearStopOpts(); document.body.classList.add('picking'); if (nav) { nav.follow = false; document.body.classList.add('free'); } };
+$('pickCancel').onclick = () => { picking = false; document.body.classList.remove('picking'); };
+async function pickedStop(ll) {
+  picking = false; document.body.classList.remove('picking');
+  const n = await reverseName(ll.lat, ll.lng).catch(() => null);
+  addStop({ lat: ll.lat, lon: ll.lng, name: n ? n.main : 'Dropped pin', label: n ? n.label : ll.lat.toFixed(5) + ', ' + ll.lng.toFixed(5) });
+}
+async function showDetours(list, out, base, msg) {
+  if (!list.length || !pts.to) return;
+  const A = nav && here ? { lat: here[0], lon: here[1] } : pts.from || (here ? { lat: here[0], lon: here[1] } : null);
+  if (!A) return;
+  const B = pts.stops[0] && !nav ? pts.stops[0] : pts.to;   // where you head next
+  const ask = out.dataset.ask = String(Math.random());
+  const [m1, m2] = await Promise.all([matrixTimes([A], list.concat([B]), prefs.mode), matrixTimes(list, [B], prefs.mode)]);
+  if (out.dataset.ask !== ask) return;
+  if (!m1 || !m2) { msg('Tap one to add it to your trip.'); return; }
+  const direct = m1[0][list.length];
+  list.forEach((p, i) => {
+    const a = m1[0][i], b = m2[i] && m2[i][0];
+    if (a == null || b == null || direct == null || !p.em) return;
+    const extra = Math.max(0, a + b - direct);
+    p.extra = extra;
+    p.em.textContent = (extra < 60 ? 'on the way' : '+' + fmtTime(extra)) + ' \u00b7 ' + base(p);
+  });
+  msg('Tap one to add it to your trip. The time is how much it adds.');
 }
 // Meet in the middle by name: places matching the name inside a box around the midpoint
 async function namedNear(mid, r, name) {
@@ -2594,12 +2876,19 @@ async function namedNear(mid, r, name) {
   return d.filter(x => x.name).map(x => { const pl = nomiPlace(x); return { lat: pl.lat, lon: pl.lon, name: pl.main, kind: pl.kind, sub: pl.sub }; });
 }
 [['Gas', 'gas'], ['Coffee', 'coffee'], ['Food', 'food'], ['Restrooms', 'restroom'], ['Groceries', 'grocery'], ['Charging', 'charging'], ['Parking', 'parking']].forEach(([label, word]) => {
-  const b = el('button', '', label); b.onclick = () => findStops(word, label); $('stopKinds').appendChild(b);
+  const b = el('button', '', label); b.dataset.word = word; b.onclick = () => findStops(word, label); $('stopKinds').appendChild(b);
 });
+let stopsAsk = 0;
 async function findStops(word, label) {
-  const rt = nav ? nav.rt : routes[selected], out = $('stopList'), msg = t => { $('stopMsg').textContent = t; };
+  const rt = nav ? nav.rt : routes[selected], out = $('stopList'), msg = t => { $('stopMsg').textContent = t; }, id = ++stopsAsk;
   out.innerHTML = '';
   if (!rt) return;
+  const chip = [...document.querySelectorAll('#stopKinds button')].find(b => b.dataset.word === word);
+  document.querySelectorAll('#stopKinds button').forEach(b => b.classList.toggle('on', b === chip));
+  if (chip) chip.classList.add('busy');
+  try { await findStopsIn(rt, word, label, out, msg, id); } finally { if (chip) chip.classList.remove('busy'); }
+}
+async function findStopsIn(rt, word, label, out, msg, id) {
   msg('Looking for ' + label.toLowerCase() + ' along your route...');
   const cat = categoryOf(word), c = rt.coords, cum = [0];
   for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + meters(c[i - 1], c[i]));
@@ -2618,28 +2907,48 @@ async function findStops(word, label) {
     for (let i = first; i < c.length; i += stride) { const d = meters(c[i], [p.lat, p.lon]); if (d < best) { best = d; bi = i; } }
     p.off = best; p.ahead = cum[bi] - start;
   });
+  if (id !== stopsAsk) return;
   found = found.filter(p => p.off <= 2500 && p.ahead > 150).sort((x, y) => (x.off + x.ahead * 0.02) - (y.off + y.ahead * 0.02)).slice(0, 8);
   if (!found.length) { msg('Nothing found close to your route.'); return; }
-  msg('Tap one to add it to your trip.');
-  found.forEach(p => {
-    const li = el('li'), text = el('span', '', p.main);
+  msg('Tap one to add it to your trip. Working out how much time each adds...');
+  showDetours(found, out, p => fmtDist(p.ahead / 1609.34) + ' ahead', msg);
+  showStopOpts(found);
+  found.forEach((p, i) => {
+    const li = el('li'), text = el('span', '', (i + 1) + '. ' + p.main);
     if (p.sub) text.appendChild(el('small', '', p.sub));
-    li.append(text, el('em', '', fmtDist(p.off / 1609.34) + ' off route, ' + fmtDist(p.ahead / 1609.34) + ' ahead'));
-    li.onclick = () => { closeSheets(); setVia({ lat: p.lat, lon: p.lon, name: p.main, label: p.sub ? p.main + ', ' + p.sub : p.main }); };
+    li.append(text, p.em = el('em', '', fmtDist(p.ahead / 1609.34) + ' ahead'));
+    li.onclick = () => { closeSheets(); addStop({ lat: p.lat, lon: p.lon, name: p.main, label: p.sub ? p.main + ', ' + p.sub : p.main }); };
     out.appendChild(li);
   });
 }
-async function setVia(p) {
-  dropVia(); pts.via = p;
-  markers.via = marker('pin via', [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] });
-  if (nav) await renav('Adding a stop at ' + p.name + '.'); else route();
+// A new stop goes where it adds the least distance (between whichever two trip points it fits best)
+function bestSlot(p) {
+  const all = tripPts(); if (all.length < 2) return pts.stops.length;
+  const first = nav && here ? { lat: here[0], lon: here[1] } : all[0], seq = [first, ...pts.stops, pts.to], d = (a, b) => meters([a.lat, a.lon], [b.lat, b.lon]);
+  let best = 0, cost = Infinity;
+  for (let i = 0; i < seq.length - 1; i++) { const c = d(seq[i], p) + d(p, seq[i + 1]) - d(seq[i], seq[i + 1]); if (c < cost) { cost = c; best = i; } }
+  return best;
+}
+function drawStopPins() {
+  markers.stops.forEach(m => m.remove());
+  markers.stops = pts.stops.map((p, i) => { const m = marker('pin via', [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); m.getElement().textContent = i + 1; return m; });
+}
+async function addStop(p) {
+  pts.stops.splice(bestSlot(p), 0, p); drawStopPins();
+  if (nav) await renav('Adding stop ' + (pts.stops.indexOf(p) + 1) + ', ' + p.name + '.'); else route();
+}
+function removeStop(p, quiet) {
+  const i = pts.stops.indexOf(p); if (i < 0) return;
+  pts.stops.splice(i, 1); drawStopPins();
+  if (quiet) return;
+  if (nav) renav('Stop removed.'); else route();
 }
 
 // ---------- Controls ----------
 $('go').onclick = startNav;
 $('endNav').onclick = () => endNav();
 $('arrivedOk').onclick = () => { document.body.classList.remove('arrived'); clearAll(); };
-$('recenter').onclick = () => { if (!nav) return; nav.follow = true; document.body.classList.remove('free'); if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); };
+$('recenter').onclick = () => { if (!nav) return; nav.follow = true; nav.zoomHold = 0; nav.peek = null; document.body.classList.remove('free'); map.stop(); if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); };
 
 function syncPrefs() {
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === prefs.mode));
@@ -2727,8 +3036,22 @@ const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units') { if 
 document.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prefs[b.dataset.map] = !prefs[b.dataset.map]; mapPrefChanged(b.dataset.map); });
 document.querySelectorAll('[data-mapset] button').forEach(b => b.onclick = () => { prefs[b.parentElement.dataset.mapset] = b.dataset.v; mapPrefChanged(b.parentElement.dataset.mapset); });
 [['rigH', 'h'], ['rigL', 'l'], ['rigW', 'w']].forEach(([id, k]) => $(id).onchange = () => { const v = parseFloat($(id).value); if (v > 0) { prefs.rig[k] = v; savePrefs(); if (prefs.mode === 'rig') route(); } });
+function openRouteOpts() { drawLists(); syncPrefs(); closeSheets(); document.body.classList.add('ropts'); }
+$('openRouteOpts').onclick = $('optsSum').onclick = openRouteOpts;
+// One line on the route card saying which route options are on, so it is clear why a route goes the way it does
+function drawOptsSum() {
+  const on = [prefs.noHwy && 'highways', prefs.noToll && 'tolls', prefs.noFerry && 'ferries', prefs.noUnpaved && 'unpaved roads', prefs.noAlleys && 'alleys', prefs.noBorders && 'border crossings'].filter(Boolean);
+  const style = [prefs.simple && 'fewer turns', prefs.shortest && 'shortest', prefs.relaxed && 'relaxed pace', prefs.mode === 'rig' && 'rig size'].filter(Boolean);
+  const parts = [on.length && 'Avoiding ' + on.join(', '), style.length && style.join(', ')].filter(Boolean);
+  $('optsSum').textContent = (parts.length ? parts.join(' \u00b7 ') : 'No route options on') + '  \u203a  Change';
+}
+['home', 'work'].forEach(kind => {
+  $(kind + 'Here').onclick = () => { if (pts.to) savePlace(kind, pts.to); };
+  $(kind + 'Find').onclick = () => setPlaceBySearch(kind);
+  $(kind + 'Del').onclick = () => savePlace(kind, null);
+});
 $('openPrefs').onclick = () => {
-  drawLists(); drawThemes(); syncPrefs();
+  drawLists(); drawPlaces(); drawThemes(); syncPrefs();
   if (map) { const c = map.getCenter(); $('report').href = `https://www.openstreetmap.org/note/new#map=${Math.max(15, Math.round(map.getZoom()))}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`; }
   document.body.classList.add('prefs');
 };
@@ -2744,7 +3067,7 @@ $('save').onclick = () => {
   else saved.push({ lat: p.lat, lon: p.lon, label: p.label, name: p.name || p.label.split(',')[0] });
   store('map.saved', saved); syncSave(); drawQuick();
 };
-function dropVia() { pts.via = null; if (markers.via) { markers.via.remove(); markers.via = null; } tempAvoid = null; }
+function dropVia() { pts.stops = []; drawStopPins(); tempAvoid = null; }
 function clearPoints() { dropVia(); ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
   clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
@@ -2775,7 +3098,9 @@ $('toggleSteps').onclick = () => {
   layout();
 };
 $('locate').onclick = () => {
-  if (here) { map.easeTo({ center: [here[1], here[0]], zoom: Math.max(map.getZoom(), 15) }); return; }
+  if (nav) { $('recenter').onclick(); return; }
+  followMe = true; $('locate').classList.add('on');
+  if (here) { map.stop(); map.easeTo({ center: [here[1], here[0]], zoom: Math.max(map.getZoom(), 15), bearing: 0, pitch: 0, padding: viewPad(), duration: 600 }); return; }
   startWatch(true); locHelp();   // asking again from a tap is what lets some browsers show their permission prompt
 };
 
