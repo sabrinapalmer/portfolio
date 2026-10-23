@@ -556,9 +556,13 @@ async function clearAreas() { await idbDo('saved', 'readwrite', s => s.clear());
 // In the app, traffic is a subscription bought through the App Store; requests go through the site's server, which
 // holds the TomTom key. On the website, traffic still works with a TomTom key you paste into Settings.
 const PREMIUM = ['com.sabrinapalmer.map.premium.monthly', 'com.sabrinapalmer.map.premium.yearly'];
-const premium = { active: false, ready: false, msg: '' };
-const hasTraffic = () => !!prefs.ttKey || premium.active;
-const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}`;
+const premium = { active: false, ready: false, msg: '', pass: null };
+// The site's server only serves traffic with a pass, which it issues after checking Apple's signed record of the
+// subscription. The pass is kept on the device and renewed from the latest record when it runs out.
+const passOk = () => { const p = premium.pass || (premium.pass = store('map.premiumPass')); return !!(p && p.pass && p.exp > Date.now()); };
+const hasTraffic = () => !!prefs.ttKey || (premium.active && passOk());
+const tParam = () => passOk() ? '&t=' + encodeURIComponent(premium.pass.pass) : '';
+const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}${tParam()}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 const prefs = Object.assign({ fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
@@ -2415,7 +2419,7 @@ function addTraffic() {
   if (!hasTraffic() || !prefs.trafficLayer) return;
   map.addSource('traffic', { type: 'raster', tileSize: 256, maxzoom: 20, attribution: '&copy; TomTom',
     tiles: [prefs.ttKey ? `https://api.tomtom.com/traffic/map/4/tile/flow/${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(prefs.ttKey)}`
-      : `${API}/traffic?ep=flow&style=${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}&z={z}&x={x}&y={y}`] });
+      : `${API}/traffic?ep=flow&style=${theme().ui === 'dark' ? 'relative0-dark' : 'relative0'}&z={z}&x={x}&y={y}${tParam()}`] });
   map.addLayer({ id: 'traffic', type: 'raster', source: 'traffic', minzoom: 6, paint: { 'raster-opacity': 0.85 } }, map.getLayer('alt') ? 'alt' : undefined);
 }
 let trafficFor = '', traffic = null;   // traffic: { delay (s), total (s) } for the trip currently shown
@@ -2624,7 +2628,7 @@ function syncPremium() {
   $('premM').textContent = 'Monthly' + (price(PREMIUM[0]) ? ' ' + price(PREMIUM[0]) : '');
   $('premY').textContent = 'Yearly' + (price(PREMIUM[1]) ? ' ' + price(PREMIUM[1]) : '');
   $('premM').style.display = $('premY').style.display = premium.active ? 'none' : '';
-  $('premMsg').textContent = premium.msg || (premium.active ? 'Premium is on. Traffic is included in your routes.' : !premium.ready ? 'Connecting to the App Store...' : '');
+  $('premMsg').textContent = premium.msg || (premium.active && passOk() ? 'Premium is on. Traffic is included in your routes.' : premium.active ? 'Confirming your subscription...' : !premium.ready ? 'Connecting to the App Store...' : '');
   document.querySelectorAll('[data-traffic]').forEach(b => { b.style.display = hasTraffic() ? '' : 'none'; });
 }
 function setupStore() {
@@ -2634,11 +2638,34 @@ function setupStore() {
   const S = C.store;
   premium.active = !!store('map.premium');   // last known state, so traffic works offline and before the App Store answers
   S.register(PREMIUM.map(id => ({ id, type: C.ProductType.PAID_SUBSCRIPTION, platform: C.Platform.APPLE_APPSTORE })));
+  // Apple's signed record (StoreKit 2) of the newest Premium purchase on this Apple ID, if the App Store gave one
+  const latestRecord = () => (S.localTransactions || [].concat(...(S.localReceipts || []).map(r => r.transactions || [])))
+    .filter(t => t.jwsRepresentation && (t.products || []).some(p => PREMIUM.includes(p.id)))
+    .sort((a, b) => (+b.purchaseDate || 0) - (+a.purchaseDate || 0))[0];
+  let asking = null;
+  const getPass = () => {
+    if (passOk() || asking) return asking || Promise.resolve(passOk());
+    const rec = latestRecord();
+    if (!rec) return Promise.resolve(false);
+    asking = fetch(API + '/premium', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transaction: rec.jwsRepresentation }) })
+      .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.error || 'status ' + r.status); }))
+      .then(d => { premium.pass = { pass: d.pass, exp: d.expires ? Math.min(Date.now() + 400 * 864e5, d.expires + 3 * 864e5) : Date.now() + 864e5 }; store('map.premiumPass', premium.pass); premium.msg = ''; return true; })
+      .catch(e => { premium.msg = 'Premium could not be confirmed (' + e.message + '). Try Restore purchases.'; return false; })
+      .finally(() => { asking = null; syncPremium(); });
+    return asking;
+  };
   const check = () => {
     const own = PREMIUM.some(id => S.owned(id));
-    if (premium.ready || own) { const was = premium.active; premium.active = own; store('map.premium', own ? 1 : 0); if (was !== own) { premium.msg = ''; addTraffic(); if (pts.from && pts.to) route(true); } }
+    if (premium.ready || own) {
+      const was = premium.active && passOk(); premium.active = own; store('map.premium', own ? 1 : 0);
+      if (!own) { premium.pass = null; store('map.premiumPass', null); }
+      const turnOn = () => { if ((premium.active && passOk()) !== was) { addTraffic(); if (pts.from && pts.to) route(true); } syncPremium(); };
+      if (own && !passOk()) getPass().then(turnOn); else turnOn();
+      return;
+    }
     syncPremium();
   };
+  setInterval(() => { if (premium.active && !passOk()) check(); }, 6 * 3600000);   // renew a pass that ran out while the app stayed open
   S.when().productUpdated(check).receiptUpdated(check).approved(t => t.finish()).finished(check);
   S.error(e => { premium.msg = e && e.code === C.ErrorCode.PAYMENT_CANCELLED ? '' : 'App Store: ' + ((e && e.message) || 'something went wrong'); syncPremium(); });
   S.initialize([C.Platform.APPLE_APPSTORE]).then(() => { premium.ready = true; check(); }, () => { premium.ready = true; syncPremium(); });

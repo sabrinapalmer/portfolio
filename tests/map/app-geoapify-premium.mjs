@@ -50,7 +50,7 @@ await ctx.addInitScript(() => {
   const products = { 'com.sabrinapalmer.map.premium.monthly': product('com.sabrinapalmer.map.premium.monthly', '$1.99'), 'com.sabrinapalmer.map.premium.yearly': product('com.sabrinapalmer.map.premium.yearly', '$14.99') };
   const when = { productUpdated: f => (h.productUpdated.push(f), when), receiptUpdated: f => (h.receiptUpdated.push(f), when), approved: f => (h.approved.push(f), when), finished: f => (h.finished.push(f), when) };
   window.CdvPurchase = { ProductType: { PAID_SUBSCRIPTION: 'paid subscription' }, Platform: { APPLE_APPSTORE: 'ios-appstore' }, ErrorCode: { PAYMENT_CANCELLED: 6777006 },
-    store: { register() {}, when: () => when, error() {}, initialize: async () => { setTimeout(() => fire('productUpdated'), 0); }, get: id => products[id], owned: id => owned.has(id), restorePurchases: async () => {} } };
+    store: { get localTransactions() { return [...owned].map(id => ({ products: [{ id }], purchaseDate: new Date(), jwsRepresentation: 'signed-record-for-' + id })); }, register() {}, when: () => when, error() {}, initialize: async () => { setTimeout(() => fire('productUpdated'), 0); }, get: id => products[id], owned: id => owned.has(id), restorePurchases: async () => {} } };
 });
 const p = await ctx.newPage();
 p.on('pageerror', e => errs.push('PAGE ' + e)); p.on('console', m => { if (m.type() === 'error' && !/ERR_FAILED|Failed to load/.test(m.text())) errs.push(m.text().slice(0, 200)); });
@@ -69,8 +69,12 @@ await p.route('**/*', async r => {
     if (ep === 'matrix') return J({ sources_to_targets: [[{ time: 600 }]] });
     return r.fulfill({ status: 404, body: '{}' });
   }
+  if (u.startsWith('https://www.sabrinapalmer.com/api/premium')) {
+    const body = JSON.parse(r.request().postData() || '{}'); calls.push('premium ' + body.transaction);
+    return J({ pass: 'test-pass.sig', expires: Date.now() + 30 * 864e5 });
+  }
   if (u.startsWith('https://www.sabrinapalmer.com/api/traffic')) {
-    calls.push('traffic ' + new URL(u).searchParams.get('ep'));
+    calls.push('traffic ' + new URL(u).searchParams.get('ep') + ' t=' + new URL(u).searchParams.get('t'));
     if (new URL(u).searchParams.get('ep') === 'flow') return r.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') });
     return J({ routes: [{ summary: { travelTimeInSeconds: 3300, noTrafficTravelTimeInSeconds: 3000, lengthInMeters: 60000 }, legs: [{ points: [{ latitude: HERE[0], longitude: HERE[1] }, { latitude: 31.86, longitude: -116.6 }] }], guidance: { instructions: [] }, sections: [] }] });
   }
@@ -101,7 +105,8 @@ check(await p.isVisible('#premM') && /1\.99/.test(await p.innerText('#premM')), 
 check(!(await p.isVisible('#geoKey')) && !(await p.isVisible('#ttKey')), 'key boxes hidden in the app');
 await p.click('#premM'); await p.waitForTimeout(2500);
 check(await p.evaluate(() => premium.active && hasTraffic()), 'buying monthly turns Premium on');
-check(calls.some(c => c.startsWith('traffic')), 'traffic requested through the site server after buying');
+check(calls.some(c => c === 'premium signed-record-for-com.sabrinapalmer.map.premium.monthly'), 'the App Store record is sent to the server for a pass');
+check(calls.some(c => c.startsWith('traffic')) && calls.filter(c => c.startsWith('traffic')).every(c => c.endsWith('t=test-pass.sig')), 'every traffic request carries the pass');
 console.log('premium msg:', await p.innerText('#premMsg'));
 
 // Paved only + no alleys + no border crossings: the dirt, alley and border stretch gets blocked and the route asked again

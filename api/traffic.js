@@ -2,8 +2,8 @@
 //   /api/traffic?ep=route&locs=<lat,lon:lat,lon>&<TomTom routing parameters>
 //   /api/traffic?ep=flow&style=relative0|relative0-dark&z=&x=&y=
 // TOMTOM_KEY is set in the Vercel project settings.
-// Note: this checks where a request comes from, not whether the person has paid. The app only calls it with an
-// active subscription; checking the App Store receipt here is a later step.
+// Every request carries t=<pass>, issued by /api/premium only for an active App Store subscription.
+import { checkPass } from './_premium.js';
 
 const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
@@ -19,12 +19,13 @@ export default async function handler(req, res) {
   const key = process.env.TOMTOM_KEY;
   if (!key) { res.status(503).json({ error: 'traffic is not configured' }); return; }
   const url = new URL(req.url, 'http://local'), q = url.searchParams;
+  if (!checkPass(q.get('t'))) { res.status(401).json({ error: 'Premium pass missing or expired' }); return; }
   let target;
   if (q.get('ep') === 'route') {
     const locs = q.get('locs') || '';
     if (!/^-?\d+(\.\d+)?,-?\d+(\.\d+)?(:-?\d+(\.\d+)?,-?\d+(\.\d+)?){1,5}$/.test(locs)) { res.status(400).json({ error: 'bad locations' }); return; }
     const out = new URLSearchParams();
-    for (const [k, v] of q) if (!['ep', 'locs', 'key'].includes(k) && !k.startsWith('_vercel')) out.append(k, v);
+    for (const [k, v] of q) if (!['ep', 'locs', 'key', 't'].includes(k) && !k.startsWith('_vercel')) out.append(k, v);
     out.set('key', key);
     target = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + out.toString();
   } else if (q.get('ep') === 'flow') {
