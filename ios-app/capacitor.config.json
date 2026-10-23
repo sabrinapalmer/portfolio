@@ -1,6 +1,6 @@
 {
   "appId": "com.sabrinapalmer.map",
-  "appName": "Map",
+  "appName": "BrinaMaps",
   "webDir": "www",
-  "ios": { "contentInset": "never", "backgroundColor": "#fffaf6" }
+  "ios": { "contentInset": "never", "backgroundColor": "#1b1838" }
 }

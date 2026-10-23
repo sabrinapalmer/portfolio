@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const locs = q.get('locs') || '';
     if (!/^-?\d+(\.\d+)?,-?\d+(\.\d+)?(:-?\d+(\.\d+)?,-?\d+(\.\d+)?){1,5}$/.test(locs)) { res.status(400).json({ error: 'bad locations' }); return; }
     const out = new URLSearchParams();
-    for (const [k, v] of q) if (!['ep', 'locs', 'key'].includes(k)) out.append(k, v);
+    for (const [k, v] of q) if (!['ep', 'locs', 'key'].includes(k) && !k.startsWith('_vercel')) out.append(k, v);
     out.set('key', key);
     target = `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?` + out.toString();
   } else if (q.get('ep') === 'flow') {
