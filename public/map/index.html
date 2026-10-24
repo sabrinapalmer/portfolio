@@ -1613,7 +1613,7 @@ async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from Tom
   try {
     const r = await fetch(API + '/poi?q=' + encodeURIComponent(q) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
     if (!r.ok) { if (r.status >= 500) poiDownUntil = Date.now() + 600000; return []; }
-    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '' }));
+    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/^important /i, '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '' }));
   } catch (e) { return []; }
 }
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
@@ -1697,6 +1697,9 @@ async function search(which, q, now) {
       const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => fold(p.main).includes(w));
       const lead = p => fold(p.main).startsWith(fold(ql));   // "Costco" before "Saldos Costco"
       add(own);
+      // A town or city named exactly what you typed ("Rosarito", "Tijuana") comes before shops and buildings that share the name
+      const town = p => /^(City|Town|Village)$/.test(p.kind || kindOf(p) || '') && fold(p.main) === fold(ql) && dist(p) <= 400000;
+      add(all.filter(town).sort(byDist).slice(0, 2));
       const tiers = arr => { add(arr.filter(p => full(p) && lead(p)).sort(byDist)); add(arr.filter(p => full(p) && !lead(p)).sort(byDist)); };
       const close2 = all.filter(p => dist(p) <= NEARBY), away = all.filter(p => dist(p) > NEARBY);
       tiers(close2); add(onMap); add(close2.filter(p => !full(p)).sort(byDist));   // near you: best name matches first, then names only on the map, then the rest
@@ -2532,7 +2535,7 @@ async function geoapifyRoutes(quiet) {
   }
   // Every way uses tolls: ask once more with tolls avoided and offer that too (for example Mexico 1 libre next to the 1D)
   if (!quiet && motor && !prefs.noToll && trips[0].steps.some(st => st.toll) && trips.every(t => t.steps.some(st => st.toll) || problems(t).length)) {   // the fastest way has tolls: also offer a way without (listed after it)
-    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => !t.steps.some(st => st.toll) && !problems(t).length);
+    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => mostlyFree(t, trips[0]) && !problems(t).length).slice(0, 1);
     trips = trips.concat(free);
   }
   const missing = geoMissing(), left = geoBreaks(trips[0]), said = { unpaved: 'unpaved road', alley: 'service road or alley', border: 'border crossing' };
@@ -2555,7 +2558,7 @@ async function route(quiet, afterFires) {
       found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.';
       if (!quiet && !prefs.noToll && found[0].steps.some(st => st.toll) && found.every(t => t.steps.some(st => st.toll))) {   // the fastest way has tolls: also offer one without
         const note = found.note, free = await tomtomRoutes(true, 'avoid=tollRoads').catch(() => []);
-        found = found.concat(free.filter(t => !t.steps.some(st => st.toll))); found.note = note;
+        found = found.concat(free.filter(t => mostlyFree(t, found[0])).slice(0, 1)); found.note = note;
       }
       const ok = found.filter(rt => !zoneHits(rt.coords).length);   // a traffic route that still enters an avoided area is dropped
       if (ok.length) { const n = found.note; found = ok; found.note = n; } else found = null;
@@ -2638,6 +2641,10 @@ function sensible(list) {
   return kept;
 }
 
+// Miles of toll road on a route; a "no tolls" alternative is kept when it uses well under half the toll road of the
+// fastest way (routers sometimes cannot avoid a short toll stretch, for example where the free road joins the toll road)
+const tollMiles = t => t.steps.reduce((n, s) => n + (s.toll ? s.length || 0 : 0), 0);
+const mostlyFree = (t, than) => tollMiles(t) < Math.max(0.5, tollMiles(than) * 0.4) && Math.abs((t.dist || 0) - (than.dist || 0)) + Math.abs((t.time || 0) - (than.time || 0)) / 60 > 0.3;
 function describe(rt) {
   let n = 0; rt.steps.forEach(st => { if (st.kind === 'stop') st.stopRef = pts.stops[n++] || null; });
   rt.turns = rt.steps.filter(s => s.kind === 'turn' || s.kind === 'roundabout').length;
@@ -3298,7 +3305,11 @@ function drawStrip() {
 }
 async function nameHere() {   // the street or place you are at, refreshed after moving a few blocks
   if (!here || nav || routes.length) return;
-  if (hereAt && (meters(hereAt, here) < 400 || Date.now() - hereWhen < 120000)) return;
+  const moved = hereAt ? meters(hereAt, here) : Infinity;
+  if (moved > 2000 && hereName) { hereName = ''; drawStrip(); }   // far from where the name was looked up: never show the old street
+  if (moved < 400) return;   // a new name after moving a few blocks, at most every 20 seconds
+  const wait = 20000 - (Date.now() - hereWhen);
+  if (wait > 0) { clearTimeout(nameHere.t); nameHere.t = setTimeout(nameHere, wait); return; }
   hereAt = here; hereWhen = Date.now();
   const n = await reverseName(here[0], here[1]);
   if (n) { const parts = n.label.split(',').map(x => x.trim()).filter((x, i, a) => x && !a.slice(0, i).some(y => y.includes(x))); hereName = parts.slice(0, 2).join(', '); drawStrip(); }
