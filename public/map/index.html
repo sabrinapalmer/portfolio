@@ -291,7 +291,14 @@
   #navEta { flex:1; }
   #navEta b { display:block; font-size:23px; font-weight:700; }
   #navEta span { font-size:13px; color:var(--muted); }
+  #cityHere { display:none; z-index:11; padding:16px 18px; bottom:calc(98px + env(safe-area-inset-bottom)); }
+  body.nav.inCity #cityHere { display:block; } body.inCity #recenter { display:none !important; } body.inCity #speedo { visibility:hidden; }
+  #cityHere b { display:block; font-size:21px; font-weight:700; } #cityHere p { margin:4px 0 12px; color:var(--muted); font-size:14px; }
+  #cityHere .row { display:flex; gap:8px; } #cityHere .row button { flex:1; padding:12px 10px; }
   body.nav.free #recenter { display:block; position:fixed; z-index:10; left:50%; transform:translateX(-50%); bottom:calc(100px + env(safe-area-inset-bottom)); box-shadow:var(--shadow); }
+  @media (min-width:700px) and (max-height:560px) {   /* phone on its side: Recenter sits in the open map on the right, not over the route */
+    body.nav.free #recenter { left:auto; right:calc(12px + env(safe-area-inset-right)); bottom:calc(16px + env(safe-area-inset-bottom)); transform:none; }
+  }
   #arrived { z-index:20; top:50%; transform:translateY(-50%); padding:26px 20px; text-align:center; overflow:hidden; }
   @media (min-width:700px) { #arrived { left:50%; transform:translate(-50%,-50%); } }
   body.arrived #arrived { display:block; }
@@ -522,6 +529,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <i id="navProg"></i>
 </div>
 <button id="recenter" class="go">Recenter</button>
+<div id="cityHere" class="panel"><b id="cityName"></b><p>Keep going to the center, or pick somewhere in town.</p><div class="row"><button id="cityOn">Continue to center</button><button id="cityPick" class="go">Choose a place</button></div></div>
 <div id="speedo"><b id="spdNow"></b><small id="spdUnit">mph</small><i id="spdLim"></i></div>
 <div id="navbar" class="panel">
   <div id="navEta"><b id="navArrive">--</b><span id="navLeft"></span></div>
@@ -1046,7 +1054,11 @@ mapReady = (async () => {
     pixelRatio: Math.min(window.devicePixelRatio || 1, 2), fadeDuration: 120, maxTileCacheSize: 400, refreshExpiredTiles: false });
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
   map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 4.5) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
-  map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); nameIdx = null; });
+  map.on('moveend', () => { nameIdx = null; if (camOwn) return; const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
+  map.on('movestart', e => {   // any other move of the map (a route shown, a place picked) stops following you, so the two never fight
+    if (camOwn || nav || !followMe || e.originalEvent) return;   // your own pinches and drags are handled by dragstart
+    followMe = false; $('locate').classList.remove('on');
+  });
   map.on('idle', () => { nameIdx = null; });   // new tiles may have come in
   map.on('dragstart', e => {
     if (!e.originalEvent) return;   // only your own drags, not the map's own moves
@@ -1065,7 +1077,7 @@ mapReady = (async () => {
     if (si < nav.live.next) return;
     clearTimeout(peekTimer); nav.peek = si; nav.peekPan = true; $('nav').classList.add('peek'); drawPeek();
   });   // a pinch is kept, not snapped back
-  const touching = on => () => { if (nav) nav.touching = on; };
+  const touching = on => () => { touchDown = on; if (nav) nav.touching = on; };
   map.getCanvasContainer().addEventListener('touchstart', touching(true), { passive: true });
   map.getCanvasContainer().addEventListener('touchend', touching(false), { passive: true });
   map.getCanvasContainer().addEventListener('touchcancel', touching(false), { passive: true });
@@ -1078,16 +1090,65 @@ mapReady = (async () => {
 })();
 
 function marker(cls, ll, opts) { return new maplibregl.Marker(Object.assign({ element: el('div', cls) }, opts)).setLngLat([ll[1], ll[0]]).addTo(map); }
-function showMe(ll, heading) {
+// Your marker glides from one location fix to the next over the time between fixes, instead of hopping once a second.
+// While the map is following you it moves with the marker frame by frame, so the marker stays put on screen and the
+// map slides under it; zoom, tilt and turning ease toward their targets instead of jumping.
+const glide = { a: null, b: null, ha: 0, hb: 0, t0: 0, dur: 1, raf: 0, cam: null, saved: 0 };
+let camHold = 0, camOwn = false, touchDown = false;   // camHold: a scripted move (locate, recenter) runs until then
+function glidePos(now) {
+  if (!glide.b) return null;
+  const k = Math.min(1, (now - glide.t0) / glide.dur), dh = ((glide.hb - glide.ha + 540) % 360) - 180;
+  return { ll: [glide.a[0] + (glide.b[0] - glide.a[0]) * k, glide.a[1] + (glide.b[1] - glide.a[1]) * k], h: (glide.ha + dh * k + 360) % 360, done: k >= 1 };
+}
+function showMe(ll, heading, dur) {
   here = ll;
   if (!map) return;
   const want = nav ? 'puck' : 'me';
   if (meMarker && meMarker._kind !== want) { meMarker.remove(); meMarker = null; }
-  if (!meMarker) {
+  const now = performance.now(), cur = glidePos(now), fresh = !meMarker;
+  if (fresh) {
     meMarker = marker(want, ll, { rotationAlignment: 'map' }); meMarker._kind = want;
     if (want === 'puck') meMarker.getElement().innerHTML = '<svg viewBox="0 0 40 40"><path d="M20 4l13 30-13-7-13 7z"/></svg>';
-  } else meMarker.setLngLat([ll[1], ll[0]]);
-  if (want === 'puck' && heading != null) meMarker.setRotation(heading);
+  }
+  const jump = fresh || !cur || !dur || meters(cur.ll, ll) > 400;   // first fix, or a jump too big to slide across
+  const h0 = cur ? cur.h : heading || 0;
+  glide.a = jump ? ll : cur.ll; glide.b = ll;
+  glide.ha = jump && heading != null ? heading : h0; glide.hb = heading != null ? heading : h0;
+  glide.t0 = now; glide.dur = jump ? 1 : dur;
+  if (!glide.raf) glide.raf = requestAnimationFrame(glideFrame);
+}
+function glideFrame() {
+  glide.raf = 0;
+  if (!meMarker || !glide.b || !map) return;
+  const now = performance.now(), g = glidePos(now);
+  meMarker.setLngLat([g.ll[1], g.ll[0]]);
+  if (meMarker._kind === 'puck') meMarker.setRotation(g.h);
+  const easing = followCam(g, now);
+  if (!g.done || easing) glide.raf = requestAnimationFrame(glideFrame);
+}
+function followCam(g, now) {   // true while the view is still easing toward its target
+  const want = nav ? nav.follow && !nav.touching && nav.peek == null && nav.cam : followMe;
+  if (!want || now < camHold || touchDown || map.isMoving()) { glide.cam = null; return false; }
+  let cam = glide.cam;
+  if (!cam) {   // taking over from wherever the map is: blend into the follow view instead of snapping to it
+    const c = map.getCenter(), pd = map.getPadding();
+    cam = glide.cam = { t0: now, last: now, c0: [c.lat, c.lng], b0: map.getBearing(), z: map.getZoom(), p: map.getPitch(), pad: { top: pd.top, bottom: pd.bottom, left: pd.left, right: pd.right } };
+  }
+  const dt = Math.min(100, now - cam.last); cam.last = now;
+  const s = Math.min(1, (now - cam.t0) / 600), e = s * s * (3 - 2 * s);
+  const o = { center: [cam.c0[1] + (g.ll[1] - cam.c0[1]) * e, cam.c0[0] + (g.ll[0] - cam.c0[0]) * e] };
+  let easing = s < 1;
+  if (nav) {
+    const t = nav.cam, k = 1 - Math.exp(-dt / 900), tb = prefs.northUp ? 0 : g.h;
+    const tz = nav.zoomHold > Date.now() ? nav.userZoom : t.z;
+    cam.z += (tz - cam.z) * k; cam.p += (t.p - cam.p) * k;
+    ['top', 'bottom', 'left', 'right'].forEach(side => { cam.pad[side] += (t.pad[side] - cam.pad[side]) * k; if (Math.abs(t.pad[side] - cam.pad[side]) > 1) easing = true; });
+    if (Math.abs(tz - cam.z) > 0.01 || Math.abs(t.p - cam.p) > 0.2) easing = true;
+    Object.assign(o, { zoom: cam.z, pitch: cam.p, bearing: cam.b0 + (((tb - cam.b0 + 540) % 360) - 180) * e, padding: cam.pad });
+  }
+  camOwn = true; try { map.jumpTo(o); } finally { camOwn = false; }
+  if (now - glide.saved > 5000) { glide.saved = now; store('map.view', { c: [g.ll[0], g.ll[1]], z: map.getZoom() }); }
+  return easing;
 }
 function drawAvoid() {
   avoidMarkers.forEach(m => m.remove());
@@ -1737,7 +1798,7 @@ async function search(which, q, now) {
       if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
       const st = p.hours ? openState(p.hours, new Date()) : null;
       const eta = etaOf(p);
-      const li = suggestion(which, p.main, p.kind && p.kind !== p.sub ? p.kind + (p.sub ? ' \u00b7 ' + p.sub : '') : p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours });
+      const li = suggestion(which, p.main, p.kind && p.kind !== p.sub ? p.kind + (p.sub ? ' \u00b7 ' + p.sub : '') : p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours, kind: p.kind });
       if (st && !st.open) li.classList.add('shut');
       list.appendChild(li);
     });
@@ -2606,6 +2667,7 @@ async function route(quiet, afterFires) {
   }
   if (id !== reqId) return false;
   const fromSaved = !!found.saved;
+  found.forEach(checkTurns);
   found.forEach(describe);
   await Promise.all([checkTolls(found).catch(() => {}), checkBorder(found).catch(() => {})]);
   if (id !== reqId) return false;
@@ -2627,6 +2689,44 @@ async function route(quiet, afterFires) {
   return true;
 }
 
+// The router now and then names the wrong turn (a "left U-turn" where the road turns right onto an on-ramp). Each real
+// turn is checked against the route's own line: when the line plainly turns the other way, or turns far less than a
+// U-turn, the words and the arrow are rebuilt from the line. A true U-turn (the line comes back on itself) is left alone.
+function checkTurns(t) {
+  const c = t.coords, steps = t.steps;
+  if (!c || c.length < 3 || !steps) return;
+  const cum = [0]; for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + meters(c[i - 1], c[i]));
+  const idx = d => { let lo = 0, hi = c.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < d) lo = m + 1; else hi = m; } return lo; };
+  const turned = (i0, i1) => {   // total signed turn along the line between two points: + right, - left
+    let sum = 0, prev = null;
+    for (let i = i0; i < i1; i++) { if (cum[i + 1] - cum[i] < 2) continue; const b = bearing(c[i], c[i + 1]); if (prev != null) sum += ((b - prev + 540) % 360) - 180; prev = b; }
+    return sum;
+  };
+  steps.forEach((st, k) => {
+    if (!k || st._checked || /^(arrive|stop|roundabout)$/.test(st.kind)) return;
+    st._checked = true;
+    const said = st.angle || 0, P = st.begin;
+    if (Math.abs(said) < 60 || P <= 0 || P >= c.length - 1) return;
+    const nextAt = steps[k + 1] ? cum[steps[k + 1].begin] : cum[c.length - 1];
+    const lo = Math.max(cum[steps[k - 1].begin], cum[P] - 40), hi = Math.min(nextAt, cum[P] + 150);
+    if (cum[P] - lo < 10 || hi - cum[P] < 10) return;   // too little line either side to judge
+    const a = Math.min(idx(lo), P - 1), b = Math.max(idx(Math.min(hi, cum[P] + 40)), P + 1);
+    const nearTurn = turned(a, b), whole = turned(a, Math.max(b, idx(hi)));
+    const sign = Math.sign(said), uturn = Math.abs(said) >= 170;
+    const wrong = uturn ? !(Math.sign(whole) === sign && Math.abs(whole) >= 120) && !(Math.sign(nearTurn) === sign && Math.abs(nearTurn) >= 150)
+      : Math.abs(nearTurn) >= 45 && Math.sign(nearTurn) !== sign && Math.sign(whole) === Math.sign(nearTurn);
+    if (!wrong) return;
+    const ang = nearTurn, side = ang > 0 ? 'right' : 'left', mag = Math.abs(ang), onto = st.road ? ' onto ' + st.road : '';
+    const after = steps[k + 1], ramp = /\bramp\b|\bexit\b/i.test(st.instruction) || (after && (after.highway || /^merge/i.test(after.instruction || '')));
+    let text, short;
+    if (mag < 25) { text = 'Continue' + onto + '.'; short = 'Continue.'; }
+    else if (ramp) { text = 'Take the ramp on the ' + side + onto + '.'; short = 'Take the ramp on the ' + side + '.'; }
+    else if (mag < 60) { text = 'Bear ' + side + onto + '.'; short = 'Bear ' + side + '.'; }
+    else if (mag < 150) { text = 'Turn ' + side + onto + '.'; short = 'Turn ' + side + '.'; }
+    else { text = 'Make a ' + side + ' U-turn' + onto + '.'; short = 'Make a U-turn.'; }
+    Object.assign(st, { instruction: text, say: text, short, angle: mag < 25 ? 0 : mag >= 150 ? (ang > 0 ? 180 : -180) : ramp ? (ang > 0 ? 30 : -30) : Math.round(ang), left: ang < -25 && !ramp, kind: mag < 25 ? 'other' : 'turn' });
+  });
+}
 function zoneNote(rt) {   // a warning when the route still enters an area you avoid, or starts or ends in one
   $('status').classList.remove('warn');
   if (!rt) return '';
@@ -2928,11 +3028,11 @@ $('parkMore').onclick = () => nudgePark(1);
 
 // Room the map must leave for what floats over it, so "centred" means centred in the part you can see
 function viewPad() {
-  const vis = e => e && e.offsetParent !== null && getComputedStyle(e).display !== 'none';
+  const vis = e => e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';   // (fixed panels have no offsetParent, so that cannot be the test)
   if (innerWidth >= 700) {   // wide screen or phone on its side: the panels sit at the sides, so keep the map clear of them sideways
     let left = 20, right = 20;
     ['top', 'bottom', 'nav', 'navbar'].map($).filter(vis).map(e => e.getBoundingClientRect()).forEach(r => {
-      if (r.left < innerWidth / 2) left = Math.max(left, r.right + 12); else right = Math.max(right, innerWidth - r.left + 12);
+      if ((r.left + r.right) / 2 < innerWidth / 2) left = Math.max(left, r.right + 12); else right = Math.max(right, innerWidth - r.left + 12);
     });
     if (innerWidth - left - right < 220) left = right = 20;
     return { top: 20, bottom: 20, left: Math.round(left), right: Math.round(right) };
@@ -2961,7 +3061,7 @@ function say(text, level) {
 function spokenDist(m) {
   if (prefs.units === 'km') return m < 950 ? Math.max(50, Math.round(m / 50) * 50) + ' metres' : (m < 10000 ? Math.round(m / 500) / 2 : Math.round(m / 1000)) + ' kilometres';
   const mi = m / 1609.34;
-  if (mi < 0.1) return Math.max(50, Math.round(m * 3.281 / 50) * 50) + ' feet';
+  if (mi < 0.18) { const ft = m * 3.281, step = ft < 300 ? 50 : 100; return Math.max(50, Math.round(ft / step) * step) + ' feet'; }
   if (mi < 0.35) return 'a quarter mile';
   if (mi < 0.7) return 'half a mile';
   return (mi < 10 ? Math.round(mi * 2) / 2 : Math.round(mi)) + ' miles';
@@ -3018,7 +3118,7 @@ function peekTo(i) {
   clearTimeout(peekTimer);
   if (i === first) {   // back to now
     nav.peek = null; nav.peekPan = false; $('nav').classList.remove('peek'); nav.follow = true; document.body.classList.remove('free');
-    if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
+    if (here) refix();
     return;
   }
   nav.peek = i; $('nav').classList.add('peek'); drawPeek();
@@ -3053,6 +3153,8 @@ function startNav() {
   if (!routes.length) return;
   if (!navigator.geolocation && !BG) { status('Location is not available in this browser.'); return; }
   nav = { follow: true, lastReroute: 0, lastTraffic: Date.now(), busy: false, zoom: 16.5 };
+  // Going to a city or town: the point the search gives is just its middle, so arriving in the town is the real arrival
+  nav.city = TOWN_R[pts.to.kind] ? { name: pts.to.name || pts.to.label.split(',')[0], kind: pts.to.kind, at: 0 } : null;
   loadNavRoute();
   document.body.classList.add('nav'); document.body.classList.remove('free');
   $('navArrow').innerHTML = ''; $('navDist').textContent = ''; $('navText').textContent = 'Finding your location...'; $('navThen').textContent = '';
@@ -3061,14 +3163,15 @@ function startNav() {
   if (prefs.voice === 'detailed') say('Starting directions.', 'detailed'); else if (prefs.voice !== 'off' && window.speechSynthesis) { try { speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch (e) {} }
   keepAwake();
   if (BG) startWatch(true);   // switch to a watch that keeps going with the screen locked
-  if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
+  if (here) refix();
   drawStrip();
 }
 function endNav(arrivedAt) {
   if (!nav) return;
   if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
+  if (nav.city) clearTimeout(nav.city.t);
   nav = null; tempAvoid = null;
-  document.body.classList.remove('nav', 'free'); closeSheets();
+  document.body.classList.remove('nav', 'free', 'inCity'); closeSheets();
   try { if (wake) wake.release(); } catch (e) {}
   wake = null;
   if (AWAKE) AWAKE.allowSleep().catch(() => {});
@@ -3082,6 +3185,30 @@ function endNav(arrivedAt) {
     document.body.classList.add('arrived');
   } else { if (window.speechSynthesis) speechSynthesis.cancel(); if (routes.length) setTimeout(() => { if (!nav) draw(true); }, 350); }   // ended early: show the whole route again
   drawStrip(); drawTiming();
+}
+// Arriving in a city or town. Checked only near the end: within a radius that suits the size of the place, the street
+// address of where you are is looked up every 20 seconds, and when its town is the destination you have arrived.
+// Close to the middle it counts regardless. Directions keep going until you choose.
+const TOWN_R = { City: [15000, 3500], Town: [6000, 1500], Village: [2500, 600] };
+const plainName = n => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^(city of|ciudad de|town of)\s+/, '').trim();
+function cityCheck(ll) {
+  const c = nav.city, [outer, inner] = TOWN_R[c.kind], d = meters(ll, [pts.to.lat, pts.to.lon]);
+  if (d > outer) return;
+  if (d <= inner) { inCity(); return; }
+  if (c.asking || Date.now() - c.at < 20000) return;
+  c.asking = true; c.at = Date.now();
+  photon(`/reverse?lat=${ll[0].toFixed(6)}&lon=${ll[1].toFixed(6)}&lang=en`).then(r => {
+    const pr = ((r && r.features || [])[0] || {}).properties || {}, want = plainName(c.name);
+    if (nav && nav.city === c && [pr.city, pr.town, pr.village, pr.district].some(n => n && plainName(n) === want)) inCity();
+  }).catch(() => {}).finally(() => { c.asking = false; });
+}
+function inCity() {
+  const c = nav.city; if (c.done) return;
+  c.done = true;
+  $('cityName').textContent = 'You\u2019re in ' + c.name;
+  document.body.classList.add('inCity');
+  say('You have arrived in ' + c.name + '.', 'brief');
+  c.t = setTimeout(() => document.body.classList.remove('inCity'), 45000);   // left alone, the card goes and directions carry on to the center
 }
 // Closest point on the route to ll. Searches near the last known segment first, then the whole route.
 function snap(ll) {
@@ -3128,31 +3255,33 @@ async function renav(sayIt, silent) {
   if (!nav) return false;
   if (ok) loadNavRoute();
   nav.busy = false;
-  onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
+  refix();
   return ok;
 }
 let lastFixAt = 0, locFirstFollow = true;
+function refix() { if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 }, again: true }); }   // same place, fresh screen
 function onFix(p) {
   const ll = [p.coords.latitude, p.coords.longitude];
+  // Each glide lasts about as long as the gap between fixes, so the moves join up instead of stopping and starting
+  const now = Date.now(), gap = p.again ? 300 : lastFixAt ? Math.min(1500, Math.max(250, now - lastFixAt)) : 600;
+  if (!p.again) lastFixAt = now;
   if (!nav) {
-    showMe(ll); nameHere();
-    if (followMe && !map.isMoving()) map.easeTo({ center: [ll[1], ll[0]], padding: viewPad(), duration: 600 });
-    else if (followMe && locFirstFollow) { locFirstFollow = false; map.easeTo({ center: [ll[1], ll[0]], zoom: Math.max(map.getZoom(), 15), padding: viewPad(), duration: 600 }); }
+    showMe(ll, null, gap); nameHere();
+    if (followMe && locFirstFollow && !map.isMoving()) { locFirstFollow = false; goToMe(); }
     return;
   }
-  const s = snap(ll), acc = p.coords.accuracy || 0, c = nav.rt.coords, speed = p.coords.speed > 0 ? p.coords.speed : 0;
+  const s = snap(ll), acc = p.coords.accuracy || 0, c = nav.rt.coords;
+  // Speed, smoothed: it sets how far ahead the voice speaks and how far out the map zooms, so one odd reading moves neither
+  if (!p.again && p.coords.speed != null && p.coords.speed >= 0) nav.spd = nav.spd == null ? p.coords.speed : nav.spd * 0.6 + p.coords.speed * 0.4;
+  const speed = p.again ? nav.spd || 0 : p.coords.speed > 0 ? p.coords.speed : 0, spd = nav.spd || 0;
   const onRoute = s.d <= Math.max(50, acc);
   const head = onRoute && c[s.i + 1] ? bearing(c[s.i], c[s.i + 1]) : (p.coords.heading >= 0 && speed > 1 ? p.coords.heading : nav.head || 0);
   nav.head = head;
-  showMe(ll, head);
+  // Where the map should sit: the follow camera eases toward this every frame (and pauses while a finger is on the map)
+  const pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
+  nav.cam = { z: nav.zoom, p: prefs.northUp ? 0 : 50, pad };
+  showMe(ll, head, gap);
   drawSpeed(ll, speed);
-  // Follow you: each move lasts about as long as the gap between fixes, so moves join up instead of cutting each other off.
-  // Skipped while a finger is on the map, so a pinch or a look around is never fought.
-  const now = Date.now(), gap = lastFixAt ? Math.min(1200, Math.max(250, now - lastFixAt)) : 600; lastFixAt = now;
-  if (nav.follow && !nav.touching && nav.peek == null) {
-    const pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
-    map.easeTo({ center: [ll[1], ll[0]], zoom: nav.zoomHold > now ? nav.userZoom : nav.zoom, bearing: prefs.northUp ? 0 : head, pitch: prefs.northUp ? 0 : 50, padding: pad, duration: gap, easing: t => t });
-  }
   if (nav.busy) return;
   if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
   if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
@@ -3174,6 +3303,7 @@ function onFix(p) {
     endNav('Welcome to ' + (pts.to.name || pts.to.label.split(',')[0]) + '.');
     return;
   }
+  if (nav.city && !nav.city.done) cityCheck(ll);
   // Once you have passed the stop, forget it so a later reroute does not send you back
   steps.forEach((x, i) => { if (x.kind === 'stop' && x.stopRef && i <= cur && pts.stops.includes(x.stopRef)) removeStop(x.stopRef, true); });
 
@@ -3210,27 +3340,36 @@ function onFix(p) {
   let toBorder = 0; if (bd) { for (let i = cur; i < steps.length && steps[i].begin < bd.idx; i++) toBorder += i === cur ? (steps[i].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0) : steps[i].time || 0; }
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
-  // Closer in for a turn, further out at speed
-  nav.zoom = toNext < 250 ? 17.2 : speed > 24 ? 14.8 : speed > 13 ? 15.7 : 16.5;
+  // Further out the faster you go, closer in for a turn in town. One smooth curve on the smoothed speed (steps made the
+  // map zoom in and out whenever the speed hovered around a step).
+  nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));
+  if (next && next.kind !== 'arrive' && toNext < 220 && spd < 18) nav.zoom = Math.max(nav.zoom, 17.1);
+  if (nav.cam) nav.cam.z = nav.zoom;
   Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: nextStop || [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ') });
   drawStrip();
   if (document.body.classList.contains('steps')) drawNavSteps();
 
-  // Voice prompts: once on entering a step, once on approach, once at the turn
-  const near = Math.max(45, speed * 5), early = Math.max(400, speed * 20);
+  // Voice prompts, timed by speed so each is heard well before the turn: a heads-up a minute or more out at highway
+  // speed, one about half a minute out, and the last one about 10 seconds out (never at the turn itself). The position
+  // is a moment old and speech takes a moment to start, so the distance is counted from a little further along.
+  const driving = prefs.mode === 'auto' || prefs.mode === 'rig', ahead = toNext - spd * 1.5;
+  const near = driving ? Math.max(90, spd * 11) : Math.max(25, spd * 10), early = Math.max(driving ? 400 : 120, spd * 30), far = driving && spd > 20 ? Math.max(1600, spd * 75) : 0;
   if (cur !== nav.step) {
     nav.step = cur;
-    if (toNext > early * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', 'detailed'); return; }
+    if (toNext > Math.max(early, far) * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', 'detailed'); return; }
   }
   if (!next) return;
   const full = withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '');
-  if (toNext <= near) {
+  const lower = t => t.charAt(0).toLowerCase() + t.slice(1);
+  if (ahead <= near) {
     if (!nav.said[cur + 'b']) {
-      nav.said[cur + 'b'] = nav.said[cur + 'a'] = 1;
-      const then = prefs.voice === 'detailed' && after && (next.multi || next.length * 1609.34 < 250) ? ' Then ' + after.short.charAt(0).toLowerCase() + after.short.slice(1) : '';
-      say(prefs.voice === 'brief' ? next.short : full + then, 'brief');
+      nav.said[cur + 'b'] = nav.said[cur + 'a'] = nav.said[cur + 'f'] = 1;
+      const then = prefs.voice === 'detailed' && after && (next.multi || next.length * 1609.34 < 250) ? ' Then ' + lower(after.short) : '';
+      const lead = toNext >= (driving ? 150 : 60) && next.kind !== 'arrive' ? 'In ' + spokenDist(toNext) + ', ' : '';
+      say(prefs.voice === 'brief' ? (lead ? lead + lower(next.short) : next.short) : (lead ? lead + lower(full) : full) + then, 'brief');
     }
-  } else if (toNext <= early && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = 1; say('In ' + spokenDist(toNext) + ', ' + full, 'standard'); }
+  } else if (ahead <= early && ahead > near * 1.4 && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = nav.said[cur + 'f'] = 1; say('In ' + spokenDist(toNext) + ', ' + lower(full), 'standard'); }
+  else if (far && ahead <= far && ahead > early * 1.3 && !nav.said[cur + 'f']) { nav.said[cur + 'f'] = 1; say('In ' + spokenDist(toNext) + ', ' + lower(full), 'standard'); }
 }
 
 // ---------- Lanes and landmarks for the coming turn ----------
@@ -3615,8 +3754,21 @@ function removeStop(p, quiet) {
 // ---------- Controls ----------
 $('go').onclick = startNav;
 $('endNav').onclick = () => endNav();
+$('cityOn').onclick = () => { if (nav && nav.city) clearTimeout(nav.city.t); document.body.classList.remove('inCity'); };
+$('cityPick').onclick = () => {   // stop directions and open search, so you can pick a place in town (nearby results come first)
+  endNav(); clearAll();
+  if (here) map.easeTo({ center: [here[1], here[0]], zoom: 14, pitch: 0, bearing: 0 });
+  $('to').focus();
+};
 $('arrivedOk').onclick = () => { document.body.classList.remove('arrived'); clearAll(); };
-$('recenter').onclick = () => { if (!nav) return; nav.follow = true; nav.zoomHold = 0; nav.peek = null; document.body.classList.remove('free'); map.stop(); if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); };
+$('recenter').onclick = () => {   // back to you with the same zoom-out-and-in as the locate button, then following resumes
+  if (!nav) return;
+  nav.follow = true; nav.zoomHold = 0; nav.peek = null; $('nav').classList.remove('peek'); clearTimeout(peekTimer); document.body.classList.remove('free');
+  if (!here) return;
+  refix();
+  const t = nav.cam; if (!t) return;
+  flyHome({ center: [here[1], here[0]], zoom: t.z, bearing: prefs.northUp ? 0 : nav.head || 0, pitch: t.p, padding: t.pad });
+};
 
 function syncPrefs() {
   drawMyPlacesUi();
@@ -3637,10 +3789,10 @@ document.querySelectorAll('[data-set] button').forEach(b => b.onclick = () => {
   const k = b.parentElement.dataset.set; prefs[k] = b.dataset.v === 'true' ? true : b.dataset.v === 'false' ? false : b.dataset.v;
   savePrefs(); syncPrefs(); if (prefs.voice === 'off' && window.speechSynthesis) speechSynthesis.cancel();
   if (k === 'lane' && routes.length) { checkBorder(routes).then(() => draw(false)); }
-  if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } });
+  if (nav && here) refix();
 });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
-document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); });
+document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) refix(); });
 function syncPremium() {
   const C = window.CdvPurchase, S = C && C.store, price = id => { const pr = S && S.get(id) && S.get(id).pricing; return pr ? pr.price : ''; };
   $('premM').textContent = 'Monthly' + (price(PREMIUM[0]) ? ' ' + price(PREMIUM[0]) : '');
@@ -3784,16 +3936,24 @@ $('toggleSteps').onclick = () => {
 };
 // Back to you in one smooth motion that stays centred on you: a short glide when you are close, and when you are
 // far off it rises just enough to show the way to you and comes down on you (one flight, no second jump)
-function goToMe() {
-  map.stop();
-  const me = [here[1], here[0]], pad = viewPad(), z = Math.max(map.getZoom(), 15), c = map.getContainer();
-  const pt = map.project(me), onScreen = pt.x > pad.left && pt.x < c.clientWidth - pad.right && pt.y > pad.top && pt.y < c.clientHeight - pad.bottom;
-  const km = meters([map.getCenter().lat, map.getCenter().lng], here) / 1000;
-  if ((onScreen || km < 2) && z - map.getZoom() < 1.5) { map.easeTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, duration: 500, easing: t => 1 - Math.pow(1 - t, 3) }); return; }
-  if (onScreen) { map.flyTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, curve: 1, duration: 900, essential: true }); return; }   // zoomed out with you in view: zoom straight in on you
-  if (km > 4000) { map.jumpTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad }); return; }
-  // (a fixed duration: MapLibre's maxDuration turns a long flight into an instant jump)
-  map.flyTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, curve: 1.3, duration: Math.round(Math.min(1800, 700 + 260 * Math.log2(1 + km))), essential: true });
+function goToMe() { flyHome({ center: [here[1], here[0]], zoom: Math.max(map.getZoom(), 15), bearing: 0, pitch: 0, padding: viewPad() }); }
+function flyHome(t) {   // used by the locate button and by Recenter during directions; the follow camera waits until it lands
+  map.stop(); glide.cam = null;
+  const pad = t.padding, c = map.getContainer(), pt = map.project(t.center);
+  const onScreen = pt.x > pad.left && pt.x < c.clientWidth - pad.right && pt.y > pad.top && pt.y < c.clientHeight - pad.bottom;
+  const km = meters([map.getCenter().lat, map.getCenter().lng], [t.center[1], t.center[0]]) / 1000;
+  let ms;
+  camOwn = true;
+  try {
+    if ((onScreen || km < 2) && t.zoom - map.getZoom() < 1.5) { ms = 500; map.easeTo(Object.assign({ duration: ms, easing: x => 1 - Math.pow(1 - x, 3) }, t)); }
+    else if (onScreen) { ms = 900; map.flyTo(Object.assign({ curve: 1, duration: ms, essential: true }, t)); }   // zoomed out with you in view: zoom straight in on you
+    else if (km > 4000) { ms = 0; map.jumpTo(t); }
+    // (a fixed duration: MapLibre's maxDuration turns a long flight into an instant jump)
+    else { ms = Math.round(Math.min(1800, 700 + 260 * Math.log2(1 + km))); map.flyTo(Object.assign({ curve: 1.3, duration: ms, essential: true }, t)); }
+  } finally { camOwn = false; }
+  camHold = performance.now() + ms + 30;
+  if (!glide.raf && glide.b) glide.raf = requestAnimationFrame(glideFrame);
+  return ms;
 }
 $('locate').onclick = () => {
   if (nav) { $('recenter').onclick(); return; }
