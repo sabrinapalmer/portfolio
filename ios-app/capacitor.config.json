@@ -10,6 +10,13 @@
     "Keyboard": {
       "resize": "none",
       "resizeOnFullScreen": false
+    },
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "launchShowDuration": 0,
+      "backgroundColor": "#f7f4ff",
+      "showSpinner": false,
+      "launchFadeOutDuration": 200
     }
   }
 }
