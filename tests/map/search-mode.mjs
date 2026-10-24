@@ -32,6 +32,6 @@ await p.fill('#to', 'campo angeles'); await p.waitForTimeout(400);
 console.log('list:', (await p.innerText('#suggest')).replace(/\n/g, ' / ')); check(/Campo Ángeles/.test(await p.innerText('#suggest')), 'listed in the results');
 await p.click('#cancelSearch'); await p.waitForTimeout(200);
 check(await p.evaluate(() => !document.body.classList.contains('searching') && $('to').value === '' && $('suggest').style.display === 'none'), 'Cancel closes search, clears the box and the list');
-await p.click('#to'); await p.mouse.click(200, 650); await p.waitForTimeout(200);
+await p.click('#to'); await p.waitForTimeout(150); await p.mouse.click(200, 650); await p.waitForTimeout(200);
 check(await p.evaluate(() => !document.body.classList.contains('searching')), 'tapping the dimmed map closes search');
 console.log('errors', errs); await b.close(); if (errs.length) process.exit(1);

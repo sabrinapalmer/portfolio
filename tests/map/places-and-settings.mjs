@@ -1,0 +1,48 @@
+// Settings pickers, speed units, your own places, saving and avoiding from a press on the map, places on the map
+import { chromium } from 'playwright-core';
+import fs from 'fs';
+const ROOT = new URL('../../', import.meta.url).pathname, CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const html = fs.readFileSync(ROOT + 'public/map/index.html', 'utf8');
+const errs = [], check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
+const b = await chromium.launch({ executablePath: CHROME, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const p = await (await b.newContext({ viewport: { width: 390, height: 844 }, permissions: ['geolocation'], geolocation: { latitude: 32.05, longitude: -116.88 } })).newPage();
+p.on('pageerror', e => errs.push('PAGE ' + e.message));
+await p.route('**/*', r => { const u = r.request().url(), J = o => r.fulfill({ contentType: 'application/json', body: JSON.stringify(o) });
+  if (u.startsWith('http://localhost/map')) return r.fulfill({ contentType: 'text/html', body: html });
+  if (u.includes('maplibre-gl.min.js')) return r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.js') });
+  if (u.includes('openfreemap')) return J({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] });
+  if (u.includes('/reverse')) return J({ features: [{ geometry: { coordinates: [-116.87, 32.06] }, properties: { name: 'Calle Uno 5', street: 'Calle Uno', city: 'La Salina', state: 'Baja California', country: 'Mexico' } }] });
+  if (u.includes('photon') || u.includes('nominatim') || u.includes('/api/')) return J({ features: [] });
+  return r.abort(); });
+await p.goto('http://localhost/map'); await p.waitForTimeout(2000);
+await p.click('#openPrefs'); await p.waitForTimeout(300);
+const pick = await p.$$eval('#themes details.picker summary', e => e.map(x => x.innerText.replace(/\n/g, ' ')));
+console.log('pickers:', pick);
+check(pick.length === 2 && /Day map/.test(pick[0]) && /Brina/.test(pick[0]) && /Night map/.test(pick[1]) && /Twilight/.test(pick[1]), 'day and night pickers show the current choice');
+check(!(await p.isVisible('#themes .themeGrid button')), 'options stay folded until opened');
+await p.click('#themes details[data-k=night] summary'); await p.click('#themes details[data-k=night] .themeGrid button:has-text("Nord")');
+check(await p.evaluate(() => prefs.nightTheme === 'nord' && /Nord/.test($('themes').innerText)), 'picking a night map sets it and shows it');
+check(/Jakarta/.test(await p.textContent('#fontNow')), 'font picker shows the current font');
+await p.click('[data-mapset=units] [data-v=mi]'); await p.click('[data-mapset=speedUnits] [data-v=kmh]');
+check(await p.evaluate(() => fmtDist(5) === '5.0 miles' || /mile/.test(fmtDist(5))) && await p.evaluate(() => fmtSpeed(31.07) === '50 km/h'), 'distances in miles with speeds in km/h');
+await p.click('#poiKinds button:has-text("Gas")'); await p.fill('#favIn', "Dunkin'"); await p.click('#favAdd');
+check(await p.evaluate(() => prefs.poiKinds.includes('gas') && prefs.favNames[0] === "Dunkin'"), 'kinds of places and liked names are kept');
+// your own named place, set from where you are
+await p.fill('#mineName', 'My spa'); await p.click('#mineHow [data-how=here]'); await p.waitForTimeout(800);
+check(await p.evaluate(() => (places.mine || []).some(m => m.name === 'My spa')), 'a named place can be set from your location');
+await p.evaluate(() => closeSheets()); await p.click('#to'); await p.waitForTimeout(400);
+check(/My spa/.test(await p.innerText('#suggest')), 'it shows with your places when search opens');
+await p.click('#cancelSearch');
+check((await p.$$eval('#quick button', e => e.map(x => x.innerText))).every(t => /home|work/i.test(t)), 'the bottom buttons are only home and work');
+// press on the map: Save this place, and one Avoid option
+const menu = await p.evaluate(() => { mapMenu({ lat: 32.06, lng: -116.87 }); return [...document.querySelectorAll('.pop button')].map(x => x.textContent); });
+console.log('menu:', menu);
+check(menu.includes('Save this place') && menu.filter(t => /Avoid/.test(t)).length === 1, 'press menu: save, and a single avoid');
+await p.evaluate(() => [...document.querySelectorAll('.pop button')].find(x => x.textContent === 'Save this place').click()); await p.waitForTimeout(800);
+check(await p.evaluate(() => saved.length === 1 && !!document.querySelector('.pop input')), 'saving asks for a name');
+// avoided spot: wider and smaller
+await p.evaluate(async () => { avoid = []; await addAvoid(32.07, -116.86); });
+await p.evaluate(() => avoidMarkers[0].getElement().click()); await p.waitForTimeout(200);
+await p.evaluate(() => [...document.querySelectorAll('.pop button')].find(x => /Wider/.test(x.textContent)).click()); await p.waitForTimeout(300);
+check(await p.evaluate(() => avoid[0].r === 300), 'an avoided spot can be made wider from its marker');
+console.log('errors', errs); await b.close(); if (errs.length) process.exit(1);
