@@ -1471,9 +1471,16 @@ async function search(which, q, now) {
     if (deeperAsked || id !== searchId) return; deeperAsked = true; pending++;
     Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
   };
+  // The main search sometimes takes many seconds for a query. After 3 s the list stops waiting for it (what the
+  // place list found stays up); a late answer is still added when it comes.
+  let farDone = false;
+  const farWait = setTimeout(() => { if (farDone || id !== searchId) return; farDone = true; pending--; paint(); }, now ? 5000 : 3000);
   get(base + '&limit=' + (geo ? 20 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => {
+    clearTimeout(farWait);
+    const late = farDone; farDone = true;
     far = f;
-    if (geo && deeper && !isAddress && (!f || f.length < 3)) askDeeper();   // thin answer: try the address search too
+    if (late) { if (id === searchId && f && f.length) { painted = false; paint(); } return; }
+    if (geo && deeper && !isAddress && (!f || f.length < 3) && !(tt && tt.length)) askDeeper();   // thin answer: try the address search too
     if (geo && f && !isAddress && !cat && q.length >= 3) {
       // Near the US-Mexico border: the search fills up with one side, so ask the other side too and list both by distance
       const mine = (f.find(p => p.cc) || {}).cc || '', side = mine === 'mx' ? 'us' : mine === 'us' ? 'mx' : '';
