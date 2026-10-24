@@ -17,16 +17,16 @@ export async function GET(req) {
   const [w, s, e, n] = b;
   if (e <= w || n <= s || e - w > 0.26 || n - s > 0.26) return bad();   // one grid cell at most
   const q = `[out:json][timeout:15];(node["barrier"="toll_booth"](${s},${w},${n},${e});node["highway"="toll_gantry"](${s},${w},${n},${e}););out skel qt;`;
-  // Two public Overpass servers; the second is tried when the first is busy
-  let d, why = '';
-  for (const host of ['https://overpass-api.de/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']) {
-    try {
-      const r = await fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.timeout(14000) });
-      if (!r.ok) { why += host + ' ' + r.status + '; '; continue; }
-      d = await r.json(); break;
-    } catch (err) { why += host + ' ' + (err.name || 'error') + '; '; }
-  }
-  if (!d) return new Response(JSON.stringify({ error: 'toll data unavailable', why }), { status: 502, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, cors) });
+  // Several public Overpass servers asked at once; the first good answer wins (each is often busy or slow)
+  const HOSTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+  const ctl = new AbortController(), why = [];
+  const ask = host => fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.any ? AbortSignal.any([ctl.signal, AbortSignal.timeout(20000)]) : ctl.signal })
+    .then(async r => { if (!r.ok) throw new Error(host.split('/')[2] + ' ' + r.status); const j = await r.json(); if (!j || !Array.isArray(j.elements)) throw new Error(host.split('/')[2] + ' bad answer'); return j; })
+    .catch(e => { why.push(e.name === 'TimeoutError' ? host.split('/')[2] + ' timeout' : e.message); throw e; });
+  let d = null;
+  try { d = await Promise.any(HOSTS.map(ask)); } catch (e) {}
+  ctl.abort();
+  if (!d) return new Response(JSON.stringify({ error: 'toll data unavailable', why: why.join('; ') }), { status: 502, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, cors) });
   const booths = (d.elements || []).filter(x => x.type === 'node').map(x => [+x.lat.toFixed(6), +x.lon.toFixed(6)]);
   return new Response(JSON.stringify({ booths }), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'public, s-maxage=604800, max-age=86400' }, cors) });
 }

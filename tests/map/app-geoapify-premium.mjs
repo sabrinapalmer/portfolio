@@ -75,6 +75,7 @@ await p.route('**/*', async r => {
     return r.fulfill({ status: 404, body: '{}' });
   }
   if (u.startsWith('https://www.sabrinapalmer.com/api/poi')) { calls.push('poi ' + new URL(u).searchParams.get('q')); return J({ places: /hacienda/i.test(u) ? [{ name: 'Hacienda Km 43', street: 'Carretera Libre Tijuana-Ensenada Km 43', city: 'Puerto Nuevo', state: 'Baja California', country: 'Mexico', cc: 'mx', lat: 32.25, lon: -116.94 }] : [] }); }
+  if (u.startsWith('https://www.sabrinapalmer.com/map/data/tolls.json')) { calls.push('toll list'); return r.fulfill({ status: 404, body: '' }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/firms')) { calls.push('firms'); return J({ at: Date.now(), spots: [] }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/tolls')) { calls.push('tolls'); return J({ booths: tollBooths }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/border')) { calls.push('border'); return J({ at: Date.now(), ports: [{ port: 'San Ysidro', crossing: '', status: 'Open', standard: { minutes: 75, status: 'delay' }, ready: { minutes: 45, status: 'delay' }, sentri: { minutes: 15, status: 'no delay' } }] }); }
@@ -204,6 +205,9 @@ console.log('sentri:', JSON.stringify(sen));
 check(Math.abs(sen.time - (2400 - (640 - 160.9 / 8) + 15 * 60)) < 5 && /SENTRI line/.test(sen.step) && /SENTRI wait now: 15 min/.test(sen.line), 'SENTRI wait replaces the router guess in the trip time and the step names the SENTRI line');
 check(Math.abs(sen.std - (2400 - (640 - 160.9 / 8) + 75 * 60)) < 5, 'switching to the regular lane recomputes from the original time (75 min wait)');
 
+// The weekly toll list: booths in a cell come from it without asking the server
+const fromList = await p.evaluate(async () => { boothCache.clear(); boothList = Promise.resolve([[32.11, -117.06], [40, -100]]); const n = calls0 => 0; return await boothsIn(Math.floor(-117.06 / 0.25) + ',' + Math.floor(32.11 / 0.25)); });
+check(JSON.stringify(fromList) === '[[32.11,-117.06]]', 'toll booths come from the saved list when it is there');
 const community = calls.filter(c => c.startsWith('COMMUNITY') || c.startsWith('OTHER'));
 console.log('geo calls:', calls.filter(c => c.startsWith('geo')).length, '| first few:', calls.filter(c => c.startsWith('geo')).slice(0, 8));
 check(!community.length, 'no community servers or unknown hosts called' + (community.length ? ': ' + community.slice(0, 3).join(' ; ') : ''));
