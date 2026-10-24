@@ -50,7 +50,7 @@ export default async function handler(req) {
   }
   out.set('apiKey', key);
 
-  let r;
+  let r; const t0 = Date.now();
   try {
     r = await fetch('https://api.geoapify.com' + ep.path + '?' + out.toString(), ep.post ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(12000) } : { signal: AbortSignal.timeout(12000) });
   } catch (e) {
@@ -59,7 +59,7 @@ export default async function handler(req) {
   // Never pass Geoapify's own auth errors through as-is: they can echo the request URL, which holds the key
   if (r.status === 401 || r.status === 403) return json(502, { error: 'map service rejected the server key' }, cors);
   const text = (await r.text()).split(key).join('');
-  const headers = Object.assign({ 'Content-Type': r.headers.get('content-type') || 'application/json',
+  const headers = Object.assign({ 'Server-Timing': 'upstream;dur=' + (Date.now() - t0), 'Timing-Allow-Origin': '*', 'Content-Type': r.headers.get('content-type') || 'application/json',
     'Cache-Control': r.ok && ep.cache ? `public, s-maxage=${ep.cache}, max-age=300` : 'no-store' }, cors);
   return new Response(text, { status: r.status, headers });
 }
