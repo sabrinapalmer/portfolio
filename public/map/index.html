@@ -1418,6 +1418,9 @@ function censusLookup(q) {
 // Names on the loaded map tiles (towns, neighbourhoods, businesses, beaches, peaks) that match every word typed,
 // ignoring accents ("campo angeles" finds "Campo Ángeles")
 const fold = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// English words for common Spanish place words, so "angels camp" finds "Campo Ángeles"
+const ES_WORDS = { camp: 'campo', camping: 'campo', angels: 'angel', angel: 'angel', beach: 'playa', saint: 'san', lake: 'lago', river: 'rio', hill: 'cerro', mountain: 'cerro',
+  bay: 'bahia', point: 'punta', valley: 'valle', ranch: 'rancho', church: 'iglesia', market: 'mercado', spring: 'ojo', springs: 'ojo', island: 'isla', canyon: 'canon', creek: 'arroyo', port: 'puerto', new: 'nuevo' };
 function mapNames(q, ref) {
   if (!map || !map.getSource('openmaptiles') || q.length < 3) return [];
   const words = fold(q).split(/[^a-z0-9]+/).filter(w => w.length > 1); if (!words.length) return [];
@@ -1426,7 +1429,7 @@ function mapNames(q, ref) {
     let feats = []; try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: layer }); } catch (e) {}
     for (const f of feats) {
       const pr = f.properties, name = pr['name:latin'] || pr.name; if (!name) continue;
-      const n = fold(name + ' ' + (pr.name_en || '')); if (!words.every(w => n.includes(w))) continue;
+      const n = fold(name + ' ' + (pr.name_en || '')); if (!words.every(w => n.includes(w) || (ES_WORDS[w] && n.includes(ES_WORDS[w])))) continue;
       let c = f.geometry.coordinates; while (Array.isArray(c[0])) c = c[0];
       const key = fold(name) + Math.round(c[1] * 200) + ',' + Math.round(c[0] * 200); if (seen.has(key)) continue; seen.add(key);
       const kind = layer === 'transportation_name' ? 'Street' : layer === 'waterway' ? 'Stream' : KIND_WORDS[pr.subclass] || KIND_WORDS[pr.class] || (layer === 'park' ? 'Park' : layer === 'water_name' ? 'Water' : 'Place');
@@ -1524,7 +1527,11 @@ async function search(which, q, now) {
     else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
       const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => fold(p.main).includes(w));
       const lead = p => fold(p.main).startsWith(fold(ql));   // "Costco" before "Saldos Costco"
-      add(own); add(all.filter(p => full(p) && lead(p)).sort(byDist)); add(all.filter(p => full(p) && !lead(p)).sort(byDist)); add(onMap); add(all.filter(p => !full(p)).sort(byDist));   // names only on the map come after the servers' matches
+      add(own);
+      const tiers = arr => { add(arr.filter(p => full(p) && lead(p)).sort(byDist)); add(arr.filter(p => full(p) && !lead(p)).sort(byDist)); };
+      const close2 = all.filter(p => dist(p) <= NEARBY), away = all.filter(p => dist(p) > NEARBY);
+      tiers(close2); add(onMap); add(close2.filter(p => !full(p)).sort(byDist));   // near you: best name matches first, then names only on the map, then the rest
+      tiers(away); add(away.filter(p => !full(p)).sort(byDist));                   // further away, the same order
     }
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 12);
