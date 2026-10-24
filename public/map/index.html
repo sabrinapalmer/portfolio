@@ -3449,9 +3449,16 @@ function syncPremium() {
   $('premMsg').textContent = premium.msg || (premium.active && passOk() ? 'Premium is on. Traffic is included in your routes.' : premium.active ? 'Confirming your subscription...' : !premium.ready ? 'Connecting to the App Store...' : '');
   document.querySelectorAll('[data-traffic]').forEach(b => { b.style.display = hasTraffic() ? '' : 'none'; });
 }
+let storeTries = 0;
 function setupStore() {
   const C = window.CdvPurchase;
   if (!NATIVE || !C) return;
+  // The purchase plugin creates its store a moment after the page script starts (on the next tick in the app);
+  // wait for it rather than fail, since a failure here used to stop the rest of the app's start-up
+  if (!C.store) { if (++storeTries < 100) setTimeout(setupStore, 50); else report('error', 'purchase store never appeared'); return; }
+  try { setupStoreNow(C); } catch (e) { report('error', 'store setup: ' + (e && e.message)); }
+}
+function setupStoreNow(C) {
   if (window.Capacitor && Capacitor.Plugins && !Capacitor.Plugins.PurchasePlugin && Capacitor.registerPlugin) Capacitor.Plugins.PurchasePlugin = Capacitor.registerPlugin('PurchasePlugin');
   const S = C.store;
   premium.active = !!store('map.premium');   // last known state, so traffic works offline and before the App Store answers
@@ -3497,7 +3504,7 @@ function setupStore() {
   $('premRestore').onclick = () => { premium.msg = 'Checking your purchases...'; syncPremium(); S.restorePurchases().then(() => { premium.msg = ''; check(); if (!premium.active) { premium.msg = 'No active subscription found on this Apple ID.'; syncPremium(); } }); };
   syncPremium();
 }
-if (NATIVE) { if (window.CdvPurchase) setupStore(); else document.addEventListener('deviceready', setupStore, { once: true }); }
+if (NATIVE) setTimeout(() => { if (window.CdvPurchase) setupStore(); else document.addEventListener('deviceready', setupStore, { once: true }); }, 0);   // after the rest of start-up, and never able to stop it
 document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
 $('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();
 $('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };

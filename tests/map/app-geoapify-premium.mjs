@@ -50,7 +50,8 @@ await ctx.addInitScript(() => {
   const products = { 'com.sabrinapalmer.map.premium.monthly': product('com.sabrinapalmer.map.premium.monthly', '$1.99'), 'com.sabrinapalmer.map.premium.yearly': product('com.sabrinapalmer.map.premium.yearly', '$14.99') };
   const when = { productUpdated: f => (h.productUpdated.push(f), when), receiptUpdated: f => (h.receiptUpdated.push(f), when), approved: f => (h.approved.push(f), when), finished: f => (h.finished.push(f), when) };
   window.CdvPurchase = { ProductType: { PAID_SUBSCRIPTION: 'paid subscription' }, Platform: { APPLE_APPSTORE: 'ios-appstore' }, ErrorCode: { PAYMENT_CANCELLED: 6777006 },
-    store: { get localTransactions() { return [...owned].map(id => ({ products: [{ id }], purchaseDate: new Date(), jwsRepresentation: 'signed-record-for-' + id })); }, register() {}, when: () => when, error() {}, initialize: async () => { setTimeout(() => fire('productUpdated'), 0); }, get: id => products[id], owned: id => owned.has(id), restorePurchases: async () => {} } };
+    __store: { get localTransactions() { return [...owned].map(id => ({ products: [{ id }], purchaseDate: new Date(), jwsRepresentation: 'signed-record-for-' + id })); }, register() {}, when: () => when, error() {}, initialize: async () => { setTimeout(() => fire('productUpdated'), 0); }, get: id => products[id], owned: id => owned.has(id), restorePurchases: async () => {} } };
+  { const st = window.CdvPurchase.__store; delete window.CdvPurchase.__store; setTimeout(() => { window.CdvPurchase.store = st; }, 0); }   // like the real plugin: the store appears a tick after the page script starts
 });
 const p = await ctx.newPage();
 p.on('pageerror', e => errs.push('PAGE ' + e)); p.on('console', m => { if (m.type() === 'error' && !/ERR_FAILED|Failed to load/.test(m.text())) errs.push(m.text().slice(0, 200)); });
