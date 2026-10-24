@@ -1830,6 +1830,7 @@ async function loadFires(box) {   // box [west, south, east, north]
   if (fresh && fireBoxes.some(b => b[0] <= box[0] && b[1] <= box[1] && b[2] >= box[2] && b[3] >= box[3])) return;
   const big = [box[0] - 0.3, box[1] - 0.3, box[2] + 0.3, box[3] + 0.3], b = big.map(n => n.toFixed(3));
   const geo = `&geometry=${b.join(',')}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outSR=4326&f=geojson`;
+  const satP = satFires(big).catch(() => null);   // NASA satellite heat spots, for Mexico and Canada
   const get = async url => { const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000); try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error('fire data ' + r.status); return await r.json(); } finally { clearTimeout(t); } };
   try {
     const [per, loc] = await Promise.all([
@@ -1859,11 +1860,43 @@ async function loadFires(box) {   // box [west, south, east, north]
       const r = Math.min(15000, Math.sqrt(size * 4047 / Math.PI) + 1600);
       fires.push({ kind: 'fire', name: p.IncidentName || 'Unnamed', c, r, active: true, info: acres(size) + ', ' + (pc == null ? 'containment not reported' : pc + '% contained') + '. Reported ' + ago(found) + '. No mapped outline yet, so a circle around the reported spot is avoided.' });
     });
+    const sat = await satP;
+    if (sat) sat.forEach(f => { if (!fires.some(x => x.sat ? meters(x.c, f.c) < x.r + f.r : x.rings ? x.rings.some(r => inRing(f.c, r)) : meters(x.c, f.c) < x.r + f.r)) fires.push(f); });
     fireBoxes.push(big); fireAt = Date.now(); fireFail = false;
     const act = fires.filter(x => x.active).length;
     $('fireMsg').textContent = (act ? act + (act === 1 ? ' active fire' : ' active fires') + ' nearby. ' : 'No active fires nearby. ') + 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
     drawZones();
   } catch (e) { fireFail = true; $('fireMsg').textContent = 'Could not get wildfire data (' + (e.name === 'AbortError' ? 'timed out' : e.message) + '). Routes are not being checked for fires.'; throw e; }
+}
+// Outside the US the fire service has no data, so NASA's satellite heat spots (VIIRS, about 375 m across, last 2 days)
+// are grouped: spots within 1.5 km of each other are one fire. Three or more spots, or one very hot group, count as an
+// active fire to keep away from; a lone spot is usually a farm or trash burn and is left out.
+const MX_LINE = [[-117.13, 32.53], [-114.72, 32.72], [-111.07, 31.33], [-108.21, 31.33], [-108.21, 31.78], [-106.53, 31.78], [-106.45, 31.76], [-106.3, 31.62], [-106.0, 31.39], [-105.0, 30.68], [-104.5, 29.6], [-103.0, 29.0], [-101.4, 29.77], [-99.5, 27.5], [-97.14, 25.95]];
+function inUS(lat, lon) {   // rough: the lower 48 (south of 49°N, east to Maine) and north of the Mexico border
+  if (lat > 49.05 || lat < 24.4 || lon < -125 || lon > -66.9) return false;
+  if (lon < -117.13 || lon > -97.14) return lon > -117.13 || lat > 32.4;
+  for (let i = 1; i < MX_LINE.length; i++) { const [x1, y1] = MX_LINE[i - 1], [x2, y2] = MX_LINE[i]; if (lon >= x1 && lon <= x2) return lat > y1 + (y2 - y1) * (lon - x1) / (x2 - x1); }
+  return true;
+}
+async function satFires(box) {
+  const b = [Math.floor(box[0]), Math.floor(box[1]), Math.ceil(box[2]), Math.ceil(box[3])];
+  if (b[2] - b[0] > 20 || b[3] - b[1] > 20) return null;
+  const r = await fetch(API + '/firms?bbox=' + b.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined });
+  if (!r.ok) return null;
+  const spots = ((await r.json()).spots || []).filter(s => !inUS(s[0], s[1]) && s[0] >= box[1] && s[0] <= box[3] && s[1] >= box[0] && s[1] <= box[2]);
+  const groups = [];
+  spots.forEach(s => {
+    const near = groups.filter(g => g.pts.some(q => meters(q, s) < 1500));
+    if (!near.length) { groups.push({ pts: [s] }); return; }
+    near[0].pts.push(s); near.slice(1).forEach(g => { near[0].pts.push(...g.pts); groups.splice(groups.indexOf(g), 1); });
+  });
+  const ago = t => { const h = (Date.now() - t) / 3600000; return h < 1 ? 'under an hour ago' : h < 48 ? Math.round(h) + ' hours ago' : Math.round(h / 24) + ' days ago'; };
+  return groups.filter(g => g.pts.length >= 3 || g.pts.reduce((n, q) => n + q[2], 0) >= 100).map(g => {
+    const c = [g.pts.reduce((n, q) => n + q[0], 0) / g.pts.length, g.pts.reduce((n, q) => n + q[1], 0) / g.pts.length];
+    const r = Math.min(15000, Math.max(...g.pts.map(q => meters(c, q))) + 1200), last = Math.max(...g.pts.map(q => q[3]));
+    return { kind: 'fire', sat: true, name: 'Satellite-detected', c, r, active: Date.now() - last < 36 * 3600000,
+      info: g.pts.length + ' heat spots seen by NASA satellites in the last 2 days, latest ' + ago(last) + '. Not confirmed by a fire agency: it can be a controlled or farm burn. A circle around the spots is avoided.' };
+  });
 }
 function circleRing(c, r) { const out = []; for (let k = 0; k <= 32; k++) { const t = k / 32 * 2 * Math.PI; out.push([c[1] + r / 111320 / Math.cos(c[0] * Math.PI / 180) * Math.cos(t), c[0] + r / 111320 * Math.sin(t)]); } return out; }
 function drawZones() {
