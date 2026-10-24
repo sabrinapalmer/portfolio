@@ -557,8 +557,9 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 <div id="stops" class="panel sheet">
   <h2>Add a stop <button class="go" data-close>Done</button></h2>
   <div class="field"><input id="stopQ" type="text" placeholder="Search a place or address" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></div>
-  <p>Or pick a kind of place close to your route, or <button id="pickMap" class="pill">Pick on the map</button></p>
+  <p style="margin-top:10px">Close to your route</p>
   <div class="chips" id="stopKinds"></div>
+  <div class="chips" style="margin-top:8px"><button id="pickMap" class="pill">Pick a spot on the map</button></div>
   <div id="stopMsg"></div>
   <ul id="stopList" class="list"></ul>
 </div>
