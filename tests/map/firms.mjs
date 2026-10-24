@@ -25,7 +25,7 @@ await p.route('**/*', async r => {
 await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
 const res = await p.evaluate(async () => {
   prefs.fires = true; fires = []; fireBoxes = []; fireAt = 0;
-  await loadFires([-117.2, 31.7, -116.4, 33.0]);
+  await loadFires([-117.2, 31.7, -116.4, 33.0]); await new Promise(r => setTimeout(r, 600));   // satellite fires arrive on their own
   return { us: [inUS(32.72, -117.16), inUS(32.50, -117.03), inUS(31.79, -106.42), inUS(31.69, -106.42), inUS(25.9, -97.5), inUS(45, -93)],
     fires: fires.map(f => ({ sat: !!f.sat, active: f.active, r: Math.round(f.r), c: f.c.map(n => +n.toFixed(3)), info: f.info })), msg: $('fireMsg').textContent };
 });

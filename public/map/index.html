@@ -219,7 +219,8 @@
   body.nav #top, body.nav #bottom, body.nav #fabs button:not(#fabStop) { display:none !important; }
   #fabStop { display:none; }
   body.nav #fabStop { display:flex; }   /* before starting, the route card has its own Add stop */
-  #fabs #fabStop { width:auto; height:44px; padding:0 14px 0 10px; border-radius:22px; align-items:center; gap:6px; align-self:flex-end; font-weight:700; color:var(--accent); }
+  #fabs #fabStop { width:48px; height:48px; padding:0; border-radius:24px; align-items:center; justify-content:center; color:var(--accent); } #fabStop span { display:none; }
+  #fabStop svg { width:24px !important; height:24px !important; }
   #fabStop svg { width:20px; height:20px; }
   button.pill { border:1.5px solid var(--accent); color:var(--accent); background:transparent; border-radius:999px; padding:7px 12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
   button.pill svg { width:16px; height:16px; stroke-width:2.8; }
@@ -299,7 +300,11 @@
   .puck svg { width:40px; height:40px; fill:var(--me); stroke:#fff; stroke-width:2.5; filter:drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
   .maplibregl-popup-content { border-radius:20px; background:var(--card); color:var(--fg); box-shadow:var(--shadow); padding:8px; font:inherit; }
   .maplibregl-popup-tip { border-top-color:var(--card) !important; border-bottom-color:var(--card) !important; }
-  .pop small { display:block; color:var(--muted); margin:2px 4px 6px; }
+  .tripGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:6px 0 4px; }
+  .tripGrid button { display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 6px; border-radius:18px; white-space:normal; font-size:13px; line-height:1.2; }
+  .tripGrid button svg { width:26px; height:26px; color:var(--accent); }
+  .tripGrid button.on { background:var(--accent); color:var(--accent-ink); } .tripGrid button.on svg { color:var(--accent-ink); }
+  .pop small { display:block; color:var(--muted); margin:2px 4px 6px; } .pop small.around { color:var(--fg); }
   .pop button { display:block; width:100%; margin-top:6px; }
   .pop button:first-child { margin-top:0; }
   .maplibregl-ctrl-attrib { font:500 10px/1.4 system-ui, sans-serif; }
@@ -430,6 +435,8 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>Extra guidance</h3>
   <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
+  <h3>Map during directions</h3>
+  <div class="chips" data-set="northUp"><button data-v="false">Faces my direction</button><button data-v="true">North up</button></div>
   <h3>Home and work</h3>
   <p>They show first under the search box.</p>
   <div class="placeRow"><b>Home</b><span id="homeNow"></span><button id="homeHere" class="pill">This place</button><button id="homeFind" class="pill">Search</button><button id="homeDel" class="ghost">Remove</button></div>
@@ -504,17 +511,15 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <ol id="navStepList" class="list"></ol>
 </div>
 <div id="navMenu" class="panel sheet">
-  <h2>Trip options <button class="go" data-close>Done</button></h2>
-  <h3>Voice directions</h3>
-  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <h3>On-screen directions</h3>
-  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <h3>Extra guidance</h3>
-  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
-  <h3>Map view</h3>
-  <div class="chips" data-set="northUp"><button data-v="false">Faces my direction</button><button data-v="true">North up</button></div>
-  <h3>This trip</h3>
-  <div class="chips"><button id="mOverview">Show whole route</button><button id="mRepeat">Repeat the instruction</button><button id="mOther">Avoid the road ahead</button><button id="mStop">Add a stop</button></div>
+  <h2>This trip <button class="go" data-close>Done</button></h2>
+  <div class="tripGrid">
+    <button id="mStop"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><path d="M12 8.5v5M9.5 11h5"/></svg>Add a stop</button>
+    <button id="mOverview"><svg viewBox="0 0 24 24"><path d="M4 18c3-8 13-4 16-12"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></svg>Whole route</button>
+    <button id="mOther"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>Avoid road ahead</button>
+    <button id="mRepeat"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/></svg>Repeat direction</button>
+    <button id="mMute"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/></svg><span>Mute voice</span></button>
+    <button id="mSettings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Direction settings</button>
+  </div>
   <div id="menuMsg"></div>
 </div>
 <div id="locSheet" class="panel sheet">
@@ -685,7 +690,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 let statusTimer = 0;
 // Problem reports: script errors and failed searches or routes go to the app's server log (no location or search text),
 // at most 25 per session, so problems people hit on their phones can be found and fixed
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 let reportQ = [], reportN = 0, reportT = 0;
 function report(kind, msg) {
   if (reportN >= 25 || /^(localhost|127\.)/.test(location.hostname) && !NATIVE) return;
@@ -1016,6 +1021,9 @@ function onMapClick(e) {
   if (fire) {
     const p = fire.properties, div = el('div', 'pop');
     div.append(el('b', '', p.title), el('small', '', p.info), el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
+    const around = namesAround([p.lat, p.lon], p.reach + 1500);   // so you can place it: the neighbourhoods and places in and around it
+    if (around.areas.length) div.append(el('small', 'around', 'Neighbourhoods: ' + around.areas.join(', ')));
+    if (around.spots.length) div.append(el('small', 'around', 'Places: ' + around.spots.join(', ')));
     openPop(e.lngLat, div); return;
   }
   if (nav) return;
@@ -1024,6 +1032,20 @@ function onMapClick(e) {
     if (hit.length) { selected = hit[0].properties.i; draw(false); return; }
   }
   placeAt(e);
+}
+// Neighbourhoods and places (from the map itself) within reach of a point, nearest first
+function namesAround(c, reach) {
+  const out = { areas: [], spots: [] };
+  if (!map || !map.getSource('openmaptiles') || !c[0]) return out;
+  const pick = (layer, test, list, max) => {
+    let feats = []; try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: layer }); } catch (e) {}
+    const seen = new Set();
+    feats.filter(f => f.properties.name && test(f.properties)).map(f => { let g = f.geometry.coordinates; while (Array.isArray(g[0])) g = g[0]; return { n: f.properties['name:latin'] || f.properties.name, d: meters(c, [g[1], g[0]]) }; })
+      .filter(x => x.d <= reach).sort((a, b) => a.d - b.d).forEach(x => { if (!seen.has(x.n) && seen.size < max) { seen.add(x.n); list.push(x.n); } });
+  };
+  pick('place', pr => /suburb|neighbourhood|quarter|village|hamlet|isolated_dwelling|locality|town/.test(pr.class || ''), out.areas, 4);
+  pick('poi', pr => true, out.spots, 5);
+  return out;
 }
 // Tapping a name or icon on the map: what it is, and a button to go there
 const KIND_WORDS = { suburb: 'Neighbourhood', neighbourhood: 'Neighbourhood', quarter: 'Neighbourhood', village: 'Village', town: 'Town', city: 'City', hamlet: 'Place', locality: 'Place', isolated_dwelling: 'Place',
@@ -1971,11 +1993,11 @@ async function loadFires(box) {   // box [west, south, east, north]
     satP.then(sat => {   // satellite fires arrive on their own time; a route that now runs into one is worked out again
       if (!sat || !sat.length) return;
       sat.forEach(f => { if (!fires.some(x => x.sat ? meters(x.c, f.c) < x.r + f.r : x.rings ? x.rings.some(r => inRing(f.c, r)) : meters(x.c, f.c) < x.r + f.r)) fires.push(f); });
-      nameFires(); drawZones(); fireCount();
-      if (!nav && routes.length && prefs.fires && zoneHits(routes[selected].coords).length) route(true);
+      drawZones(); fireCount();
+      if (!nav && routes.length && prefs.fires && zoneHits(routes[selected].coords).length) { status("Updated wildfire data: finding a way around a fire..."); route(true, true); }
     });
     fireBoxes.push(big); fireAt = Date.now(); fireFail = false;
-    fireCount(); nameFires();
+    fireCount();
     drawZones();
   } catch (e) { fireFail = true; $('fireMsg').textContent = 'Could not get wildfire data (' + (e.name === 'AbortError' ? 'timed out' : e.message) + '). Routes are not being checked for fires.'; throw e; }
 }
@@ -1994,7 +2016,8 @@ async function satFires(box) {
   if (b[2] - b[0] > 20 || b[3] - b[1] > 20) return null;
   const r = await fetch(API + '/firms?bbox=' + b.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined });
   if (!r.ok) return null;
-  const spots = ((await r.json()).spots || []).filter(s => !inUS(s[0], s[1]) && s[0] >= box[1] && s[0] <= box[3] && s[1] >= box[0] && s[1] <= box[2]);
+  const d = await r.json(), hist = !!d.history;
+  const spots = (d.spots || []).filter(s => !inUS(s[0], s[1]) && s[0] >= box[1] && s[0] <= box[3] && s[1] >= box[0] && s[1] <= box[2]);
   const groups = [];
   spots.forEach(s => {
     const near = groups.filter(g => g.pts.some(q => meters(q, s) < 1500));
@@ -2005,31 +2028,26 @@ async function satFires(box) {
   return groups.filter(g => { const heat = g.pts.reduce((n, q) => n + q[2], 0); return (g.pts.length >= 3 && heat >= 20) || heat >= 100; }).map(g => {
     const c = [g.pts.reduce((n, q) => n + q[0], 0) / g.pts.length, g.pts.reduce((n, q) => n + q[1], 0) / g.pts.length];
     const r = Math.min(15000, Math.max(...g.pts.map(q => meters(c, q))) + 1200), last = Math.max(...g.pts.map(q => q[3]));
-    return { kind: 'fire', sat: true, name: 'Satellite-detected', title: 'Fire seen by satellite', c, r, active: Date.now() - last < 36 * 3600000,
-      info: g.pts.length + ' heat spots seen by NASA satellites in the last 2 days, latest ' + ago(last) + '. Not confirmed by a fire agency: it can be a controlled or farm burn. A circle around the spots is avoided.' };
+    const seen = Math.max(...g.pts.map(q => q[5] || 0)), regular = seen >= 3;   // hot here on several other days in the last 3 months
+    return { kind: 'fire', sat: true, name: 'Satellite-detected', title: regular ? 'Regular heat source (satellite)' : 'Fire seen by satellite', c, r, active: !regular && Date.now() - last < 36 * 3600000, regular,
+      info: g.pts.length + ' heat spots seen by NASA satellites in the last 2 days, latest ' + ago(last) + '. ' + (regular
+        ? 'The same spot was hot on ' + seen + ' other days in the last 3 months, which points to something there that is often hot (a factory, power station, gas flare or dump) rather than a new fire. Routes are not changed.'
+        : (hist ? 'Not seen there in the last 3 months, so it looks new. ' : '') + 'Not confirmed by a fire agency: it can be a controlled or farm burn. A circle around the spots is avoided.') };
   });
 }
 function fireCount() {
   const act = fires.filter(x => x.active).length;
   $('fireMsg').textContent = (act ? act + (act === 1 ? ' active fire' : ' active fires') + ' nearby. ' : 'No active fires nearby. ') + 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
 }
-// Satellite fires have no name: call each one after the nearest town or neighbourhood, so the map says where it is
-async function nameFires() {
-  for (const f of fires.filter(x => x.sat && !x.place).slice(0, 6)) {
-    f.place = '...';
-    const n = await reverseName(f.c[0], f.c[1]).catch(() => null);
-    f.place = n ? (n.label.split(',').map(x => x.trim()).filter(x => !/^\d/.test(x))[1] || n.main) : '';
-    if (f.place) { f.name = 'Near ' + f.place; f.title = 'Fire near ' + f.place; drawZones(); }
-  }
-}
 function circleRing(c, r) { const out = []; for (let k = 0; k <= 32; k++) { const t = k / 32 * 2 * Math.PI; out.push([c[1] + r / 111320 / Math.cos(c[0] * Math.PI / 180) * Math.cos(t), c[0] + r / 111320 * Math.sin(t)]); } return out; }
 function drawZones() {
   if (!map || !map.getSource('zones')) return;
   const feats = [];
   if (prefs.fires) fires.forEach(f => {
-    feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.title || f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
+    const reach = f.c ? f.r : meters([f.box[1], f.box[0]], [f.box[3], f.box[2]]) / 2 + 500, mid = f.c || [(f.box[1] + f.box[3]) / 2, (f.box[0] + f.box[2]) / 2];
+    feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.title || f.name + ' Fire', info: f.info, lat: mid[0], lon: mid[1], reach }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
     const c = f.c ? [f.c[1], f.c[0]] : [(f.box[0] + f.box[2]) / 2, (f.box[1] + f.box[3]) / 2];
-    if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.title || f.name + ' Fire', info: f.info }, geometry: { type: 'Point', coordinates: c } });
+    if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.title || f.name + ' Fire', info: f.info, lat: mid[0], lon: mid[1], reach }, geometry: { type: 'Point', coordinates: c } });
   });
   avoid.forEach(a => { if ((a.r || 120) > 300) feats.push({ type: 'Feature', properties: { kind: 'spot', active: true }, geometry: { type: 'Polygon', coordinates: [circleRing([a.lat, a.lon], a.r)] } }); });
   map.getSource('zones').setData({ type: 'FeatureCollection', features: feats });
@@ -2147,12 +2165,13 @@ function tomtomShort(m) {
     MOTORWAY_EXIT_LEFT: 'Take the exit on the left', MOTORWAY_EXIT_RIGHT: 'Take the exit on the right', TAKE_EXIT: 'Take the exit', STRAIGHT: 'Continue straight' }[k];
   return w ? w + '.' : m.message || 'Continue.';
 }
-async function tomtomRoutes(quiet) {
+async function tomtomRoutes(quiet, more) {
   const locs = tripPts().map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
   const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
     'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.stops.length ? 0 : 2)];
   if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
+  if (more) q.push(more);
   if (prefs.mode === 'rig') q.push('vehicleHeight=' + (prefs.rig.h * 0.3048).toFixed(2), 'vehicleLength=' + (prefs.rig.l * 0.3048).toFixed(2), 'vehicleWeight=' + Math.round(prefs.rig.w * 907));
   let url = ttRoute(locs, q.join('&'));
   const tb = tripBox(), near = z => { const bx = z.c ? [z.c[1], z.c[0], z.c[1], z.c[0]] : z.box; return bx[2] > tb[0] - 1 && bx[0] < tb[2] + 1 && bx[3] > tb[1] - 1 && bx[1] < tb[3] + 1; };
@@ -2348,7 +2367,7 @@ async function geoapifyRoutes(quiet) {
     }
   }
   // Every way uses tolls: ask once more with tolls avoided and offer that too (for example Mexico 1 libre next to the 1D)
-  if (!quiet && motor && !prefs.noToll && trips.every(t => t.steps.some(st => st.toll))) {
+  if (!quiet && motor && !prefs.noToll && trips[0].steps.some(st => st.toll) && trips.every(t => t.steps.some(st => st.toll) || problems(t).length)) {   // the fastest way has tolls: also offer a way without (listed after it)
     const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => !t.steps.some(st => st.toll) && !problems(t).length);
     trips = trips.concat(free);
   }
@@ -2359,16 +2378,21 @@ async function geoapifyRoutes(quiet) {
   return trips;
 }
 
-async function route(quiet) {
+async function route(quiet, afterFires) {
   if (!pts.from || !pts.to) return false;
   if (!quiet) status('Finding routes...');
   const id = ++reqId;
   let found = null;
-  if (prefs.fires) { await Promise.race([loadFires(tripBox()).catch(() => {}), pause(2500)]); if (id !== reqId) return false; }   // never hold a route long for fire data; late fires re-check it
+  // Fire data never holds up a route: the route uses fires already known, and new fire data is checked once the route is up
+  const fireCheck = prefs.fires && !afterFires ? loadFires(tripBox()).catch(() => {}) : null;
   if (useBackup && Date.now() - useBackup > 300000) useBackup = false;   // try the main router again after 5 minutes
   if (hasTraffic() && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
     try {
       found = await tomtomRoutes(quiet); $('ttMsg').textContent = 'Traffic routing is on.';
+      if (!quiet && !prefs.noToll && found[0].steps.some(st => st.toll) && found.every(t => t.steps.some(st => st.toll))) {   // the fastest way has tolls: also offer one without
+        const note = found.note, free = await tomtomRoutes(true, 'avoid=tollRoads').catch(() => []);
+        found = found.concat(free.filter(t => !t.steps.some(st => st.toll))); found.note = note;
+      }
       const ok = found.filter(rt => !zoneHits(rt.coords).length);   // a traffic route that still enters an avoided area is dropped
       if (ok.length) { const n = found.note; found = ok; found.note = n; } else found = null;
     }
@@ -2397,6 +2421,7 @@ async function route(quiet) {
   found.forEach(describe);
   await Promise.all([checkTolls(found).catch(() => {}), checkBorder(found).catch(() => {})]);
   if (id !== reqId) return false;
+  { const note = found.note; found = found.slice().sort((a, b) => a.time - b.time); found.note = note; }   // fastest first, after border waits are counted
   if (!prefs.showAll) { const note = found.note; found = sensible(found); found.note = note; }
   routes = found; selected = 0;
   if (!fromSaved) store('map.trip', { at: Date.now(), mode: prefs.mode, from: pts.from, to: pts.to, stops: pts.stops, routes: [Object.assign({}, found[0], { _cells: undefined })] });
@@ -2405,6 +2430,12 @@ async function route(quiet) {
   loadTraffic();
   status(zoneNote(routes[selected]) || found.note || '');
   writeHash();
+  if (fireCheck) fireCheck.then(() => {   // fresh fire data came in after the route was drawn: if the route now runs into a fire, find another way
+    if (id !== reqId || nav || !routes.length || !zoneHits(routes[selected].coords).length) return;
+    const hit = zoneHits(routes[selected].coords)[0].z;
+    status('Updated wildfire data: finding a way around ' + (hit.title ? 'the ' + hit.title.replace(/^Fire/, 'fire') : 'a fire area') + '...');
+    route(true, true);
+  });
   return true;
 }
 
@@ -2843,6 +2874,7 @@ function startNav() {
 }
 function endNav(arrivedAt) {
   if (!nav) return;
+  if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
   nav = null; tempAvoid = null;
   document.body.classList.remove('nav', 'free'); closeSheets();
   try { if (wake) wake.release(); } catch (e) {}
@@ -2958,6 +2990,15 @@ function onFix(p) {
   let secs = (steps[cur].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0);
   for (let i = cur + 1; i < steps.length; i++) secs += steps[i].time || 0;
   const arrive = new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  // With stops still ahead, the top line names the next one and when you get there
+  const stopAt = steps.findIndex((x, i) => i > cur && x.kind === 'stop' && x.stopRef && pts.stops.includes(x.stopRef));
+  let nextStop = '';
+  if (stopAt > 0) {
+    let t = (steps[cur].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0);
+    for (let i = cur + 1; i < stopAt; i++) t += steps[i].time || 0;
+    const sr = steps[stopAt].stopRef;
+    nextStop = 'Next: ' + (sr.name || sr.label.split(',')[0]) + ', arrive ' + new Date(Date.now() + t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
 
   if (next && toNext < 3000) enrich(next, rt, cum);   // look up lanes and a landmark for the coming turn
   nav.live = { next: cur + 1, toNext };
@@ -2979,7 +3020,7 @@ function onFix(p) {
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
   // Closer in for a turn, further out at speed
   nav.zoom = toNext < 250 ? 17.2 : speed > 24 ? 14.8 : speed > 13 ? 15.7 : 16.5;
-  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ') });
+  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: nextStop || [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ') });
   drawStrip();
   if (document.body.classList.contains('steps')) drawNavSteps();
 
@@ -3117,7 +3158,7 @@ function drawNavSteps() {
   });
 }
 $('openSteps').onclick = () => { drawNavSteps(); document.body.classList.add('steps'); };
-$('openMenu').onclick = () => { $('menuMsg').textContent = ''; syncPrefs(); document.body.classList.add('menu'); };
+$('openMenu').onclick = () => { $('menuMsg').textContent = ''; syncPrefs(); drawMute(); document.body.classList.add('menu'); };
 $('nav').onclick = () => { if (nav && nav.nextSay) say(nav.nextSay, 'brief'); };   // tapping the banner repeats the instruction
 $('mRepeat').onclick = () => { if (nav && nav.nextSay) { const v = prefs.voice; prefs.voice = 'detailed'; say(nav.nextSay); prefs.voice = v; } closeSheets(); };
 $('mOverview').onclick = () => {
@@ -3136,6 +3177,11 @@ $('mOther').onclick = async () => {   // route around the stretch about a quarte
 };
 $('fabStop').onclick = () => openStops();
 $('mStop').onclick = $('addStop').onclick = $('tripAdd').onclick = () => openStops();
+// Mute for this trip only: voice comes back at your chosen level next time
+let muteFrom = null;
+const drawMute = () => { $('mMute').classList.toggle('on', !!muteFrom); $('mMute').querySelector('span').textContent = muteFrom ? 'Voice muted' : 'Mute voice'; };
+$('mMute').onclick = () => { if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; } else { muteFrom = prefs.voice === 'off' ? 'standard' : prefs.voice; prefs.voice = 'off'; try { if (TTS) TTS.stop().catch(() => {}); else speechSynthesis.cancel(); } catch (e) {} } savePrefs(); drawMute(); };
+$('mSettings').onclick = () => { closeSheets(); document.body.classList.add('prefs'); syncPrefs(); const h = [...$('prefs').querySelectorAll('h3')].find(x => /Voice directions/.test(x.textContent)); if (h) h.scrollIntoView({ block: 'start' }); };
 $('tripStops').onclick = () => openTrip();
 $('navEta').onclick = () => openTrip();
 function openStops() {
@@ -3504,10 +3550,22 @@ $('toggleSteps').onclick = () => {
   $('toggleSteps').textContent = show ? 'Hide steps' : 'Show steps';
   layout();
 };
+// Back to you: if you are on screen, glide there; if not, first pull back at once so you can see where you are
+// relative to what you were looking at, then zoom in on you
+function goToMe() {
+  map.stop();
+  const me = [here[1], here[0]], pad = viewPad(), z = Math.max(map.getZoom(), 15);
+  const onScreen = (() => { const pt = map.project(me), c = map.getContainer(); return pt.x > pad.left && pt.x < c.clientWidth - pad.right && pt.y > pad.top && pt.y < c.clientHeight - pad.bottom; })();
+  if (onScreen) { map.easeTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, duration: 450 }); return; }
+  const b = new maplibregl.LngLatBounds(me, me).extend(map.getCenter());
+  const cam = map.cameraForBounds(b, { padding: { top: pad.top + 40, bottom: pad.bottom + 40, left: pad.left + 40, right: pad.right + 40 } });
+  map.easeTo(Object.assign({}, cam, { bearing: 0, pitch: 0, duration: 350, padding: { top: 0, bottom: 0, left: 0, right: 0 } }));
+  map.once('moveend', () => { if (followMe) map.easeTo({ center: me, zoom: z, padding: pad, duration: 650 }); });
+}
 $('locate').onclick = () => {
   if (nav) { $('recenter').onclick(); return; }
   followMe = true; $('locate').classList.add('on');
-  if (here) { map.stop(); map.easeTo({ center: [here[1], here[0]], zoom: Math.max(map.getZoom(), 15), bearing: 0, pitch: 0, padding: viewPad(), duration: 600 }); return; }
+  if (here) { goToMe(); return; }
   startWatch(true); locHelp();   // asking again from a tap is what lets some browsers show their permission prompt
 };
 
