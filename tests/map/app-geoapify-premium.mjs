@@ -75,6 +75,7 @@ await p.route('**/*', async r => {
     return r.fulfill({ status: 404, body: '{}' });
   }
   if (u.startsWith('https://www.sabrinapalmer.com/api/poi')) { calls.push('poi ' + new URL(u).searchParams.get('q')); return J({ places: /hacienda/i.test(u) ? [{ name: 'Hacienda Km 43', street: 'Carretera Libre Tijuana-Ensenada Km 43', city: 'Puerto Nuevo', state: 'Baja California', country: 'Mexico', cc: 'mx', lat: 32.25, lon: -116.94 }] : [] }); }
+  if (u.startsWith('https://www.sabrinapalmer.com/api/log')) { calls.push('log'); return r.fulfill({ status: 204, body: '' }); }
   if (u.startsWith('https://www.sabrinapalmer.com/map/data/tolls.json')) { calls.push('toll list'); return r.fulfill({ status: 404, body: '' }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/firms')) { calls.push('firms'); return J({ at: Date.now(), spots: [] }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/tolls')) { calls.push('tolls'); return J({ booths: tollBooths }); }

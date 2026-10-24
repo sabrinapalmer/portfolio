@@ -71,6 +71,17 @@
   .seg { flex:1; display:flex; background:var(--bg); border-radius:999px; padding:3px; border:2px solid var(--line); }
   .seg button { flex:1; padding:7px 4px; background:transparent; color:var(--muted); }
   .seg button.on { background:var(--accent); color:var(--accent-ink); }
+  /* Search mode: shows the moment the box is tapped, before the keyboard has slid up */
+  #cancelSearch { display:none; flex:0 0 auto; padding:10px 6px 10px 2px; color:var(--accent); font-weight:700; background:transparent; }
+  body.searching #cancelSearch { display:block; }
+  body.searching #plan, body.searching #openPrefs, body.searching #modeRow { display:none !important; }
+  body.searching #bottom, body.searching #fabs { visibility:hidden; }
+  body.searching #top { box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); }
+  body.searching #top .field:focus-within, body.searching #top .field { border-color:var(--accent); }
+  #searchScrim { position:fixed; inset:0; z-index:9; background:rgba(12,10,32,.32); display:none; }
+  body.searching #searchScrim { display:block; animation:fadeIn .15s ease-out; }
+  @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+  body.searching #strip { color:var(--accent); }
   #suggest { list-style:none; margin:8px 0 0; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:min(52vh, calc(100vh - var(--kb, 0px) - 150px)); overflow:auto; }
   #suggest li { padding:10px 12px; border-radius:14px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:center; }
   #suggest li:active { background:var(--soft); }
@@ -301,10 +312,12 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 <body>
 <div id="map"></div>
 <div id="strip"></div>
+<div id="searchScrim" aria-hidden="true"></div>
 
 <div id="top" class="panel">
   <div class="row">
     <div class="field"><i class="to"></i><input id="to" type="text" placeholder="Where to?" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button id="toClear" class="x" aria-label="Clear">&times;</button></div>
+    <button id="cancelSearch" class="ghost" aria-label="Close search">Cancel</button>
     <button id="plan" class="round" title="Plan a route from somewhere else" aria-label="Plan a route from somewhere else"><svg viewBox="0 0 24 24"><circle cx="6" cy="18.500" r="2.300"/><circle cx="18" cy="5.500" r="2.300"/><path d="M8.300 18.500H14a3.500 3.500 0 0 0 0-7h-4a3.500 3.500 0 0 1 0-7h5.700"/></svg></button>
     <button id="openPrefs" class="round" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
   </div>
@@ -542,7 +555,7 @@ const $ = id => document.getElementById(id);
 // plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
-const BG = plugin('BackgroundGeolocation'), TTS = plugin('TextToSpeech'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
 // In the app the keyboard slides over the page instead of shrinking it (resizing the page redraws the whole map, which
 // made the search box slow to respond). The search list is kept above the keyboard instead.
 if (KEYS && KEYS.addListener) {
@@ -670,7 +683,20 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 // Messages under the search box go away on their own: 6 s for news, 15 s for warnings; "...in progress" lines stay
 // until something replaces them (20 s at most, so none can get stuck)
 let statusTimer = 0;
+// Problem reports: script errors and failed searches or routes go to the app's server log (no location or search text),
+// at most 25 per session, so problems people hit on their phones can be found and fixed
+const APP_VERSION = '1.0.2';
+let reportQ = [], reportN = 0, reportT = 0;
+function report(kind, msg) {
+  if (reportN >= 25 || /^(localhost|127\.)/.test(location.hostname) && !NATIVE) return;
+  reportN++; reportQ.push({ k: kind, m: String(msg || '').replace(/-?\d{1,3}\.\d{3,}/g, '#').slice(0, 300), t: Date.now() });
+  clearTimeout(reportT);
+  reportT = setTimeout(() => { const items = reportQ; reportQ = []; try { fetch(API + '/log', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ v: APP_VERSION, ua: (navigator.userAgent.match(/(iPhone OS|Android|Mac OS X|Windows NT) [\d_.]+/) || [''])[0], items }) }).catch(() => {}); } catch (e) {} }, 3000);
+}
+window.addEventListener('error', e => report('error', (e.message || '') + ' @' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', e => report('reject', e.reason && (e.reason.stack || e.reason.message) || String(e.reason)));
 function status(msg) {
+  if (msg && /fail|not answering|unavailable|No route|Could not|not working|went wrong|timed out/i.test(msg)) report('status', msg);
   clearTimeout(statusTimer);
   $('status').textContent = msg || '';
   if (!msg) return;
@@ -992,9 +1018,34 @@ function onMapClick(e) {
     div.append(el('b', '', p.title), el('small', '', p.info), el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
     openPop(e.lngLat, div); return;
   }
-  if (nav || !routes.length) return;
-  const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['alt'] });
-  if (hit.length) { selected = hit[0].properties.i; draw(false); }
+  if (nav) return;
+  if (routes.length) {
+    const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['alt'] });
+    if (hit.length) { selected = hit[0].properties.i; draw(false); return; }
+  }
+  placeAt(e);
+}
+// Tapping a name or icon on the map: what it is, and a button to go there
+const KIND_WORDS = { suburb: 'Neighbourhood', neighbourhood: 'Neighbourhood', quarter: 'Neighbourhood', village: 'Village', town: 'Town', city: 'City', hamlet: 'Place', locality: 'Place', isolated_dwelling: 'Place',
+  fuel: 'Gas station', restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Cafe', bar: 'Bar', grocery: 'Grocery store', supermarket: 'Supermarket', shop: 'Shop', lodging: 'Hotel', hotel: 'Hotel', campsite: 'Campground',
+  park: 'Park', beach: 'Beach', school: 'School', college: 'College', hospital: 'Hospital', doctors: 'Clinic', pharmacy: 'Pharmacy', bank: 'Bank', atm: 'ATM', place_of_worship: 'Place of worship', town_hall: 'Town hall',
+  police: 'Police', fire_station: 'Fire station', post: 'Post office', attraction: 'Attraction', museum: 'Museum', stadium: 'Stadium', golf: 'Golf course', marina: 'Marina', airport: 'Airport', aerodrome: 'Airport',
+  bus: 'Bus stop', railway: 'Station', peak: 'Peak', water: 'Water', bay: 'Bay', ocean: 'Ocean', sea: 'Sea', lake: 'Lake', river: 'River' };
+function placeAt(e) {
+  const layers = map.getStyle().layers.filter(l => l.type === 'symbol' && l.source === 'openmaptiles' && !/shield|housenum/.test(l.id)).map(l => l.id);
+  const near = map.queryRenderedFeatures([[e.point.x - 14, e.point.y - 14], [e.point.x + 14, e.point.y + 14]], { layers }).filter(f => f.properties.name);
+  if (!near.length) return;
+  const rank = f => (f.sourceLayer === 'poi' ? 0 : f.sourceLayer === 'place' ? 1 : f.sourceLayer === 'transportation_name' ? 3 : 2);
+  const f = near.sort((a, b) => rank(a) - rank(b))[0], pr = f.properties;
+  const ll = f.geometry.type === 'Point' ? { lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] } : e.lngLat;
+  const name = pr['name:latin'] || pr.name, road = f.sourceLayer === 'transportation_name';
+  const kind = road ? 'Street' : KIND_WORDS[pr.subclass] || KIND_WORDS[pr.class] || (pr.subclass || pr.class || '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+  const div = el('div', 'pop');
+  div.append(el('b', '', name), el('small', '', [kind, here ? fmtDist(meters(here, [ll.lat, ll.lng]) / 1609.34) + ' away' : ''].filter(Boolean).join(' \u00b7 ')));
+  const go = el('button', 'go', 'Go here');
+  go.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } if (road) setPointFromLatLng('to', ll.lat, ll.lng); else setPoint('to', { lat: ll.lat, lon: ll.lng, label: name, name }); };
+  div.appendChild(go);
+  openPop(ll, div);
 }
 function mapMenu(lngLat) {
   const lat = lngLat.lat, lon = lngLat.lng, div = el('div', 'pop');
@@ -1235,6 +1286,23 @@ function settleEnter() {   // after Return, once every source has answered: keep
   say(s.items.some(p => p.d <= NEARBY) ? '' : 'Nothing nearby matches "' + s.q + '". These are further away.');
 }
 let debounce;
+// Search mode starts on the first touch of the box, so the screen changes at once even while the keyboard is on its way
+function enterSearch(which) {
+  if (nav || document.body.classList.contains('searching')) return;
+  document.body.classList.add('searching'); drawStrip();
+  if (!$(which).value.trim() || (which === 'to' && pts.to && $(which).value === pts.to.label)) shortcuts(which);
+}
+function exitSearch() {
+  if (!document.body.classList.contains('searching')) return;
+  document.body.classList.remove('searching');
+  listFor('to').style.display = 'none';
+  ['to', 'from'].forEach(w => { $(w).blur(); const p = pts[w]; $(w).value = p && !p.auto ? p.label : ''; });   // back to the chosen place, or empty
+  status(''); syncClear();
+  drawStrip();
+}
+['to', 'from'].forEach(w => { $(w).closest('.field').addEventListener('pointerdown', () => enterSearch(w)); $(w).addEventListener('focus', () => enterSearch(w)); });
+$('cancelSearch').onclick = exitSearch;
+$('searchScrim').addEventListener('pointerdown', e => { e.preventDefault(); exitSearch(); });
 ['from', 'to', 'friend'].forEach(which => {
   const input = $(which);
   if (which === 'to') input.addEventListener('blur', () => setTimeout(() => { if (settingPlace && !input.value.trim()) { settingPlace = null; input.placeholder = 'Where to?'; } }, 400));
@@ -1251,7 +1319,7 @@ let debounce;
     if (!q) return;
     e.preventDefault(); clearTimeout(debounce);
     enterFor = { which, q };
-    input.blur();
+    input.blur(); if (which !== 'friend') { document.body.classList.remove('searching'); drawStrip(); }
     if (!lastSearch || lastSearch.q !== q || lastSearch.which !== which) search(which, q, true); else settleEnter();
   });
 });
@@ -1260,7 +1328,7 @@ function suggestion(which, main, sub, right, p) {
   const li = el('li'), text = el('span', '', main);
   if (sub) text.appendChild(el('small', '', sub));
   li.append(text, el('em', '', right || ''));
-  li.onclick = () => { listFor(which).style.display = 'none'; $(which).blur(); if (which === 'friend') meetPick(p); else setPoint(which, p); };
+  li.onclick = () => { listFor(which).style.display = 'none'; if (which !== 'friend') exitSearch(); $(which).blur(); if (which === 'friend') meetPick(p); else setPoint(which, p); };
   return li;
 }
 // A place's address without its name repeated in front ("Walmart, Blvd ..." -> "Blvd ...")
@@ -1347,6 +1415,26 @@ function censusLookup(q) {
     document.head.appendChild(tag);
   });
 }
+// Names on the loaded map tiles (towns, neighbourhoods, businesses, beaches, peaks) that match every word typed,
+// ignoring accents ("campo angeles" finds "Campo Ángeles")
+const fold = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function mapNames(q, ref) {
+  if (!map || !map.getSource('openmaptiles') || q.length < 3) return [];
+  const words = fold(q).split(/[^a-z0-9]+/).filter(w => w.length > 1); if (!words.length) return [];
+  const out = [], seen = new Set();
+  for (const layer of ['place', 'poi', 'water_name', 'waterway', 'mountain_peak', 'park', 'aerodrome_label', 'transportation_name']) {
+    let feats = []; try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: layer }); } catch (e) {}
+    for (const f of feats) {
+      const pr = f.properties, name = pr['name:latin'] || pr.name; if (!name) continue;
+      const n = fold(name + ' ' + (pr.name_en || '')); if (!words.every(w => n.includes(w))) continue;
+      let c = f.geometry.coordinates; while (Array.isArray(c[0])) c = c[0];
+      const key = fold(name) + Math.round(c[1] * 200) + ',' + Math.round(c[0] * 200); if (seen.has(key)) continue; seen.add(key);
+      const kind = layer === 'transportation_name' ? 'Street' : layer === 'waterway' ? 'Stream' : KIND_WORDS[pr.subclass] || KIND_WORDS[pr.class] || (layer === 'park' ? 'Park' : layer === 'water_name' ? 'Water' : 'Place');
+      out.push({ main: name, sub: kind, lat: c[1], lon: c[0], named: true, osm: '', d: meters(ref, [c[1], c[0]]) });
+    }
+  }
+  return out.sort((a, b) => a.d - b.d).slice(0, 8);
+}
 const nearBorder = c => PORTS.some(([, , lat, lon]) => meters(c, [lat, lon]) < 150000);
 let poiDownUntil = 0;
 async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from TomTom's place list, through the app's server
@@ -1398,7 +1486,7 @@ async function search(which, q, now) {
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
   let near, close, far, exact = [], pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
-  const ql = q.toLowerCase(), mine = [], words = ql.replace(/\bkm\b/g, ' ').split(/[^a-z0-9\u00c0-\u024f]+/).filter(w => w.length > 1);
+  const ql = q.toLowerCase(), mine = [], words = fold(ql).replace(/\bkm\b/g, ' ').split(/[^a-z0-9]+/).filter(w => w.length > 1);
   [[places.home, 'Home'], [places.work, 'Work']].forEach(([pl, t]) => { if (pl && (t.toLowerCase().startsWith(ql) || (pl.label || '').toLowerCase().includes(ql))) mine.push(pl); });
   saved.concat(Object.values(visits).sort((a, b) => b.n - a.n).map(v => v.p), recent).forEach(pl => { if (pl && ((pl.name || '').toLowerCase().includes(ql) || (pl.label || '').toLowerCase().split(',')[0].includes(ql)) && !mine.some(o => o.label === pl.label)) mine.push(pl); });
   const own = mine.slice(0, 4).map(pl => {
@@ -1406,9 +1494,12 @@ async function search(which, q, now) {
     const parts = pl.label.split(','), sub = parts[0].trim() === main ? parts.slice(1).join(',').trim() : pl.label;
     return { main, sub, lat: pl.lat, lon: pl.lon, mine: true };
   });
-  if (own.length && which !== 'friend') {   // drawn right away; the full list replaces it when it arrives
-    list.innerHTML = ''; list.appendChild(el('li', 'head', 'Your places'));
-    own.forEach(p2 => list.appendChild(suggestion(which, p2.main, p2.sub, fmtDist(meters(ref, [p2.lat, p2.lon]) / 1609.34), { lat: p2.lat, lon: p2.lon, label: p2.sub ? p2.main + ', ' + p2.sub : p2.main, name: p2.main })));
+  const onMap = mapNames(q, ref);   // names printed on the map tiles already loaded: found at once, even ones search servers lack
+  if ((own.length || onMap.length) && which !== 'friend') {   // drawn right away; the full list replaces it when it arrives
+    list.innerHTML = '';
+    const head = t => list.appendChild(el('li', 'head', t)), row = p2 => list.appendChild(suggestion(which, p2.main, p2.sub, fmtDist(meters(ref, [p2.lat, p2.lon]) / 1609.34), { lat: p2.lat, lon: p2.lon, label: p2.sub ? p2.main + ', ' + p2.sub : p2.main, name: p2.main }));
+    if (own.length) { head('Your places'); own.forEach(row); }
+    if (onMap.length) { head('On the map'); onMap.slice(0, 5).forEach(row); }
     list.style.display = 'block';
   }
   let painted = false;
@@ -1431,9 +1522,9 @@ async function search(which, q, now) {
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
     if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
     else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
-      const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => low(p.main).includes(w));
-      const lead = p => low(p.main).startsWith(ql);   // "Costco" before "Saldos Costco"
-      add(own); add(all.filter(p => full(p) && lead(p)).sort(byDist)); add(all.filter(p => full(p) && !lead(p)).sort(byDist)); add(all.filter(p => !full(p)).sort(byDist));
+      const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => fold(p.main).includes(w));
+      const lead = p => fold(p.main).startsWith(fold(ql));   // "Costco" before "Saldos Costco"
+      add(own); add(all.filter(p => full(p) && lead(p)).sort(byDist)); add(all.filter(p => full(p) && !lead(p)).sort(byDist)); add(onMap); add(all.filter(p => !full(p)).sort(byDist));   // names only on the map come after the servers' matches
     }
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 12);
@@ -1870,11 +1961,14 @@ async function loadFires(box) {   // box [west, south, east, north]
       const r = Math.min(15000, Math.sqrt(size * 4047 / Math.PI) + 1600);
       fires.push({ kind: 'fire', name: p.IncidentName || 'Unnamed', c, r, active: true, info: acres(size) + ', ' + (pc == null ? 'containment not reported' : pc + '% contained') + '. Reported ' + ago(found) + '. No mapped outline yet, so a circle around the reported spot is avoided.' });
     });
-    const sat = await satP;
-    if (sat) sat.forEach(f => { if (!fires.some(x => x.sat ? meters(x.c, f.c) < x.r + f.r : x.rings ? x.rings.some(r => inRing(f.c, r)) : meters(x.c, f.c) < x.r + f.r)) fires.push(f); });
+    satP.then(sat => {   // satellite fires arrive on their own time; a route that now runs into one is worked out again
+      if (!sat || !sat.length) return;
+      sat.forEach(f => { if (!fires.some(x => x.sat ? meters(x.c, f.c) < x.r + f.r : x.rings ? x.rings.some(r => inRing(f.c, r)) : meters(x.c, f.c) < x.r + f.r)) fires.push(f); });
+      nameFires(); drawZones(); fireCount();
+      if (!nav && routes.length && prefs.fires && zoneHits(routes[selected].coords).length) route(true);
+    });
     fireBoxes.push(big); fireAt = Date.now(); fireFail = false;
-    const act = fires.filter(x => x.active).length;
-    $('fireMsg').textContent = (act ? act + (act === 1 ? ' active fire' : ' active fires') + ' nearby. ' : 'No active fires nearby. ') + 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
+    fireCount(); nameFires();
     drawZones();
   } catch (e) { fireFail = true; $('fireMsg').textContent = 'Could not get wildfire data (' + (e.name === 'AbortError' ? 'timed out' : e.message) + '). Routes are not being checked for fires.'; throw e; }
 }
@@ -1904,18 +1998,31 @@ async function satFires(box) {
   return groups.filter(g => { const heat = g.pts.reduce((n, q) => n + q[2], 0); return (g.pts.length >= 3 && heat >= 20) || heat >= 100; }).map(g => {
     const c = [g.pts.reduce((n, q) => n + q[0], 0) / g.pts.length, g.pts.reduce((n, q) => n + q[1], 0) / g.pts.length];
     const r = Math.min(15000, Math.max(...g.pts.map(q => meters(c, q))) + 1200), last = Math.max(...g.pts.map(q => q[3]));
-    return { kind: 'fire', sat: true, name: 'Satellite-detected', c, r, active: Date.now() - last < 36 * 3600000,
+    return { kind: 'fire', sat: true, name: 'Satellite-detected', title: 'Fire seen by satellite', c, r, active: Date.now() - last < 36 * 3600000,
       info: g.pts.length + ' heat spots seen by NASA satellites in the last 2 days, latest ' + ago(last) + '. Not confirmed by a fire agency: it can be a controlled or farm burn. A circle around the spots is avoided.' };
   });
+}
+function fireCount() {
+  const act = fires.filter(x => x.active).length;
+  $('fireMsg').textContent = (act ? act + (act === 1 ? ' active fire' : ' active fires') + ' nearby. ' : 'No active fires nearby. ') + 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
+}
+// Satellite fires have no name: call each one after the nearest town or neighbourhood, so the map says where it is
+async function nameFires() {
+  for (const f of fires.filter(x => x.sat && !x.place).slice(0, 6)) {
+    f.place = '...';
+    const n = await reverseName(f.c[0], f.c[1]).catch(() => null);
+    f.place = n ? (n.label.split(',').map(x => x.trim()).filter(x => !/^\d/.test(x))[1] || n.main) : '';
+    if (f.place) { f.name = 'Near ' + f.place; f.title = 'Fire near ' + f.place; drawZones(); }
+  }
 }
 function circleRing(c, r) { const out = []; for (let k = 0; k <= 32; k++) { const t = k / 32 * 2 * Math.PI; out.push([c[1] + r / 111320 / Math.cos(c[0] * Math.PI / 180) * Math.cos(t), c[0] + r / 111320 * Math.sin(t)]); } return out; }
 function drawZones() {
   if (!map || !map.getSource('zones')) return;
   const feats = [];
   if (prefs.fires) fires.forEach(f => {
-    feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
+    feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.title || f.name + ' Fire', info: f.info }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
     const c = f.c ? [f.c[1], f.c[0]] : [(f.box[0] + f.box[2]) / 2, (f.box[1] + f.box[3]) / 2];
-    if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.name + ' Fire', info: f.info }, geometry: { type: 'Point', coordinates: c } });
+    if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.title || f.name + ' Fire', info: f.info }, geometry: { type: 'Point', coordinates: c } });
   });
   avoid.forEach(a => { if ((a.r || 120) > 300) feats.push({ type: 'Feature', properties: { kind: 'spot', active: true }, geometry: { type: 'Polygon', coordinates: [circleRing([a.lat, a.lon], a.r)] } }); });
   map.getSource('zones').setData({ type: 'FeatureCollection', features: feats });
@@ -2250,7 +2357,7 @@ async function route(quiet) {
   if (!quiet) status('Finding routes...');
   const id = ++reqId;
   let found = null;
-  if (prefs.fires) { await loadFires(tripBox()).catch(() => {}); if (id !== reqId) return false; }
+  if (prefs.fires) { await Promise.race([loadFires(tripBox()).catch(() => {}), pause(2500)]); if (id !== reqId) return false; }   // never hold a route long for fire data; late fires re-check it
   if (useBackup && Date.now() - useBackup > 300000) useBackup = false;   // try the main router again after 5 minutes
   if (hasTraffic() && prefs.trafficRoute && (prefs.mode === 'auto' || prefs.mode === 'rig')) {   // traffic-aware when a key is saved; any failure falls through to the open routers
     try {
@@ -2298,7 +2405,7 @@ function zoneNote(rt) {   // a warning when the route still enters an area you a
   $('status').classList.remove('warn');
   if (!rt) return '';
   const hit = zoneHits(rt.coords)[0], fire = zonesAround().find(z => z.kind === 'fire');
-  const what = z => z.kind === 'fire' ? 'the ' + z.name + ' Fire area' : 'an area you avoid';
+  const what = z => z.kind === 'fire' ? (z.title ? 'the ' + z.title.replace(/^Fire/, 'fire') + ' area' : 'the ' + z.name + ' Fire area') : 'an area you avoid';
   if (hit) { $('status').classList.add('warn'); return 'This route goes through ' + what(hit.z) + '. There was no way around it. Check road closures before you go.'; }
   if (fire) { $('status').classList.add('warn'); return 'Your start or destination is inside or near the ' + fire.name + ' Fire area. Check evacuation orders and road closures.'; }
   if (prefs.fires && fireFail) return 'Could not get wildfire data, so this route is not checked for fires.';
@@ -2617,7 +2724,7 @@ function layout() {   // keep the floating button and map credit clear of the ro
 const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
 function say(text, level) {
   if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text) return;
-  if (TTS) { TTS.stop().catch(() => {}).then(() => TTS.speak({ text, lang: 'en-US', rate: 1, category: 'playback' })).catch(() => {}); return; }
+  if (TTS) { TTS.speak({ text, lang: 'en-US' }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
   if (!window.speechSynthesis) return;
   try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {}
 }
@@ -2967,7 +3074,7 @@ async function loadTraffic() {
 // One line of glanceable text under the browser bar. Nothing here is tappable.
 let hereName = '', hereAt = null, hereWhen = 0, stripRoute = '';
 function drawStrip() {
-  const t = !navigator.onLine ? 'Offline: maps and search need a connection'
+  const t = document.body.classList.contains('searching') ? 'Search places, addresses and businesses' : !navigator.onLine ? 'Offline: maps and search need a connection'
     : nav ? (nav.info || 'Starting...')
     : routes.length && pts.to ? stripRoute
     : hereName ? 'Near ' + hereName : here ? 'Showing your location'
