@@ -381,8 +381,8 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 <div id="scrim"></div>
 <div id="routeOpts" class="panel sheet">
   <h2>Route options <button class="go" data-close>Done</button></h2>
-  <p>Every route follows these until you change them. Your current route updates as you tap.</p>
-  <h3>Always avoid</h3>
+  <p>Used for every route until you change them.</p>
+  <h3>Avoid</h3>
   <div class="chips">
     <button data-pref="noHwy">Highways</button>
     <button data-pref="noToll">Tolls</button>
@@ -391,29 +391,29 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <button data-pref="noAlleys">Alleys and service roads</button>
     <button data-pref="noBorders">Border crossings</button>
   </div>
-  <h3>My border lane (US-Mexico)</h3>
-  <p>Wait times are the US border agency's current numbers for cars entering the US.</p>
-  <div class="chips" data-set="lane"><button data-v="standard">Regular</button><button data-v="ready">Ready Lane</button><button data-v="sentri">SENTRI</button></div>
   <h3>Route style</h3>
   <div class="chips">
-    <button data-pref="simple">Fewer turns, even if a bit slower</button>
-    <button data-pref="shortest">Shortest distance, not fastest</button>
-    <button data-pref="relaxed">Relaxed pace, under 55 mph</button>
+    <button data-pref="simple">Fewer turns</button>
+    <button data-pref="shortest">Shortest, not fastest</button>
+    <button data-pref="relaxed">Relaxed, under 55 mph</button>
     <button data-pref="showAll">Show every alternative</button>
   </div>
+  <h3>Border lane (US-Mexico)</h3>
+  <p>Used for wait times when crossing into the US.</p>
+  <div class="chips" data-set="lane"><button data-v="standard">Regular</button><button data-v="ready">Ready Lane</button><button data-v="sentri">SENTRI</button></div>
   <h3>Biking</h3>
   <div class="chips">
     <button data-pref="bikeFlat">Avoid hills</button>
-    <button data-pref="bikePaths">Prefer bike paths and quiet streets</button>
+    <button data-pref="bikePaths">Prefer bike paths</button>
   </div>
   <h3>Wildfires</h3>
-  <p>Active US wildfire areas from the national fire agencies (NIFC), updated a few times a day. Routes keep at least half a mile from fire areas that are not fully contained. This does not include evacuation zones or road closures: follow local officials.</p>
+  <p>Fire areas from US fire agencies and NASA satellites. Routes stay at least half a mile away. For evacuations and road closures, follow local officials.</p>
   <div class="chips"><button data-pref="fires">Show and avoid wildfires</button></div>
   <div id="fireMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
-  <h3>Spots I avoid</h3>
-  <p>Press and hold a spot on the map and choose "Avoid this spot" (the road there) or "Avoid this area" (about a mile around it), even during a trip. Tap its marker to stop avoiding it.</p>
+  <h3>Spots you avoid</h3>
+  <p>Press and hold the map, then choose "Avoid this spot". Tap an avoided spot to make it bigger or smaller.</p>
   <ul class="list" id="avoidList"></ul>
-  <h3>My rig (used in Rig mode)</h3>
+  <h3>Rig (used in Rig mode)</h3>
   <p>For a camper, trailer or tall vehicle. Routes avoid roads and bridges posted below these limits.</p>
   <div class="rig">
     <label>Height (ft)<div class="field"><input id="rigH" type="number" inputmode="decimal" step="0.5" min="5" max="15"></div></label>
@@ -423,79 +423,75 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 </div>
 <div id="prefs" class="panel sheet">
   <h2>Settings <button id="closePrefs" class="go">Done</button></h2>
-  <p>How the app looks, talks and stores maps. Avoiding tolls, highways and the like is under Route options.</p>
-  <h3>Map colours</h3>
-  <div class="chips"><button data-map="autoNight">Dark map at night</button></div>
-  <div id="themes"></div>
-  <h3>Font</h3>
-  <details class="picker" id="fontPick"><summary><span class="lbl">Font</span><b id="fontNow"></b></summary><div class="chips" id="fonts"></div></details>
-  <h3>Map details</h3>
-  <div class="chips">
-    <button data-map="showPois">Shop and cafe icons</button>
-    <button data-map="showBuildings">Buildings</button>
-  </div>
-  <h3>Show on my map</h3>
-  <p>Kinds of places to mark clearly on the map, everywhere you go.</p>
-  <div class="chips" id="poiKinds"></div>
-  <h3>Places I like</h3>
-  <p>Chains or names to stand out on the map in gold, so you notice when you pass one (for example Dunkin' or Oxxo).</p>
-  <div class="rig"><div class="field" style="flex:1"><input id="favIn" type="text" placeholder="Add a name" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"></div><button id="favAdd">Add</button></div>
-  <div class="chips" id="favList"></div>
-  <h3>Label size</h3>
-  <div class="chips" data-mapset="labels"><button data-v="s">Small</button><button data-v="m">Standard</button><button data-v="l">Large</button></div>
-  <h3>Distances</h3>
-  <div class="chips" data-mapset="units"><button data-v="mi">Miles</button><button data-v="km">Kilometres</button></div>
-  <h3>Speeds</h3>
-  <p>For your speed and the speed limit while driving. In Mexico the signs are in km/h.</p>
-  <div class="chips" data-mapset="speedUnits"><button data-v="mph">mph</button><button data-v="kmh">km/h</button></div>
-  <h3>Voice directions</h3>
-  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <h3>On-screen directions</h3>
-  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <h3>Extra guidance</h3>
-  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
-  <h3>Map during directions</h3>
-  <div class="chips" data-set="northUp"><button data-v="false">Faces my direction</button><button data-v="true">North up</button></div>
   <h3>Home and work</h3>
-  <p>They show first under the search box.</p>
   <div class="placeRow"><b>Home</b><span id="homeNow"></span><button id="homeHere" class="pill">This destination</button><button id="homeMe" class="pill">My location</button><button id="homeFind" class="pill">Search</button><button id="homeMap" class="pill">On the map</button><button id="homeDel" class="ghost">Remove</button></div>
   <div class="placeRow"><b>Work</b><span id="workNow"></span><button id="workHere" class="pill">This destination</button><button id="workMe" class="pill">My location</button><button id="workFind" class="pill">Search</button><button id="workMap" class="pill">On the map</button><button id="workDel" class="ghost">Remove</button></div>
   <h3>My places</h3>
-  <p>Name places only you use (for example My spa or Mom's). They show with home and work when you search.</p>
+  <p>Your own names for places, like "My spa". They show first when you search.</p>
   <ul class="list" id="mineList"></ul>
   <div class="rig"><div class="field" style="flex:1"><input id="mineName" type="text" placeholder="Name, for example My spa" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"></div></div>
   <div class="chips" id="mineHow"><button data-how="find">Search its address</button><button data-how="here">My location</button><button data-how="map">On the map</button></div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
-  <h3>Offline map</h3>
-  <p>Places you have looked at stay viewable without a connection for a while. To be sure of an area, move the map to it and save it. Search and new routes still need a connection; a route you already have keeps working.</p>
+  <h3>Voice directions</h3>
+  <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>On-screen directions</h3>
+  <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <h3>While driving, show</h3>
+  <div class="chips"><button data-nav="lanes">Which lane to be in</button><button data-nav="landmarks">Landmarks at turns</button><button data-nav="showSpeed">Speed and speed limit</button></div>
+  <div class="chips" data-set="northUp" style="margin-top:8px"><button data-v="false">Map faces my direction</button><button data-v="true">North up</button></div>
+  <h3>Units</h3>
+  <p>Distances</p>
+  <div class="chips" data-mapset="units"><button data-v="mi">Miles</button><button data-v="km">Kilometres</button></div>
+  <p style="margin-top:10px">Speeds (signs in Mexico are in km/h)</p>
+  <div class="chips" data-mapset="speedUnits"><button data-v="mph">mph</button><button data-v="kmh">km/h</button></div>
+  <h3>Map colours</h3>
+  <div class="chips"><button data-map="autoNight">Dark map at night</button></div>
+  <div id="themes"></div>
+  <h3>Text</h3>
+  <details class="picker" id="fontPick"><summary><span class="lbl">Font</span><b id="fontNow"></b></summary><div class="chips" id="fonts"></div></details>
+  <p style="margin-top:10px">Label size</p>
+  <div class="chips" data-mapset="labels"><button data-v="s">Small</button><button data-v="m">Standard</button><button data-v="l">Large</button></div>
+  <h3>On the map</h3>
+  <div class="chips">
+    <button data-map="showPois">Shop and cafe icons</button>
+    <button data-map="showBuildings">Buildings</button>
+  </div>
+  <p style="margin-top:10px">Always mark these:</p>
+  <div class="chips" id="poiKinds"></div>
+  <h3>Places I like</h3>
+  <p>Names shown in gold so you notice them as you pass, like Dunkin' or Oxxo.</p>
+  <div class="rig"><div class="field" style="flex:1"><input id="favIn" type="text" placeholder="Add a name" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"></div><button id="favAdd">Add</button></div>
+  <div class="chips" id="favList"></div>
+  <h3>Offline maps</h3>
+  <p>Areas you have looked at work without signal for a while. To be sure, move the map to an area and save it. Search and new routes need a connection; a route you already have keeps working.</p>
   <div class="chips"><button id="offSave">Save the area on screen</button><button id="offClear">Remove saved areas</button></div>
   <div id="offMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <div id="offUse" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
   <div class="webonly">
-  <h3>More reliable search (optional)</h3>
-  <p>Search uses free public servers that are sometimes slow or down. A free Geoapify key (no card) makes it steadier: create one at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and paste it here. It stays on this device. With a key, what you type in search is sent to Geoapify.</p>
+  <h3>Steadier search (optional)</h3>
+  <p>Paste a free Geoapify key from <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> if search is slow. It stays on this device, and what you search is sent to Geoapify.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="geoKey" type="text" placeholder="Geoapify key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="geoSave">Save</button></div>
   <div id="geoMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   </div>
   <div class="apponly">
   <h3>Premium: live traffic</h3>
-  <p>Routes that steer around jams, arrival times that include traffic, and traffic colours on the map. Everything else in the app is free.</p>
+  <p>Routes around jams, arrival times that include traffic, and traffic colours on the map. Everything else is free.</p>
   <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
   <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://sabrinapalmer.com/map/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
   </div>
   <div class="webonly">
   <h3>Live traffic (optional)</h3>
-  <p>Traffic needs a free TomTom key (no card): create one at developer.tomtom.com and paste it here. It stays on this device. With a key, driving routes come from TomTom and steer around jams, and your trip's start and end are sent to TomTom. Walking and biking are unchanged.</p>
+  <p>Paste a free TomTom key from developer.tomtom.com. It stays on this device. Driving routes then come from TomTom and avoid jams, and your trip's start and end are sent to TomTom.</p>
   <div class="rig"><div class="field" style="flex:1"><input id="ttKey" type="text" placeholder="TomTom key" autocomplete="off" autocapitalize="off" spellcheck="false"></div><button id="ttSave">Save</button></div>
   </div>
   <div class="chips" style="margin-top:8px"><button data-traffic="trafficRoute">Route around traffic</button><button data-traffic="trafficLayer">Show traffic on the map</button></div>
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
-  <p>No ads, no sponsored places, no account. Your places and settings stay on this device. Maps and roads come from OpenStreetMap, which anyone can correct.</p>
-  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search and routing <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Powered by Geoapify</a>; on the website, Photon, Nominatim, Valhalla and OSRM as a backup. Traffic, when you add a key, &copy; TomTom. Search, when you add a key, powered by Geoapify. Search, when you add a key, powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>.</p>
-  <p><a id="report" target="_blank" rel="noopener">Report a map problem here</a></p>
+  <p>No ads, no sponsored places, no account. Your places and settings stay on this device.</p>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, which anyone can correct. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search and routing <a href="https://www.geoapify.com/" target="_blank" rel="noopener">powered by Geoapify</a>. Traffic &copy; TomTom. Fire data from NIFC and NASA FIRMS. Border waits from US Customs and Border Protection.</p>
+  <p><a id="report" target="_blank" rel="noopener">Report a map problem</a></p>
 </div>
 
 <div id="meet" class="panel sheet">
@@ -548,7 +544,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 </div>
 <div id="locSheet" class="panel sheet">
   <h2><span id="locTitle">Location is off</span> <button class="ghost" data-close>Close</button></h2>
-  <p>The map needs your location to start routes from where you are and to search nearby. It is only used on this device.</p>
+  <p>BrinaMaps uses your location to start routes from where you are and to show what is nearby.</p>
   <ol id="locSteps"></ol>
   <div class="chips"><button id="locSettings" class="go" hidden>Open Settings</button><button id="locRetry" class="go">Try again</button><button id="locPlan">Choose a start instead</button></div>
 </div>
@@ -1819,7 +1815,7 @@ function setPoint(which, p) {
 function startFromHere() {
   const use = () => { if (pts.to && !pts.from && here && !planning) setPoint('from', { lat: here[0], lon: here[1], label: 'My location', auto: true }); };
   if (here) { use(); return; }
-  if (!navigator.geolocation && !BG) { status('Location is not available. Use "Plan a route" to choose a start.'); return; }
+  if (!navigator.geolocation && !BG) { status('Location is not available. Tap the route button next to the search box to choose a start.'); return; }
   status('Getting your location...');
   if (BG) return;   // in the app the running location watch picks this up on its first fix
   navigator.geolocation.getCurrentPosition(
@@ -1907,13 +1903,13 @@ async function addAvoid(lat, lon, r) {
   const a = { lat, lon, r: r || 120, label: lat.toFixed(4) + ', ' + lon.toFixed(4) };
   avoid.push(a); store('map.avoid', avoid); drawAvoid(); drawLists();
   if (nav) await renav('Avoiding that spot.');
-  else if (!(await route())) status('Got it. Routes will avoid that spot. Tap its marker to undo.');
+  else if (!(await route())) status('Avoiding this spot. Tap it to make it bigger or smaller, or to stop avoiding it.');
   const n = await reverseName(lat, lon);
   if (n) { a.label = (a.r > 500 ? 'Area around ' : '') + n.street; store('map.avoid', avoid); drawLists(); }
 }
 function tipOnce() {   // one-time hint, since press-and-hold is not discoverable
   if (store('map.tipHold')) return;
-  store('map.tipHold', 1); status('Tip: press and hold the map to go to a spot or avoid it.');
+  store('map.tipHold', 1); status('Tip: press and hold the map to go there, save it or avoid it.');
 }
 
 // ---------- Meet in the middle ----------
@@ -2542,7 +2538,7 @@ async function geoapifyRoutes(quiet) {
   const missing = geoMissing(), left = geoBreaks(trips[0]), said = { unpaved: 'unpaved road', alley: 'service road or alley', border: 'border crossing' };
   const stuckOn = [...new Set(left.map(x => x.why))].map(w => said[w]);
   trips.note = stuckOn.length ? 'No way around found: this route still has a ' + stuckOn.join(' and a ') + '.'
-    : missing.length ? 'Not available in this version: ' + missing.join(', ') + (prefs.mode === 'rig' ? ' (routes use the nearest truck class)' : '') + '.' : '';
+    : missing.length ? 'Not supported here: ' + missing.join(', ') + (prefs.mode === 'rig' ? ' (routes use the nearest truck class)' : '') + '.' : '';
   return trips;
 }
 
@@ -3779,7 +3775,7 @@ function startWatch(precise) {
     const old = bgWatch; bgWatch = null;
     Promise.resolve(old).then(id => id && BG.removeWatcher({ id })).catch(() => {});
     const opts = { requestPermissions: true, stale: false, distanceFilter: nav ? 3 : 10 };
-    if (nav) Object.assign(opts, { backgroundTitle: 'Directions are running', backgroundMessage: 'Map is using your location to guide you.' });
+    if (nav) Object.assign(opts, { backgroundTitle: 'Directions are running', backgroundMessage: 'BrinaMaps is using your location to guide you.' });
     bgWatch = BG.addWatcher(opts, (loc, err) => {
       if (err) { if (err.code === 'NOT_AUTHORIZED') { locState = 'blocked'; drawStrip(); if (nav) $('navText').textContent = 'Location is off. Allow location for BrinaMaps in Settings.'; } return; }
       if (!loc) return;
