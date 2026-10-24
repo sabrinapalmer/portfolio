@@ -1117,7 +1117,7 @@ async function geoFetchNet(ep, qs, signal, body) {
 }
 function geoProps(x) {   // a Geoapify feature's properties in the free search server's shape
   const p = x.properties || x, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || p.result_type || '';
-  return { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.town || p.village || p.county, state: p.state, country: p.country,
+  return { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.town || p.village || p.county, state: p.state, country: p.country, countrycode: p.country_code,
     osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours };
 }
 const geoPhoton = d => ({ features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => ({ geometry: x.geometry, properties: geoProps(x) })) });
@@ -1128,6 +1128,7 @@ async function geoapify(path, signal) {   // a free-search-server style path ans
     const p = { text: q.get('q'), lang: 'en', format: 'geojson', limit: q.get('limit') || 8 };
     if (q.get('lat')) p.bias = 'proximity:' + q.get('lon') + ',' + q.get('lat');
     if (q.get('bbox')) { const [w, s2, e, n] = q.get('bbox').split(','); p.filter = rectOf(s2, w, n, e); }
+    if (q.get('cc')) p.filter = 'countrycode:' + q.get('cc');
     return geoPhoton(await geoFetch('autocomplete', p, signal));
   }
   if (path.startsWith('/reverse')) {
@@ -1330,6 +1331,16 @@ function censusLookup(q) {
     document.head.appendChild(tag);
   });
 }
+const nearBorder = c => PORTS.some(([, , lat, lon]) => meters(c, [lat, lon]) < 150000);
+let poiDownUntil = 0;
+async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from TomTom's place list, through the app's server
+  if (Date.now() < poiDownUntil) return [];
+  try {
+    const r = await fetch(API + '/poi?q=' + encodeURIComponent(q) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
+    if (!r.ok) { if (r.status >= 500) poiDownUntil = Date.now() + 600000; return []; }
+    return ((await r.json()).places || []).map(p => ({ main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '' }));
+  } catch (e) { return []; }
+}
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
   try {
     const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 0.5)}&q=${encodeURIComponent(q)}`, signal);
@@ -1365,11 +1376,13 @@ async function search(which, q, now) {
   const ctl = searchCtl = new AbortController();
   const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
-  const get = url => photon(url, ctl.signal).then(d => (d.features || []).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }))).catch(() => null);
+  const JUNK = /^(taxi|bus_stop|platform|stop_position|parking|parking_entrance|parking_space|bicycle_parking|vending_machine|atm)$/;
+  const get = url => photon(url, ctl.signal).then(d => (d.features || []).filter(f => !JUNK.test(f.properties.osm_value || '') || /taxi|bus|park|atm/i.test(q))
+    .map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], cc: String(f.properties.countrycode || '').toLowerCase(), named: !!f.properties.name }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
   let near, close, far, exact = [], pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
-  const ql = q.toLowerCase(), mine = [];
+  const ql = q.toLowerCase(), mine = [], words = ql.replace(/\bkm\b/g, ' ').split(/[^a-z0-9\u00c0-\u024f]+/).filter(w => w.length > 1);
   [[places.home, 'Home'], [places.work, 'Work']].forEach(([pl, t]) => { if (pl && (t.toLowerCase().startsWith(ql) || (pl.label || '').toLowerCase().includes(ql))) mine.push(pl); });
   saved.concat(Object.values(visits).sort((a, b) => b.n - a.n).map(v => v.p), recent).forEach(pl => { if (pl && ((pl.name || '').toLowerCase().includes(ql) || (pl.label || '').toLowerCase().split(',')[0].includes(ql)) && !mine.some(o => o.label === pl.label)) mine.push(pl); });
   const own = mine.slice(0, 4).map(pl => {
@@ -1401,9 +1414,12 @@ async function search(which, q, now) {
     // Street addresses: the exact match leads. Names (a store, a chain): everything near you in one list, closest first,
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
     if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
-    else { add(own); add(exact.concat(close || [], near || [], far || []).sort(byDist)); }   // your places first, then every server's answers nearest first
+    else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
+      const all = exact.concat(close || [], near || [], far || []), full = p => p.named && words.length && words.every(w => low(p.main).includes(w));
+      add(own); add(all.filter(full).sort(byDist)); add(all.filter(p => !full(p)).sort(byDist));
+    }
     items.forEach(p => { p.d = dist(p); });
-    const shown = items.slice(0, cat ? 14 : 10);
+    const shown = items.slice(0, cat ? 14 : 12);
     lastSearch = { which, q, items: shown, pending };
     painted = true;
     list.innerHTML = '';
@@ -1441,9 +1457,23 @@ async function search(which, q, now) {
     if (deeperAsked || id !== searchId) return; deeperAsked = true; pending++;
     Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
   };
-  get(base + '&limit=' + (geo ? 15 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => {
+  get(base + '&limit=' + (geo ? 20 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => {
     far = f;
     if (geo && deeper && !isAddress && (!f || f.length < 3)) askDeeper();   // thin answer: try the address search too
+    if (geo && f && !isAddress && !cat && q.length >= 3) {
+      // Near the US-Mexico border: the search fills up with one side, so ask the other side too and list both by distance
+      const mine = (f.find(p => p.cc) || {}).cc || '', side = mine === 'mx' ? 'us' : mine === 'us' ? 'mx' : '';
+      if (side && nearBorder(ref) && f.filter(p => p.cc === side).length < 2) {
+        pending++;
+        get(base + '&limit=10&cc=' + side).then(o => { if (id !== searchId) return; if (o) far = (far || []).concat(o); pending--; paint(); });
+      }
+      // No named place matches what you typed (say a restaurant the open map data does not have): ask TomTom's place list
+      const known = f.some(p => p.named && words.every(w => p.main.toLowerCase().includes(w)));
+      if (!known && words.length) {
+        pending++;
+        poiSearch(q, ref, ctl.signal).then(o => { if (id !== searchId) return; if (o.length) far = (far || []).concat(o); pending--; paint(); });
+      }
+    }
     pending--; paint();
   });
   const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
@@ -2338,6 +2368,10 @@ function crossingOf(rt) {   // the port a route crosses at, which way, and how l
   return null;
 }
 async function checkBorder(list) {
+  list.forEach(rt => {   // undo an earlier lane's changes before working them out again
+    if (!rt._border) return;
+    rt.time = rt._border.time; rt._border.steps.forEach(([x, keep]) => Object.assign(x, keep)); rt._border = null;
+  });
   const any = list.map(rt => (rt.border = crossingOf(rt))).some(b => b && b.north);
   if (!any) return;
   const ports = await Promise.race([borderWaits(), pause(3000).then(() => null)]);
@@ -2345,11 +2379,32 @@ async function checkBorder(list) {
   list.forEach(rt => {
     const b = rt.border; if (!b || !b.north) return;
     const lk = prefs.lane || 'standard', cand = ports.filter(p => p.port.toLowerCase().includes(b.port.toLowerCase()) && (!b.crossing || p.crossing.toLowerCase().includes(b.crossing)));
-    const hit = cand.find(p => p[lk] && p[lk].minutes != null) || cand.find(p => !/pending/i.test((p[lk] || {}).status || '')) || cand[0];   // skip duplicate entries with no numbers
+    const hit = cand.find(p => p[lk] && p[lk].minutes != null) || cand.find(p => p.standard && p.standard.minutes != null) || cand.find(p => !/pending/i.test((p[lk] || {}).status || '')) || cand[0];   // skip duplicate entries with no numbers
     if (!hit) return;
-    const l = hit[prefs.lane || 'standard'];
-    b.lane = LANES[prefs.lane || 'standard']; b.wait = l && l.minutes != null ? l.minutes : null; b.status = l ? l.status : ''; b.updated = l ? l.updated : '';
-    b.closed = /closed/i.test(hit.status) || /closed|n\/a/i.test(b.status || '');
+    // The lanes your pass lets you use: SENTRI also gets you into Ready Lanes and regular lanes; a Ready Lane card
+    // (passport card, enhanced license) also gets you into regular lanes. Use your own lane, or one you can use that is shorter now.
+    const open = k => { const l = hit[k]; return l && l.minutes != null && !/closed|n\/a/i.test(l.status || '') ? l : null; };
+    const may = { sentri: ['sentri', 'ready', 'standard'], ready: ['ready', 'standard'], standard: ['standard'] }[lk] || ['standard'];
+    let use = open(lk) ? lk : null;
+    may.forEach(k => { if (open(k) && (!use || open(k).minutes < open(use).minutes - 5)) use = k; });   // switch only for a real saving
+    const l = hit[use || lk];
+    b.mine = lk; b.laneKey = use || lk; b.lane = LANES[b.laneKey]; b.wait = use ? l.minutes : null; b.status = l ? l.status : ''; b.updated = l ? l.updated : '';
+    b.closed = !use && (/closed/i.test(hit.status) || /closed|n\/a/i.test(b.status || ''));
+    b.yours = use && use !== lk ? { lane: LANES[lk], wait: open(lk) ? open(lk).minutes : null } : null;
+    // Route time: the router puts its own fixed guess for the line (often 10 minutes) on the step at the port.
+    // Swap that for the wait reported now for your lane, and name your lane in that step.
+    const st = rt.steps.filter(x => x.begin <= b.idx + 5 && x.end >= b.idx - 60).map(x => ({ x, extra: (x.time || 0) - (x.length * 1609.34) / 8 })).sort((p, q) => q.extra - p.extra)[0];
+    const extra = st && st.extra > 120 ? st.extra : 0;
+    if (st) rt._border = { time: rt.time, steps: [[st.x, { time: st.x.time, instruction: st.x.instruction, say: st.x.say, short: st.x.short, road: st.x.road }]] };
+    if (b.wait != null) {
+      const add = b.wait * 60 - extra;
+      if (st) st.x.time = Math.max(0, (st.x.time || 0) + add);
+      rt.time = Math.max(60, rt.time + add); b.counted = true;
+    }
+    if (st && b.laneKey !== 'standard') {
+      const say = 'Get in the ' + b.lane + ' line for the ' + b.port + ' border crossing.';
+      Object.assign(st.x, { instruction: say, say, short: say, road: b.lane + ' line' });
+    }
   });
 }
 function borderLine(rt) {
@@ -2359,7 +2414,8 @@ function borderLine(rt) {
   const when = 'border in ' + fmtTime(b.eta) + ' (about ' + clock(b.eta) + ')';
   if (!b.north) return 'Into Mexico at ' + name + ', ' + when + '.';
   if (b.closed) return name + ': ' + (b.lane || 'your lane') + ' is closed now. ' + when.charAt(0).toUpperCase() + when.slice(1) + '.';
-  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + ' (US border agency).' : ': no wait time reported.');
+  const other = b.yours ? ' (' + b.yours.lane + (b.yours.wait != null ? ' is ' + fmtTime(b.yours.wait * 60) : ' has no time reported') + '; your pass lets you use the ' + b.lane + ')' : '';
+  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.');
 }
 
 function draw(fit) {
