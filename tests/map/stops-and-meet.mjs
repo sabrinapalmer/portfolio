@@ -28,7 +28,7 @@ await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({conte
 await p.goto('http://localhost/map'); await p.waitForTimeout(1800);
 await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1200);
 console.log('fab visible on route:', await p.isVisible('#fabStop'), JSON.stringify(await p.$eval('#fabStop',e=>{const r=e.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top)]})), 'bottom top', await p.$eval('#bottom',e=>Math.round(e.getBoundingClientRect().top)));
-await p.click('#fabStop'); await p.fill('#stopQ','Target'); await p.waitForTimeout(2500);
+await p.click('#addStop'); await p.fill('#stopQ','Target'); await p.waitForTimeout(2500);
 console.log('stop search:', await p.$$eval('#stopList li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), '|', await p.textContent('#stopMsg'));
 await p.fill('#stopQ','gas'); await p.waitForTimeout(2500);
 console.log('stop category:', await p.$$eval('#stopList li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))));
