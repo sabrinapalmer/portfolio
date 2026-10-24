@@ -1869,8 +1869,8 @@ async function loadFires(box) {   // box [west, south, east, north]
   } catch (e) { fireFail = true; $('fireMsg').textContent = 'Could not get wildfire data (' + (e.name === 'AbortError' ? 'timed out' : e.message) + '). Routes are not being checked for fires.'; throw e; }
 }
 // Outside the US the fire service has no data, so NASA's satellite heat spots (VIIRS, about 375 m across, last 2 days)
-// are grouped: spots within 1.5 km of each other are one fire. Three or more spots, or one very hot group, count as an
-// active fire to keep away from; a lone spot is usually a farm or trash burn and is left out.
+// are grouped: spots within 1.5 km of each other are one fire. Three or more spots giving off real heat (20 MW in all),
+// or one very hot group, count as an active fire to keep away from; small weak groups are usually farm or trash burns.
 const MX_LINE = [[-117.13, 32.53], [-114.72, 32.72], [-111.07, 31.33], [-108.21, 31.33], [-108.21, 31.78], [-106.53, 31.78], [-106.45, 31.76], [-106.3, 31.62], [-106.0, 31.39], [-105.0, 30.68], [-104.5, 29.6], [-103.0, 29.0], [-101.4, 29.77], [-99.5, 27.5], [-97.14, 25.95]];
 function inUS(lat, lon) {   // rough: the lower 48 (south of 49°N, east to Maine) and north of the Mexico border
   if (lat > 49.05 || lat < 24.4 || lon < -125 || lon > -66.9) return false;
@@ -1891,7 +1891,7 @@ async function satFires(box) {
     near[0].pts.push(s); near.slice(1).forEach(g => { near[0].pts.push(...g.pts); groups.splice(groups.indexOf(g), 1); });
   });
   const ago = t => { const h = (Date.now() - t) / 3600000; return h < 1 ? 'under an hour ago' : h < 48 ? Math.round(h) + ' hours ago' : Math.round(h / 24) + ' days ago'; };
-  return groups.filter(g => g.pts.length >= 3 || g.pts.reduce((n, q) => n + q[2], 0) >= 100).map(g => {
+  return groups.filter(g => { const heat = g.pts.reduce((n, q) => n + q[2], 0); return (g.pts.length >= 3 && heat >= 20) || heat >= 100; }).map(g => {
     const c = [g.pts.reduce((n, q) => n + q[0], 0) / g.pts.length, g.pts.reduce((n, q) => n + q[1], 0) / g.pts.length];
     const r = Math.min(15000, Math.max(...g.pts.map(q => meters(c, q))) + 1200), last = Math.max(...g.pts.map(q => q[3]));
     return { kind: 'fire', sat: true, name: 'Satellite-detected', c, r, active: Date.now() - last < 36 * 3600000,
