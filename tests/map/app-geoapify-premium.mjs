@@ -11,7 +11,7 @@ const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!o
 
 // Geoapify-shaped answers
 const place = (name, lat, lon, city, country, cat) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] },
-  properties: { name, city, country, categories: cat ? [cat] : [], result_type: 'amenity', datasource: { raw: { osm_type: 'n', osm_id: Math.round(lat * 1e5), opening_hours: 'Mo-Su 07:00-23:00' } } } });
+  properties: { name, city, country, country_code: country === 'Mexico' ? 'mx' : country === 'United States' ? 'us' : '', categories: cat ? [cat] : [], result_type: 'amenity', datasource: { raw: { osm_type: 'n', osm_id: Math.round(lat * 1e5), opening_hours: 'Mo-Su 07:00-23:00' } } } });
 function geoRoute(q) {
   const av = q.get('avoid') || '';
   // A route with a dirt service road that dips across the border mid-way, unless that spot is blocked
@@ -63,12 +63,18 @@ await p.route('**/*', async r => {
   if (/photon|nominatim|openstreetmap\.de|census\.gov/.test(u)) { calls.push('COMMUNITY ' + u); return r.abort(); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/geo')) {
     const q = new URL(u).searchParams, ep = q.get('ep'); calls.push('geo ' + ep + (q.get('avoid') ? ' avoid=' + q.get('avoid') : '') + (q.get('type') ? ' type=' + q.get('type') : ''));
+    if (ep === 'autocomplete' && /oxxo/i.test(q.get('text'))) return J({ type: 'FeatureCollection', features: q.get('filter') === 'countrycode:us'
+      ? [place('Oxxo', 32.56, -117.04, 'San Ysidro', 'United States')]
+      : [place('Oxxo', 32.36, -117.05, 'Rosarito', 'Mexico'), place('Oxxo', 32.60, -116.99, 'Tijuana', 'Mexico')] });
+    if (ep === 'autocomplete' && /hacienda/i.test(q.get('text'))) return J({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [-117.09, 32.42] },
+      properties: { housenumber: '43', street: 'Hacienda Agua Nueva', city: 'Tijuana', country: 'Mexico', country_code: 'mx', result_type: 'building', datasource: { raw: {} } } }] });
     if (ep === 'autocomplete') return J({ type: 'FeatureCollection', features: /walmart/i.test(q.get('text')) ? [place('Walmart', 32.64, -117.08, 'Chula Vista', 'United States'), place('Walmart Supercenter', 32.47, -117.00, 'Tijuana', 'Mexico'), place('Walmart Pharmacy', 32.6401, -117.0801, 'Chula Vista', 'United States'), place('Walmart', 32.37, -117.06, 'Rosarito', 'Mexico')] : [place('Ensenada', 31.86, -116.6, 'Ensenada', 'Mexico')] });
     if (ep === 'search' || ep === 'reverse' || ep === 'places') return J({ type: 'FeatureCollection', features: [] });
     if (ep === 'routing') { if (dirty) q.set('dirty', '1'); return J(geoRoute(q)); }
     if (ep === 'matrix') { const b = JSON.parse(r.request().postData() || '{}'); return J({ sources_to_targets: [b.targets.map((t, i) => ({ time: 600 + 300 * i, distance: 1000 }))] }); }
     return r.fulfill({ status: 404, body: '{}' });
   }
+  if (u.startsWith('https://www.sabrinapalmer.com/api/poi')) { calls.push('poi ' + new URL(u).searchParams.get('q')); return J({ places: /hacienda/i.test(u) ? [{ name: 'Hacienda Km 43', street: 'Carretera Libre Tijuana-Ensenada Km 43', city: 'Puerto Nuevo', state: 'Baja California', country: 'Mexico', cc: 'mx', lat: 32.25, lon: -116.94 }] : [] }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/tolls')) { calls.push('tolls'); return J({ booths: tollBooths }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/border')) { calls.push('border'); return J({ at: Date.now(), ports: [{ port: 'San Ysidro', crossing: '', status: 'Open', standard: { minutes: 75, status: 'delay' }, ready: { minutes: 45, status: 'delay' }, sentri: { minutes: 15, status: 'no delay' } }] }); }
   if (u.startsWith('https://www.sabrinapalmer.com/api/premium')) {
@@ -102,6 +108,19 @@ await p.focus('#to'); await p.keyboard.press('Enter'); await p.waitForTimeout(15
 check(await p.isVisible('#suggest') && (await p.evaluate(() => pts.to)) === toBefore, 'Return keeps the options open and picks nothing');
 check(await p.evaluate(() => document.activeElement.id !== 'to'), 'Return puts the keyboard away');
 check(await p.evaluate(() => poiMarkers.length) >= 1, 'Return pins the nearby options on the map');
+
+// Near the border, the other country's places are asked for too and listed by distance
+const cb = calls.length;
+await p.fill('#to', 'oxxo'); await p.waitForTimeout(2500);
+const ox = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
+console.log('oxxo list:', ox);
+check(ox.length === 3 && ox.some(x => /San Ysidro/.test(x)) && /Rosarito/.test(ox[0]), 'search near the border lists both countries, nearest first');
+check(calls.slice(cb).filter(c => c === 'geo autocomplete').length === 2 && !calls.slice(cb).some(c => c.startsWith('poi')), 'one extra request for the other side, none to the place list when names match');
+// A business the open map data lacks comes from the place list
+await p.fill('#to', 'hacienda km 43'); await p.waitForTimeout(2500);
+const hk = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
+console.log('hacienda list:', hk);
+check(/Hacienda Km 43/.test(hk[0] || '') && calls.some(c => c === 'poi hacienda km 43'), 'a restaurant missing from the open map data is found through the place list');
 
 await p.fill('#to', 'ensenada'); await p.waitForTimeout(1500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(2500);
 console.log('routes:', (await p.innerText('#routes')).replace(/\n/g, ' / '));
@@ -172,6 +191,17 @@ const bline = await p.evaluate(async () => {
 });
 console.log('border:', bline);
 check(/San Ysidro/.test(bline) && /Ready Lane wait now: 45 min/.test(bline) && /border in 20 min/.test(bline), 'border line names the port, your lane, its wait and when you reach it');
+// SENTRI: the router's own 10-minute guess for the line is swapped for the SENTRI wait, and the step names the lane
+const sen = await p.evaluate(async () => {
+  prefs.lane = 'sentri';
+  const rt = { time: 2400, coords: [[32.50, -117.03], [32.52, -117.03], [32.5422, -117.0291], [32.56, -117.04], [32.60, -117.05]],
+    steps: [{ begin: 0, end: 1, time: 1200, length: 10 }, { begin: 1, end: 2, time: 640, length: 0.1, instruction: 'Bear left onto Linea Normal.' }, { begin: 2, end: 4, time: 560, length: 6 }] };
+  await checkBorder([rt]); const a = { time: rt.time, step: rt.steps[1].instruction, line: borderLine(rt) };
+  prefs.lane = 'standard'; await checkBorder([rt]); a.std = rt.time; return a;
+});
+console.log('sentri:', JSON.stringify(sen));
+check(Math.abs(sen.time - (2400 - (640 - 160.9 / 8) + 15 * 60)) < 5 && /SENTRI line/.test(sen.step) && /SENTRI wait now: 15 min/.test(sen.line), 'SENTRI wait replaces the router guess in the trip time and the step names the SENTRI line');
+check(Math.abs(sen.std - (2400 - (640 - 160.9 / 8) + 75 * 60)) < 5, 'switching to the regular lane recomputes from the original time (75 min wait)');
 
 const community = calls.filter(c => c.startsWith('COMMUNITY') || c.startsWith('OTHER'));
 console.log('geo calls:', calls.filter(c => c.startsWith('geo')).length, '| first few:', calls.filter(c => c.startsWith('geo')).slice(0, 8));
