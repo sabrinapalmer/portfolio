@@ -100,8 +100,14 @@
 
   /* Route sheet */
   #bottom { bottom:calc(14px + env(safe-area-inset-bottom)); display:none; overflow:hidden; }
+  /* Phone on its side: the route card sits to the right of the search panel instead of on top of it, and scrolls */
+  @media (min-width:700px) and (max-height:560px) {
+    .panel { left:calc(16px + env(safe-area-inset-left)); }
+    #bottom { left:auto; right:calc(74px + env(safe-area-inset-right)); top:calc(10px + env(safe-area-inset-top)); bottom:calc(10px + env(safe-area-inset-bottom)); width:min(380px, calc(100vw - 520px)); min-width:320px; overflow-y:auto; }
+    #fabs { right:calc(10px + env(safe-area-inset-right)); bottom:calc(16px + env(safe-area-inset-bottom)); }
+  }
   #destHead { display:flex; align-items:center; gap:6px; padding:12px 8px 0 16px; }
-  #destHours { font-size:13px; color:var(--muted); margin:-2px 0 8px; } #destHours:empty { display:none; } #destHours.warn { color:#c0392b; font-weight:600; }
+  #destHours { font-size:13px; color:var(--muted); margin:-2px 0 8px; padding:0 16px; } #destHours:empty { display:none; } #destHours.warn { color:#c0392b; font-weight:600; }
   li.shut em { color:#c0392b; }
   #speedo { display:none; position:fixed; z-index:9; left:10px; bottom:calc(100px + env(safe-area-inset-bottom)); background:var(--card); box-shadow:var(--shadow); border-radius:14px; padding:6px 10px; text-align:center; min-width:52px; }
   body.nav #speedo.on { display:block; }
@@ -201,7 +207,7 @@
   #nav, #navbar, #arrived, #recenter { display:none; }
   body.nav #top, body.nav #bottom, body.nav #fabs button:not(#fabStop) { display:none !important; }
   #fabStop { display:none; }
-  body.dest #fabStop, body.nav #fabStop { display:flex; }
+  body.nav #fabStop { display:flex; }   /* before starting, the route card has its own Add stop */
   #fabs #fabStop { width:auto; height:44px; padding:0 14px 0 10px; border-radius:22px; align-items:center; gap:6px; align-self:flex-end; font-weight:700; color:var(--accent); }
   #fabStop svg { width:20px; height:20px; }
   button.pill { border:1.5px solid var(--accent); color:var(--accent); background:transparent; border-radius:999px; padding:7px 12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
@@ -502,7 +508,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <h2><span id="locTitle">Location is off</span> <button class="ghost" data-close>Close</button></h2>
   <p>The map needs your location to start routes from where you are and to search nearby. It is only used on this device.</p>
   <ol id="locSteps"></ol>
-  <div class="chips"><button id="locRetry" class="go">Try again</button><button id="locPlan">Choose a start instead</button></div>
+  <div class="chips"><button id="locSettings" class="go" hidden>Open Settings</button><button id="locRetry" class="go">Try again</button><button id="locPlan">Choose a start instead</button></div>
 </div>
 <div id="stops" class="panel sheet">
   <h2>Add a stop <button class="go" data-close>Done</button></h2>
@@ -1257,6 +1263,8 @@ function suggestion(which, main, sub, right, p) {
   li.onclick = () => { listFor(which).style.display = 'none'; $(which).blur(); if (which === 'friend') meetPick(p); else setPoint(which, p); };
   return li;
 }
+// A place's address without its name repeated in front ("Walmart, Blvd ..." -> "Blvd ...")
+const restOf = p => { const parts = (p.label || '').split(',').map(x => x.trim()), main = (p.name || parts[0] || '').trim(); return (parts[0] === main ? parts.slice(1) : parts).filter(x => x !== main).join(', '); };
 // With an empty box: your location, saved places and recent destinations
 function shortcuts(which) {
   const list = listFor(which); list.innerHTML = '';
@@ -1264,7 +1272,7 @@ function shortcuts(which) {
   if (searchCtl) searchCtl.abort();
   searchId++;
   if (here && which === 'from') list.appendChild(suggestion(which, 'My location', null, '', { lat: here[0], lon: here[1], label: 'My location' }));
-  const add = (title, arr) => { if (!arr.length) return; list.appendChild(el('li', 'head', title)); arr.forEach(p => list.appendChild(suggestion(which, p.name || p.label.split(',')[0], p.label, here ? fmtDist(meters(here, [p.lat, p.lon]) / 1609.34) : '', p))); };
+  const add = (title, arr) => { if (!arr.length) return; list.appendChild(el('li', 'head', title)); arr.forEach(p => list.appendChild(suggestion(which, p.name || p.label.split(',')[0], restOf(p), here ? fmtDist(meters(here, [p.lat, p.lon]) / 1609.34) : '', p))); };
   add('Saved', saved); add('Recent', recent);
   list.style.display = list.children.length ? 'block' : 'none';
 }
@@ -1446,7 +1454,7 @@ async function search(which, q, now) {
     list.style.display = shown.length ? 'block' : 'none';
     const say = which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
     if (shown.length) say(pending ? 'Looking further...' : '');
-    else if (!pending) say(near === null && close === null && far === null && !exact.length ? 'Search failed. Check connection.' : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
+    else if (!pending) say(near === null && close === null && far === null && !exact.length ? (navigator.onLine === false ? 'No internet connection. Search needs one; your saved places still work.' : 'Search is not answering right now. Try again in a moment.') : 'No matches for "' + q + '"' + (isAddress ? '. Try adding the city or ZIP.' : ''));
     else say('Searching...');
     settleEnter();
     if (!pending && shown.length && etaFrom() && useGeo()) {   // travel times for the top few once the list settles (Geoapify only: each costs a lookup)
@@ -1545,7 +1553,7 @@ function startFromHere() {
   if (BG) return;   // in the app the running location watch picks this up on its first fix
   navigator.geolocation.getCurrentPosition(
     p => { if ($('status').textContent === 'Getting your location...') status(''); showMe([p.coords.latitude, p.coords.longitude]); use(); },
-    e => { status('Location is off. Allow location for this site, or choose a start with the route button.'); if (e.code === 1) { locState = 'blocked'; locHelp(); } },
+    e => { status((NATIVE ? 'Location is off for BrinaMaps.' : 'Location is off. Allow location for this site') + ', or choose a start with the route button.'); if (e.code === 1) { locState = 'blocked'; locHelp(); } },
     { enableHighAccuracy: true, timeout: 10000 });
 }
 function setPlanning(on, keep) {
@@ -2330,6 +2338,7 @@ function describe(rt) {
 }
 function titles() {   // a short name for each option, taken from what makes it different
   const used = new Set(), min = k => Math.min.apply(null, routes.map(r => r[k]));
+  if (routes.length === 1) return ['Your route'];   // nothing to compare with
   return routes.map(rt => {
     const pick = [[rt.time === min('time'), 'Fastest'], [!rt.toll && routes.some(r => r.toll), 'No tolls'], [rt.lefts === min('lefts') && routes.some(r => r.lefts > rt.lefts), 'Fewest left turns'], [rt.turns === min('turns') && routes.some(r => r.turns > rt.turns), 'Fewest turns'], [rt.dist === min('dist'), 'Shortest'],
       [!rt.basic && rt.hwy < 0.3 && routes.some(r => r.hwy >= 1), 'No highway']].find(([ok, name]) => ok && !used.has(name));
@@ -2489,7 +2498,7 @@ function draw(fit) {
   const text = why(rt); if (text) w.appendChild(el('div', '', text));
   const bl = borderLine(rt); if (bl) w.appendChild(el('div', 'border', bl));
   const flags = el('div', 'flags');
-  flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? ', ' + rt.lefts + ' left' : '')));
+  flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? (rt.lefts ? ', ' + rt.lefts + (rt.lefts === 1 ? ' left turn' : ' left turns') : ', no left turns') : '')));
   if (!rt.basic && rt.hwy >= 0.5) flags.appendChild(el('span', '', fmtDist(rt.hwy) + ' highway'));
   if (rt.toll && prefs.noToll && rt.tollBooths == null) flags.appendChild(el('span', '', 'Uses part of a toll road'));   // tolls avoided: what is left is a stretch the router could not avoid, often between booths
   else if (rt.toll) flags.appendChild(el('span', 'warn', 'Has tolls'));
@@ -2516,7 +2525,7 @@ function draw(fit) {
   if (fit) {
     const b = new maplibregl.LngLatBounds(); rt.coords.forEach(c => b.extend([c[1], c[0]]));
     const wide = innerWidth >= 700;
-    map.fitBounds(b, { padding: wide ? { top: 60, bottom: 60, left: 450, right: 60 } : { top: $('top').offsetHeight + 40, bottom: $('bottom').offsetHeight + 40, left: 36, right: 36 }, duration: 700, bearing: 0, pitch: 0 });
+    map.fitBounds(b, { padding: wide ? (() => { const v = viewPad(); return { top: 40, bottom: 40, left: v.left + 20, right: v.right + 20 }; })() : { top: $('top').offsetHeight + 40, bottom: $('bottom').offsetHeight + 40, left: 36, right: 36 }, duration: 700, bearing: 0, pitch: 0 });
   }
 }
 // ---------- When to leave ----------
@@ -2563,7 +2572,7 @@ function drawTiming() {
     if (leave < now) { w.append(el('b', 'late', 'Leave now'), el('span', '', 'You would arrive about ' + clock(now + total * 1000) + ', ' + fmtTime((now - leave) / 1000) + ' late. ' + sum + '.')); }
     else w.append(el('b', '', 'Leave by ' + clock(leave) + (tomorrow ? ' tomorrow' : '')), el('span', '', (leave - now < 12 * 3600000 ? 'In ' + fmtTime((leave - now) / 1000) + '. ' : '') + sum + ' to arrive by ' + clock(target) + '.'));
   } else w.append(el('b', '', 'Arrive about ' + clock(now + total * 1000)), el('span', '', sum + '.'));
-  stripRoute = (pts.to.name || pts.to.label.split(',')[0]) + '  \u00b7  ' + fmtTime(total) + '  \u00b7  ' + fmtDist(rt.dist) + '  \u00b7  ' + w.querySelector('b').textContent.toLowerCase();
+  stripRoute = (pts.to.name || pts.to.label.split(',')[0]) + '  \u00b7  ' + fmtTime(rt.time) + '  \u00b7  ' + fmtDist(rt.dist) + '  \u00b7  ' + w.querySelector('b').textContent.toLowerCase();
   drawTripBtn(); drawOptsSum();
   drawHours();
   drawStrip(); layout();
@@ -2583,6 +2592,14 @@ $('parkMore').onclick = () => nudgePark(1);
 // Room the map must leave for what floats over it, so "centred" means centred in the part you can see
 function viewPad() {
   const vis = e => e && e.offsetParent !== null && getComputedStyle(e).display !== 'none';
+  if (innerWidth >= 700) {   // wide screen or phone on its side: the panels sit at the sides, so keep the map clear of them sideways
+    let left = 20, right = 20;
+    ['top', 'bottom', 'nav', 'navbar'].map($).filter(vis).map(e => e.getBoundingClientRect()).forEach(r => {
+      if (r.left < innerWidth / 2) left = Math.max(left, r.right + 12); else right = Math.max(right, innerWidth - r.left + 12);
+    });
+    if (innerWidth - left - right < 220) left = right = 20;
+    return { top: 20, bottom: 20, left: Math.round(left), right: Math.round(right) };
+  }
   const top = vis($('top')) ? $('top').getBoundingClientRect().bottom + 12 : vis($('nav')) ? $('nav').getBoundingClientRect().bottom + 12 : 20;
   const b = vis($('bottom')) ? innerHeight - $('bottom').getBoundingClientRect().top + 12 : vis($('navbar')) ? innerHeight - $('navbar').getBoundingClientRect().top + 12 : 20;
   const room = innerHeight - 120, scale = top + b > room ? room / (top + b) : 1;   // never squeeze the visible part to nothing
@@ -2725,7 +2742,7 @@ function endNav(arrivedAt) {
     $('arrived').querySelectorAll('i').forEach(i => i.remove());
     ['#ff6f91', '#ffc857', '#4fc9a4', '#5aa9ff', '#c58bf2'].forEach((c, k) => { for (let j = 0; j < 4; j++) { const i = el('i'); i.style.cssText = `left:${(k * 4 + j) * 5 + 2}%;background:${c};animation-delay:${-((k * 7 + j * 3) % 24) / 10}s`; $('arrived').appendChild(i); } });
     document.body.classList.add('arrived');
-  } else if (window.speechSynthesis) speechSynthesis.cancel();
+  } else { if (window.speechSynthesis) speechSynthesis.cancel(); if (routes.length) setTimeout(() => { if (!nav) draw(true); }, 350); }   // ended early: show the whole route again
   drawStrip(); drawTiming();
 }
 // Closest point on the route to ll. Searches near the last known segment first, then the whole route.
@@ -2953,8 +2970,8 @@ function drawStrip() {
   const t = !navigator.onLine ? 'Offline: maps and search need a connection'
     : nav ? (nav.info || 'Starting...')
     : routes.length && pts.to ? stripRoute
-    : hereName ? 'Near ' + hereName : here ? 'Location found'
-    : locState === 'blocked' ? 'Location is blocked for this site'
+    : hereName ? 'Near ' + hereName : here ? 'Showing your location'
+    : locState === 'blocked' ? (NATIVE ? 'Location is off for BrinaMaps' : 'Location is blocked for this site')
     : locState === 'unsupported' ? 'This browser has no location'
     : locState === 'searching' ? 'Still looking for your location...'
     : locState === 'pending' ? 'No location yet: tap the target button for help' : 'Waiting for your location...';
@@ -2965,7 +2982,7 @@ async function nameHere() {   // the street or place you are at, refreshed after
   if (hereAt && (meters(hereAt, here) < 400 || Date.now() - hereWhen < 120000)) return;
   hereAt = here; hereWhen = Date.now();
   const n = await reverseName(here[0], here[1]);
-  if (n) { hereName = n.label.split(',').slice(0, 2).join(','); drawStrip(); }
+  if (n) { const parts = n.label.split(',').map(x => x.trim()).filter((x, i, a) => x && !a.slice(0, i).some(y => y.includes(x))); hereName = parts.slice(0, 2).join(', '); drawStrip(); }
 }
 addEventListener('online', drawStrip); addEventListener('offline', drawStrip);
 
@@ -3413,7 +3430,7 @@ function startWatch(precise) {
   }, e => {
     if (e.code === 1) {   // blocked, either in the browser prompt or in the phone's settings
       locState = 'blocked'; drawStrip();
-      if (nav) $('navText').textContent = 'Location is off. Allow location for this site to navigate.';
+      if (nav) $('navText').textContent = NATIVE ? 'Location is off. Turn it on for BrinaMaps in Settings to navigate.' : 'Location is off. Allow location for this site to navigate.';
       if (!locHelped && !here) { locHelped = true; locHelp(); }
     } else if (!here) {   // no fix: try again without asking for GPS precision, which works indoors and on computers
       locState = 'searching'; drawStrip();
@@ -3427,7 +3444,8 @@ function startWatch(precise) {
 try { navigator.permissions.query({ name: 'geolocation' }).then(st => { st.onchange = () => { if (st.state !== 'denied') startWatch(true); }; }); } catch (e) {}
 function locHelp() {
   const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua), android = /Android/.test(ua), inApp = /FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|GSA\/|LinkedInApp/.test(ua);
-  const steps = locState === 'unsupported' ? ['This browser does not offer location. Open the map in Safari or Chrome.']
+  const steps = NATIVE ? ['Tap Open Settings below (or open the Settings app > Apps > BrinaMaps).', 'Tap Location and choose "While Using the App". For directions with the screen off, choose "Always".', 'Turn on Precise Location.', 'Come back and tap Try again.']
+    : locState === 'unsupported' ? ['This browser does not offer location. Open the map in Safari or Chrome.']
     : ios ? ['Settings > Privacy & Security > Location Services: turn it on.', 'In that same list, open Safari Websites (or your browser) and choose "While Using the App", with Precise Location on.', 'Back here, tap the "aA" or page-menu button in the address bar > Website Settings > Location > Allow.', 'Then tap Try again.']
     : android ? ['Turn on Location in your phone\'s quick settings.', 'Tap the icon at the left of the address bar > Permissions > Location > Allow.', 'Then tap Try again.']
     : ['Click the icon at the left of the address bar > Location > Allow.', 'On a Mac, also check System Settings > Privacy & Security > Location Services is on for your browser.', 'Then click Try again.'];
@@ -3437,8 +3455,9 @@ function locHelp() {
   const ol = $('locSteps'); ol.innerHTML = ''; steps.forEach(t => ol.appendChild(el('li', '', t)));
   closeSheets(); document.body.classList.add('loc');
 }
-$('locRetry').onclick = () => { closeSheets(); status('Checking your location...'); startWatch(true); setTimeout(() => { if (here) status(''); else if (locState === 'blocked') status('Location is still blocked for this site.'); }, 4000); };
+$('locRetry').onclick = () => { closeSheets(); status('Checking your location...'); startWatch(true); setTimeout(() => { if (here) status(''); else if (locState === 'blocked') status(NATIVE ? 'Location is still off for BrinaMaps.' : 'Location is still blocked for this site.'); }, 4000); };
 $('locPlan').onclick = () => { closeSheets(); setPlanning(true); };
+if (NATIVE) { $('locSettings').hidden = false; $('locSettings').onclick = () => { if (BG && BG.openSettings) BG.openSettings().catch(() => {}); }; }
 document.addEventListener('pointerdown', e => { if (!$('top').contains(e.target)) $('suggest').style.display = 'none'; });
 ['from', 'to', 'friend'].forEach(w => $(w).addEventListener('input', () => { $(w)._exact = null; }));
 addEventListener('resize', layout);
