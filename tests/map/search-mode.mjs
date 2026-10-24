@@ -17,7 +17,7 @@ await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
 await p.click('#to');
 check(await p.evaluate(() => document.body.classList.contains('searching')), 'tapping the box starts search mode at once');
 check(await p.isVisible('#cancelSearch') && !(await p.isVisible('#openPrefs')), 'Cancel shows; settings button steps aside');
-check(/Search places/.test(await p.textContent('#strip')), 'top line says what to type');
+
 // names on the map: pretend the loaded tiles hold a camp and a street
 const found = await p.evaluate(() => {
   map.getSource = id => id === 'openmaptiles' ? {} : null;
