@@ -84,6 +84,10 @@
   #suggest { list-style:none; margin:8px 0 0; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:min(52vh, calc(100vh - var(--kb, 0px) - 150px)); overflow:auto; }
   #suggest li { padding:10px 12px; border-radius:14px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:center; }
   #suggest li:active { background:var(--soft); }
+  #suggest li.cats { display:flex; gap:6px; overflow-x:auto; padding:4px 4px 8px; cursor:default; scrollbar-width:none; }
+  #suggest li.cats:active { background:none; }
+  #suggest li.more { justify-content:flex-end; padding:2px 6px; cursor:default; } #suggest li.more:active { background:none; } #suggest li.more button { font-size:12px; color:var(--muted); padding:4px 6px; }
+  #suggest li.cats button { flex:none; padding:7px 12px; border-radius:999px; background:var(--soft); color:var(--ink, inherit); font-size:13px; font-weight:600; border:0; }
   #suggest small { display:block; color:var(--muted); font-weight:500; }
   #suggest em { flex:0 0 auto; font-style:normal; font-size:12px; color:var(--muted); }
   #suggest .head { font-size:12px; color:var(--muted); padding:6px 12px 2px; cursor:default; text-transform:uppercase; letter-spacing:.05em; }
@@ -309,8 +313,8 @@
   .puck svg { width:40px; height:40px; fill:var(--me); stroke:#fff; stroke-width:2.5; filter:drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
   .maplibregl-popup-content { border-radius:20px; background:var(--card); color:var(--fg); box-shadow:var(--shadow); padding:8px; font:inherit; }
   .maplibregl-popup-tip { border-top-color:var(--card) !important; border-bottom-color:var(--card) !important; }
-  .tripGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:6px 0 4px; }
-  .tripGrid button { display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 6px; border-radius:18px; white-space:normal; font-size:13px; line-height:1.2; }
+  .tripGrid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin:6px 0 4px; }
+  .tripGrid button { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px; border-radius:18px; white-space:normal; font-size:12px; line-height:1.2; }
   .tripGrid button svg { width:26px; height:26px; color:var(--accent); }
   .tripGrid button.on { background:var(--accent); color:var(--accent-ink); } .tripGrid button.on svg { color:var(--accent-ink); }
   .pop small { display:block; color:var(--muted); margin:2px 4px 6px; } .pop small.around { color:var(--fg); }
@@ -369,7 +373,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div id="routeRow"><div id="routes"></div><button id="go" class="go">Start</button></div>
   <div id="why"></div>
   <div id="timing">
-    <div id="whenRow"><div id="when"></div><button id="timeEdit" class="ghost">Arrive by...</button></div>
+    <div id="whenRow"><div id="when"></div><button id="timeEdit" class="ghost">Change</button></div>
     <div class="trow"><div class="seg" id="tmode"><button data-t="now" class="on">Leave now</button><button data-t="by">Arrive by</button></div><input id="arriveAt" type="time" aria-label="Arrive by"></div>
     <div class="trow" id="parkRow"><span id="parkNote"></span><button id="parkLess" class="round" aria-label="Less parking time">&minus;</button><b id="parkMin"></b><button id="parkMore" class="round" aria-label="More parking time">+</button></div>
   </div>
@@ -537,6 +541,8 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <button id="mOverview"><svg viewBox="0 0 24 24"><path d="M4 18c3-8 13-4 16-12"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></svg>Whole route</button>
     <button id="mOther"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>Avoid road ahead</button>
     <button id="mRepeat"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/></svg>Repeat direction</button>
+    <button id="mGas"><svg viewBox="0 0 24 24"><path d="M5 20V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15M4 20h11M5 10h9M14 8l3 2v7a1.5 1.5 0 0 0 3 0V9l-3-3"/></svg>Gas on the way</button>
+    <button id="mShare"><svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 11H5v9h14v-9h-1"/></svg>Share arrival</button>
     <button id="mMute"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/></svg><span>Mute voice</span></button>
     <button id="mSettings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Direction settings</button>
   </div>
@@ -1477,13 +1483,30 @@ function shortcuts(which) {
   if (searchCtl) searchCtl.abort();
   searchId++;
   if (here && which === 'from') list.appendChild(suggestion(which, 'My location', null, '', { lat: here[0], lon: here[1], label: 'My location' }));
+  if (which === 'to') {   // one tap for the usual nearby searches
+    const row = el('li', 'cats');
+    [['Gas', 'gas'], ['Coffee', 'coffee'], ['Food', 'food'], ['Groceries', 'groceries'], ['Parking', 'parking'], ['Restrooms', 'restrooms']].forEach(([t, q]) => {
+      const b = el('button', '', t); b.type = 'button';
+      b.onpointerdown = e => e.preventDefault();   // keep the keyboard and the search open
+      b.onclick = e => { e.stopPropagation(); const inp = $('to'); inp.value = q; inp.dispatchEvent(new Event('input', { bubbles: true })); };
+      row.appendChild(b);
+    });
+    list.appendChild(row);
+  }
   const add = (title, arr) => { if (!arr.length) return; list.appendChild(el('li', 'head', title)); arr.forEach(p => list.appendChild(suggestion(which, p.name || p.label.split(',')[0], restOf(p), here ? fmtDist(meters(here, [p.lat, p.lon]) / 1609.34) : '', p))); };
   const hw = [[places.home, 'Home'], [places.work, 'Work']].concat((places.mine || []).map(m => [m, m.name])).filter(([p2]) => p2);
   if (hw.length && which === 'to') { list.appendChild(el('li', 'head', 'Your places')); hw.forEach(([p2, t]) => list.appendChild(suggestion(which, t, p2.label, here ? fmtDist(meters(here, [p2.lat, p2.lon]) / 1609.34) : '', p2))); }
   const used = new Set(hw.map(([p2]) => p2.label)), fresh = arr => arr.filter(p2 => p2 && !used.has(p2.label) && used.add(p2.label));
   add('Saved', fresh(saved));
   add('Often', fresh(Object.values(visits).filter(v => v.n >= 2).sort((a, b) => b.n - a.n || b.at - a.at).slice(0, 4).map(v => v.p)));
-  add('Recent', fresh(recent).slice(0, 6));
+  const rec = fresh(recent).slice(0, 6);
+  add('Recent', rec);
+  if (rec.length && which === 'to') {
+    const li = el('li', 'more'), b = el('button', 'ghost', 'Clear recent'); b.type = 'button';
+    b.onpointerdown = e => e.preventDefault();
+    b.onclick = e => { e.stopPropagation(); recent = []; visits = {}; store('map.recent', recent); store('map.visits', visits); shortcuts(which); };
+    li.appendChild(b); list.appendChild(li);
+  }
   list.style.display = list.children.length ? 'block' : 'none';
 }
 
@@ -2871,9 +2894,9 @@ function drawTiming() {
   const park = driving ? (timing.parkUser != null ? timing.parkUser : timing.parkAuto != null ? timing.parkAuto : 5) : prefs.mode === 'bicycle' ? 1 : 0;
   const jam = rt.live ? 0 : traffic && driving ? traffic.delay : 0;   // extra minutes from live traffic, when a key is set
   const total = rt.time + jam + park * 60, now = Date.now(), clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  $('parkRow').style.display = driving ? 'flex' : 'none';
+  $('parkRow').style.display = driving ? '' : 'none';   // shown under Change, next to the arrival time it changes
   $('parkMin').textContent = park + ' min';
-  $('parkNote').textContent = 'Parking estimate: ' + (timing.parkUser != null ? 'set by you' : timing.parkAuto == null ? 'checking the area...' : timing.note);
+  $('parkNote').textContent = 'Time to park: ' + (timing.parkUser != null ? 'set by you' : timing.parkAuto == null ? 'checking the area...' : timing.note);
   document.querySelectorAll('#tmode button').forEach(b => b.classList.toggle('on', b.dataset.t === timing.mode));
   $('arriveAt').style.display = timing.mode === 'by' ? '' : 'none';
   const sum = fmtTime(rt.time) + (prefs.mode === 'pedestrian' ? ' walk' : prefs.mode === 'bicycle' ? ' ride' : ' drive') + (rt.live ? (rt.delay >= 60 ? ' (includes ' + fmtTime(rt.delay) + ' of traffic)' : ' (traffic is clear)') : jam >= 60 ? ' + ' + fmtTime(jam) + ' traffic' : traffic && driving ? ' (traffic is clear)' : '') + (park ? ' + ' + park + ' min to park' + (prefs.mode === 'bicycle' ? ' and lock up' : '') : '');
@@ -2898,7 +2921,7 @@ document.querySelectorAll('#tmode button').forEach(b => b.onclick = () => {
 });
 $('arriveAt').oninput = () => { timing.at = $('arriveAt').value; drawTiming(); };
 const nudgePark = by => { const cur = timing.parkUser != null ? timing.parkUser : timing.parkAuto != null ? timing.parkAuto : 5; timing.parkUser = Math.max(0, Math.min(45, cur + by)); drawTiming(); };
-$('timeEdit').onclick = () => { const open = $('timing').classList.toggle('open'); $('timeEdit').textContent = open ? 'Done' : 'Arrive by...'; layout(); };
+$('timeEdit').onclick = () => { const open = $('timing').classList.toggle('open'); $('timeEdit').textContent = open ? 'Done' : 'Change'; layout(); };
 $('parkLess').onclick = () => nudgePark(-1);
 $('parkMore').onclick = () => nudgePark(1);
 
@@ -3350,6 +3373,17 @@ $('mOther').onclick = async () => {   // route around the stretch about a quarte
 };
 $('fabStop').onclick = () => openStops();
 $('mStop').onclick = $('addStop').onclick = $('tripAdd').onclick = () => openStops();
+$('mGas').onclick = () => { openStops(); findStops('gas', 'Gas'); };
+$('mShare').onclick = async () => {   // tell someone when you will get there, with a link to the place
+  if (!nav || !pts.to) return;
+  const to = pts.to, name = to.name || (to.label || '').split(',')[0] || 'my destination';
+  const text = 'On my way to ' + name + '. I should arrive about ' + $('navArrive').textContent + '.';
+  const url = SHARE_BASE + '#to=' + (+to.lat).toFixed(5) + ',' + (+to.lon).toFixed(5);
+  try {
+    if (navigator.share) await navigator.share({ text, url });
+    else { await navigator.clipboard.writeText(text + ' ' + url); $('menuMsg').textContent = 'Copied. Paste it in a message.'; }
+  } catch (e) {}
+};
 // Mute for this trip only: voice comes back at your chosen level next time
 let muteFrom = null;
 const drawMute = () => { $('mMute').classList.toggle('on', !!muteFrom); $('mMute').querySelector('span').textContent = muteFrom ? 'Voice muted' : 'Mute voice'; };
@@ -3685,7 +3719,7 @@ function drawOptsSum() {
   const on = [prefs.noHwy && 'highways', prefs.noToll && 'tolls', prefs.noFerry && 'ferries', prefs.noUnpaved && 'unpaved roads', prefs.noAlleys && 'alleys', prefs.noBorders && 'border crossings'].filter(Boolean);
   const style = [prefs.simple && 'fewer turns', prefs.shortest && 'shortest', prefs.relaxed && 'relaxed pace', prefs.mode === 'rig' && 'rig size'].filter(Boolean);
   const parts = [on.length && 'Avoiding ' + on.join(', '), style.length && style.join(', ')].filter(Boolean);
-  $('optsSum').textContent = (parts.length ? parts.join(' \u00b7 ') : 'No route options on') + '  \u203a  Change';
+  $('optsSum').textContent = parts.length ? parts.join(' \u00b7 ') + '  \u203a  Change' : 'Route options  \u203a';
 }
 $('mineHow').querySelectorAll('button').forEach(b => b.onclick = () => {
   const name = $('mineName').value.trim(); if (!name) { $('mineName').focus(); $('mineName').placeholder = 'First give it a name'; return; }
