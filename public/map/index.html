@@ -719,7 +719,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 let statusTimer = 0;
 // Problem reports: script errors and failed searches or routes go to the app's server log (no location or search text),
 // at most 25 per session, so problems people hit on their phones can be found and fixed
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.7';
 let reportQ = [], reportN = 0, reportT = 0;
 function report(kind, msg) {
   if (reportN >= 25 || /^(localhost|127\.)/.test(location.hostname) && !NATIVE) return;
@@ -2050,6 +2050,7 @@ async function findMeet() {
     if (!spots.length && kind !== 'any') { kind = 'any'; spots = await placesNear(mid, km * 8, kind).catch(() => []); }
     if (!spots.length) { msg('No named places found near the middle of your trip. Try "Anything", or a different pair of locations.'); return; }
 
+    if (!wanted) { const offices = spots.filter(p => !/\b(office|oficinas?|sales|ventas|corporativo|headquarters)\b/i.test(p.name)); if (offices.length) spots = offices; }   // a sales office mapped inside a park is not a place to meet
     spots = spots.filter((p, i) => !spots.slice(0, i).some(o => o.name === p.name && meters([o.lat, o.lon], [p.lat, p.lon]) < 150));   // same place listed twice
     // 4. Check each place with each person's real trip, and rank by how even and how short the two trips are
     step = 'times'; msg('Checking each place for you both...');
@@ -2060,7 +2061,7 @@ async function findMeet() {
     msg((kind !== meet.kind ? 'Nothing of that kind nearby, so here is anything close. ' : '') + (uneven ? 'There is nothing near the even point between you, so these are the closest options. ' : '') + 'Fairest first' + (meet.rough ? ' (some times are estimates)' : '') + '. Tap a place for directions.');
     spots.forEach(p => {
       const li = el('li'), text = el('span', '', p.name), share2 = el('button', '', 'Share');
-      text.append(el('small', '', [p.kind, p.sub].filter(Boolean).join(' - ')), el('small', 'times', 'You ' + fmtTime(p.a) + ' ' + NAME[meet.myMode] + ' - Friend ' + fmtTime(p.b) + ' ' + NAME[meet.friendMode]));
+      text.append(el('small', '', [kindOf({ osm_value: String(p.kind || '').replace(/ /g, '_') }), p.sub].filter(Boolean).join(' · ')), el('small', 'times', 'You ' + fmtTime(p.a) + ' ' + NAME[meet.myMode] + ' - Friend ' + fmtTime(p.b) + ' ' + NAME[meet.friendMode]));
       const dest = { lat: p.lat, lon: p.lon, name: p.name, label: p.sub ? p.name + ', ' + p.sub : p.name };
       text.onclick = () => { document.body.classList.remove('meet'); prefs.mode = meet.myMode; savePrefs(); syncPrefs(); setPoint('to', dest); };
       share2.onclick = async () => {   // a link that opens this map with the place as the friend's destination
@@ -2916,7 +2917,7 @@ function viewPad() {
     if (innerWidth - left - right < 220) left = right = 20;
     return { top: 20, bottom: 20, left: Math.round(left), right: Math.round(right) };
   }
-  const top = vis($('top')) ? $('top').getBoundingClientRect().bottom + 12 : vis($('nav')) ? $('nav').getBoundingClientRect().bottom + 12 : 20;
+  const top = vis($('top')) ? $('top').getBoundingClientRect().bottom + 44 : vis($('nav')) ? $('nav').getBoundingClientRect().bottom + 12 : 20;
   const b = vis($('bottom')) ? innerHeight - $('bottom').getBoundingClientRect().top + 12 : vis($('navbar')) ? innerHeight - $('navbar').getBoundingClientRect().top + 12 : 20;
   const room = innerHeight - 120, scale = top + b > room ? room / (top + b) : 1;   // never squeeze the visible part to nothing
   return { top: Math.round(top * scale), bottom: Math.round(b * scale), left: 0, right: 0 };
@@ -3315,6 +3316,7 @@ async function nameHere() {   // the street or place you are at, refreshed after
   if (n) { const parts = n.label.split(',').map(x => x.trim()).filter((x, i, a) => x && !a.slice(0, i).some(y => y.includes(x))); hereName = parts.slice(0, 2).join(', '); drawStrip(); }
 }
 addEventListener('online', drawStrip); addEventListener('offline', drawStrip);
+setTimeout(drawStrip, 0);   // say what is happening from the start, not a blank bar
 
 // ---------- During a trip: all turns, options, stops ----------
 function closeSheets() { if (document.body.classList.contains('stops')) clearStopOpts(); document.body.classList.remove('prefs', 'meet', 'steps', 'menu', 'stops', 'loc', 'trip', 'ropts'); }
