@@ -730,8 +730,8 @@ const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9
 const THEMES = {
   brina:    { group: 'BrinaMaps', label: 'Brina', ui: 'light', accent: '#8b5cf6', soft: '#ede7ff', bg: '#f7f4ff', land2: '#efeafb', water: '#9fd3f5', park: '#bfe8cc', building: '#e7e1f4', bldLine: '#d4cbea', casing: '#b6a8db',
               minor: '#ffffff', mid: '#fff0c4', major: '#ffd98a', motorway: '#c4a1ff', path: '#dbd2ef', rail: '#bdb0dc', text: '#2a1f4a', textRoad: '#463a6e', halo: '#fcfbff', boundary: '#a48ce0' },
-  twilight: { group: 'BrinaMaps', label: 'Twilight', ui: 'dark', accent: '#b67cff', ink: '#1a1033', soft: '#382a5c', bg: '#1b1838', land2: '#211d44', water: '#123b6e', park: '#1e4a48', building: '#2a2550', bldLine: '#3b346e', casing: '#0f0d24',
-              minor: '#4f4790', mid: '#7466c9', major: '#a58cff', motorway: '#e2d8ff', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
+  twilight: { group: 'BrinaMaps', label: 'Twilight', ui: 'dark', route: '#33ddff', accent: '#b67cff', ink: '#1a1033', soft: '#382a5c', bg: '#1b1838', land2: '#211d44', water: '#123b6e', park: '#1e4a48', building: '#2a2550', bldLine: '#3b346e', casing: '#0f0d24',
+              minor: '#444071', mid: '#585091', major: '#7364af', motorway: '#a66bff', path: '#3a3370', rail: '#4a4290', text: '#ffffff', textRoad: '#e1d9ff', halo: '#0f0d24', boundary: '#9b84ff' },
   blossom:  { group: 'Soft', label: 'Blossom', ui: 'light', accent: '#f0527f', soft: '#ffe6ec', bg: '#fbf4ea', land2: '#f5ebde', water: '#a5d6f0', park: '#bfe6b8', building: '#ece0d2', bldLine: '#dccbb9', casing: '#c9b6a6',
               minor: '#ffffff', mid: '#fff3c9', major: '#ffe08f', motorway: '#ffc278', path: '#e0cfc0', rail: '#c7b6ab', text: '#33262f', textRoad: '#5a4652', halo: '#fffaf4', boundary: '#c59db0' },
   sorbet:   { group: 'Soft', label: 'Sorbet', ui: 'light', accent: '#e8457c', soft: '#ffe1ea', bg: '#fff4f5', land2: '#fdeaed', water: '#b3e4f6', park: '#c4efd0', building: '#f5e1e4', bldLine: '#e8cdd3', casing: '#d9b3bf',
@@ -760,15 +760,15 @@ const THEMES = {
   contrast: { group: 'Fresh', label: 'High contrast', ui: 'light', accent: '#c2185b', soft: '#ffe0eb', bg: '#ffffff', land2: '#f1f1f1', water: '#78c1ee', park: '#a3da94', building: '#dcdcdc', bldLine: '#b5b5b5', casing: '#5f5f5f',
               minor: '#ffffff', mid: '#ffe270', major: '#ffc02e', motorway: '#ff8433', path: '#b0b0b0', rail: '#8c8c8c', text: '#000000', textRoad: '#151515', halo: '#ffffff', boundary: '#6f6f6f' },
   night:    { group: 'Dark', label: 'Night', ui: 'dark', accent: '#ff8fab', ink: '#2a1820', soft: '#44313c', bg: '#2a2838', land2: '#302e40', water: '#1c4670', park: '#2c5642', building: '#383648', bldLine: '#48465a', casing: '#191822',
-              minor: '#686582', mid: '#8a87a6', major: '#bcb9d6', motorway: '#f2c078', path: '#4c4a62', rail: '#5a5872', text: '#f6f2ff', textRoad: '#dcd8ee', halo: '#191822', boundary: '#9490b0' },
+              minor: '#474652', mid: '#5a5966', major: '#71707c', motorway: '#f2c078', path: '#4c4a62', rail: '#5a5872', text: '#f6f2ff', textRoad: '#dcd8ee', halo: '#191822', boundary: '#9490b0' },
   mocha:    { group: 'Dark', label: 'Catppuccin Mocha', ui: 'dark', accent: '#f5a2d8', ink: '#1e1e2e', soft: '#45475a', bg: '#1e1e2e', land2: '#242436', water: '#1f3b63', park: '#294a3b', building: '#313244', bldLine: '#45475a', casing: '#11111b',
-              minor: '#5f6278', mid: '#7f849c', major: '#b4bbd6', motorway: '#f9c58f', path: '#45475a', rail: '#585b70', text: '#e4e9fb', textRoad: '#cdd6f4', halo: '#11111b', boundary: '#7f849c' },
+              minor: '#464750', mid: '#585a64', major: '#6e717c', motorway: '#f9c58f', path: '#45475a', rail: '#585b70', text: '#e4e9fb', textRoad: '#cdd6f4', halo: '#11111b', boundary: '#7f849c' },
   nord:     { group: 'Dark', label: 'Nord', ui: 'dark', accent: '#e9a0d8', ink: '#2e3440', soft: '#434c5e', bg: '#2e3440', land2: '#333a48', water: '#34567a', park: '#3b5647', building: '#3b4252', bldLine: '#4c566a', casing: '#1f242d',
-              minor: '#66728a', mid: '#8591a8', major: '#d8dee9', motorway: '#ebcb8b', path: '#4c566a', rail: '#5b6579', text: '#eceff4', textRoad: '#d8dee9', halo: '#1f242d', boundary: '#81a1c1' },
+              minor: '#434852', mid: '#565b65', major: '#6f7276', motorway: '#ebcb8b', path: '#4c566a', rail: '#5b6579', text: '#eceff4', textRoad: '#d8dee9', halo: '#1f242d', boundary: '#81a1c1' },
   forest:   { group: 'Dark', label: 'Forest night', ui: 'dark', accent: '#8fd18a', ink: '#14301a', soft: '#2f4435', bg: '#1f2a24', land2: '#24312a', water: '#1c4a5a', park: '#2f5a3a', building: '#2c3a32', bldLine: '#3a4b41', casing: '#121a15',
-              minor: '#5a6e60', mid: '#7d927f', major: '#c4d2bd', motorway: '#f2b866', path: '#3d4d43', rail: '#4a5c50', text: '#f1f7ec', textRoad: '#d3dfcd', halo: '#121a15', boundary: '#86a08a' },
-  neon:     { group: 'Dark', label: 'Neon', ui: 'dark', accent: '#ff5fd2', ink: '#2a0a26', soft: '#3d2148', bg: '#14122b', land2: '#1a1838', water: '#0b3d6b', park: '#124a3a', building: '#1d1c33', bldLine: '#2f2b5e', casing: '#0a0918',
-              minor: '#4b4690', mid: '#6f66d6', major: '#9d8bff', motorway: '#29e0ff', path: '#35316a', rail: '#45408a', text: '#ffffff', textRoad: '#d9d4ff', halo: '#0a0918', boundary: '#8a7cff' }
+              minor: '#424a44', mid: '#555e56', major: '#6e746b', motorway: '#f2b866', path: '#3d4d43', rail: '#4a5c50', text: '#f1f7ec', textRoad: '#d3dfcd', halo: '#121a15', boundary: '#86a08a' },
+  neon:     { group: 'Dark', label: 'Neon', ui: 'dark', route: '#33ddff', accent: '#ff5fd2', ink: '#2a0a26', soft: '#3d2148', bg: '#14122b', land2: '#1a1838', water: '#0b3d6b', park: '#124a3a', building: '#1d1c33', bldLine: '#2f2b5e', casing: '#0a0918',
+              minor: '#424173', mid: '#544f99', major: '#7065b1', motorway: '#ff5fd2', path: '#35316a', rail: '#45408a', text: '#ffffff', textRoad: '#d9d4ff', halo: '#0a0918', boundary: '#8a7cff' }
 };
 // Interface fonts, loaded from Google Fonts only when chosen
 const FONTS = {
@@ -845,8 +845,9 @@ async function themedStyle() {
   }
   return restyle(await offlineStyle(JSON.parse(rawStyle)), theme());
 }
-// The route is a bright blue: a colour traffic never uses (red, orange, yellow, green), and one no street uses.
-const routeColor = t => t.route || (t.ui === 'dark' ? '#3d9bff' : '#1f6fff');
+// Picked per theme to stand apart from every road colour: deep royal blue on light maps, bright sky blue on dark maps
+// (whose roads are muted greys), bright cyan on the purple themes. Never a traffic colour (red, orange, yellow, green).
+const routeColor = t => t.route || (t.ui === 'dark' ? '#3ec6ff' : '#1a3fe0');
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
