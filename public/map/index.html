@@ -1424,7 +1424,8 @@ async function search(which, q, now) {
     if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
     else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
       const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => low(p.main).includes(w));
-      add(own); add(all.filter(full).sort(byDist)); add(all.filter(p => !full(p)).sort(byDist));
+      const lead = p => low(p.main).startsWith(ql);   // "Costco" before "Saldos Costco"
+      add(own); add(all.filter(p => full(p) && lead(p)).sort(byDist)); add(all.filter(p => full(p) && !lead(p)).sort(byDist)); add(all.filter(p => !full(p)).sort(byDist));
     }
     items.forEach(p => { p.d = dist(p); });
     const shown = items.slice(0, cat ? 14 : 12);
