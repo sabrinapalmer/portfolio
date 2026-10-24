@@ -47,7 +47,7 @@ export default async function handler(req) {
   let history = false;
   if (spots.length) {
     const day = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
-    const past = await Promise.allSettled([14, 34, 54, 84].map(n => get('VIIRS_SNPP_NRT', 10, day(n), true)));
+    const past = await Promise.allSettled([7, 12, 22, 32, 47, 62, 77, 87].map(n => get('VIIRS_SNPP_NRT', 5, day(n), true)));   // 5-day windows (the most FIRMS allows) spread over 3 months
     const old = past.filter(g => g.status === 'fulfilled').flatMap(g => g.value);
     history = past.some(g => g.status === 'fulfilled');
     if (new URL(req.url).searchParams.get('debug')) why.push(...past.filter(g => g.status === 'rejected').map(g => String(g.reason && g.reason.message || g.reason)));
