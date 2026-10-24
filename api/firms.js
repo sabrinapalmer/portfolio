@@ -47,11 +47,12 @@ export default async function handler(req) {
   let history = false;
   if (spots.length) {
     const day = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
-    const past = await Promise.allSettled([14, 34, 54, 84].map(n => get('VIIRS_SNPP_NRT', 10, day(n), true)));
+    const past = await Promise.allSettled([7, 12, 22, 32, 47, 62, 77, 87].map(n => get('VIIRS_SNPP_NRT', 5, day(n), true)));   // 5-day windows (the most FIRMS allows) spread over 3 months
     const old = past.filter(g => g.status === 'fulfilled').flatMap(g => g.value);
     history = past.some(g => g.status === 'fulfilled');
+    if (new URL(req.url).searchParams.get('debug')) why.push(...past.filter(g => g.status === 'rejected').map(g => String(g.reason && g.reason.message || g.reason)));
     const near = (a, b2) => Math.abs(a[0] - b2[0]) < 0.008 && Math.abs(a[1] - b2[1]) < 0.009;   // about 800 m
     spots = spots.map(sp => { const days = new Set(old.filter(o => near(o, sp)).map(o => new Date(o[3]).toISOString().slice(0, 10))); return sp.concat(days.size); });
   }
-  return json(200, { at: Date.now(), spots, history }, Object.assign({ 'Cache-Control': 'public, s-maxage=1800, max-age=600' }, cors));
+  return json(200, Object.assign({ at: Date.now(), spots, history }, new URL(req.url).searchParams.get('debug') ? { why } : {}), Object.assign({ 'Cache-Control': 'public, s-maxage=1800, max-age=600' }, cors));
 }
