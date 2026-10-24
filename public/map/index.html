@@ -2354,10 +2354,17 @@ function why(rt) {   // one sentence comparing this option with the fastest
 
 // ---------- Tolls: a road can be tagged as a toll road all along, while you only pay at booths ----------
 const boothCache = new Map();   // grid cell -> booths [[lat, lon]] (or null while unknown)
+// The list of every toll booth in North America (refreshed weekly from OpenStreetMap, about 100 KB), fetched once;
+// cells it does not cover fall back to asking the server
+let boothList = null;
+const loadBooths = () => boothList || (boothList = fetch((NATIVE ? 'https://www.sabrinapalmer.com' : '') + '/map/data/tolls.json')
+  .then(r => r.ok ? r.json() : null).then(d => d && Array.isArray(d.booths) && d.booths.length > 100 ? d.booths : null).catch(() => null)
+  .then(v => { if (!v) boothList = null; return v; }));
 async function boothsIn(cell) {
   if (boothCache.has(cell)) return boothCache.get(cell);
   const [x, y] = cell.split(',').map(Number), box = [x * 0.25, y * 0.25, x * 0.25 + 0.25, y * 0.25 + 0.25];
-  const job = fetch(API + '/tolls?bbox=' + box.map(n => n.toFixed(2)).join(',')).then(r => r.ok ? r.json() : null).then(d => d ? d.booths : null).catch(() => null);
+  const job = loadBooths().then(list => list ? list.filter(([lat, lon]) => lon >= box[0] && lon < box[2] && lat >= box[1] && lat < box[3])
+    : fetch(API + '/tolls?bbox=' + box.map(n => n.toFixed(2)).join(',')).then(r => r.ok ? r.json() : null).then(d => d ? d.booths : null).catch(() => null));
   boothCache.set(cell, job);
   const got = await job; if (got == null) boothCache.delete(cell); return got;
 }
