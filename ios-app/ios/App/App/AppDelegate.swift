@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -46,4 +47,60 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+// MARK: - Voice directions
+// Speaks directions with the system voice. Other audio (music, videos, podcasts) is lowered only while a direction is
+// being spoken, then handed back at full volume; spoken-word apps pause briefly instead of talking over the voice.
+// (The community text-to-speech plugin kept other audio lowered the whole time the app was open.)
+@objc(VoicePlugin)
+public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelegate {
+    public let identifier = "VoicePlugin"
+    public let jsName = "Voice"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise)
+    ]
+    private let synth = AVSpeechSynthesizer()
+    private var waiting: CAPPluginCall?
+
+    override public func load() { synth.delegate = self }
+
+    @objc func speak(_ call: CAPPluginCall) {
+        let text = call.getString("text") ?? ""
+        let lang = call.getString("lang") ?? "en-US"
+        DispatchQueue.main.async {
+            if self.synth.isSpeaking { self.synth.stopSpeaking(at: .immediate) }
+            self.waiting?.resolve(); self.waiting = call
+            guard !text.isEmpty else { call.resolve(); self.waiting = nil; return }
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+            try? session.setActive(true)
+            let u = AVSpeechUtterance(string: text)
+            u.voice = AVSpeechSynthesisVoice(language: lang)
+            u.rate = AVSpeechUtteranceDefaultSpeechRate
+            self.synth.speak(u)
+        }
+    }
+
+    @objc func stop(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { self.synth.stopSpeaking(at: .immediate); call.resolve() }
+    }
+
+    private func finished() {
+        waiting?.resolve(); waiting = nil
+        // Give the other audio its volume back once nothing more is being said
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if !self.synth.isSpeaking { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        }
+    }
+    public func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish u: AVSpeechUtterance) { finished() }
+    public func speechSynthesizer(_ s: AVSpeechSynthesizer, didCancel u: AVSpeechUtterance) { finished() }
+}
+
+// The app's web view, with BrinaMaps' own native pieces registered
+class BrinaViewController: CAPBridgeViewController {
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(VoicePlugin())
+    }
 }
