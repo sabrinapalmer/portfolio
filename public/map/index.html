@@ -594,7 +594,11 @@ async function offlineStyle(st) {   // point the style's tiles and label fonts a
     const src = st.sources[id];
     if (src.type !== 'vector' || !src.url || OFF.tiles && OFF.src !== id) continue;
     let tj = null;
-    try { tj = await (await fetch(src.url)).json(); offSave('tilejson', JSON.stringify(tj)); } catch (e) { try { tj = JSON.parse(await offGet('tilejson')); } catch (e2) {} }
+    // The copy from the last few days is used at once (the tile list changes about weekly) and refreshed in the background
+    let kept = null; try { kept = JSON.parse(await Promise.race([offGet('tilejson-at'), new Promise(r => setTimeout(r, 400, null))]) || 'null'); } catch (e) {}
+    const fresh = fetch(src.url).then(r => r.json()).then(j => { if (j && j.tiles) { offSave('tilejson', JSON.stringify(j)); offSave('tilejson-at', JSON.stringify({ at: Date.now(), tj: j })); } return j; });
+    if (kept && kept.tj && kept.tj.tiles && Date.now() - kept.at < 3 * 864e5) { tj = kept.tj; fresh.catch(() => {}); }
+    else try { tj = await fresh; } catch (e) { try { tj = JSON.parse(await offGet('tilejson')); } catch (e2) {} }
     if (!tj || !tj.tiles) continue;
     OFF.tiles = tj.tiles[0]; OFF.src = id; OFF.maxzoom = tj.maxzoom || 14;
     st.sources[id] = { type: 'vector', tiles: ['omt://t/{z}/{x}/{y}'], minzoom: tj.minzoom || 0, maxzoom: OFF.maxzoom, attribution: tj.attribution || '' };
@@ -833,9 +837,11 @@ function restyle(style, t) {
 }
 let rawStyle = null;
 async function themedStyle() {
-  if (!rawStyle) {
-    try { rawStyle = await (await fetch(STYLE)).text(); offSave('style', rawStyle); }
-    catch (e) { rawStyle = await offGet('style'); if (!rawStyle) throw e; }   // no connection: the copy from last time
+  if (!rawStyle) {   // start from the copy saved last time (no wait for the network), and refresh that copy for next time
+    const saved = await Promise.race([offGet('style').catch(() => null), new Promise(r => setTimeout(r, 400, null))]);
+    const fresh = fetch(STYLE).then(r => r.ok ? r.text() : Promise.reject(new Error('style ' + r.status))).then(t => { JSON.parse(t); offSave('style', t); return t; });
+    if (saved) { rawStyle = saved; fresh.catch(() => {}); }
+    else rawStyle = await fresh;
   }
   return restyle(await offlineStyle(JSON.parse(rawStyle)), theme());
 }
@@ -928,6 +934,7 @@ mapReady = (async () => {
   map.getCanvasContainer().addEventListener('touchend', touching(false), { passive: true });
   map.getCanvasContainer().addEventListener('touchcancel', touching(false), { passive: true });
   map.on('click', onMapClick); watchHolds();
+  if (NATIVE) { const splash = plugin('SplashScreen'), hide = () => { if (splash && splash.hide) splash.hide({ fadeOutDuration: 200 }).catch(() => {}); }; map.once('idle', hide); setTimeout(hide, 4000); }
   await new Promise(r => map.once('load', r));
   addRouteLayers();
   drawAvoid();
@@ -1399,7 +1406,7 @@ async function search(which, q, now) {
   function paint() {
     if (id !== searchId) return;
     if (pending > 0 && painted) return;   // keep what is showing until everything is in, so the list does not jump
-    if (pending > 0 && !far && !exact.length) return;
+    if (pending > 0 && !far && !exact.length && !(tt && tt.length)) return;   // the first answer to arrive is shown at once
     if (near === null && close === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
       backup = true; pending++;
       nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
@@ -1415,7 +1422,7 @@ async function search(which, q, now) {
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
     if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
     else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
-      const all = exact.concat(close || [], near || [], far || []), full = p => p.named && words.length && words.every(w => low(p.main).includes(w));
+      const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => low(p.main).includes(w));
       add(own); add(all.filter(full).sort(byDist)); add(all.filter(p => !full(p)).sort(byDist));
     }
     items.forEach(p => { p.d = dist(p); });
@@ -1450,6 +1457,13 @@ async function search(which, q, now) {
     }
   }
   const geo = useGeo();
+  // Business names: TomTom's place list answers in about a third of a second and knows places the open map data lacks,
+  // so it is asked alongside the main search and whichever answers first is shown
+  let tt = null;
+  if (!isAddress && !cat && q.length >= 3 && words.length) {
+    pending++;
+    poiSearch(q, ref, ctl.signal).then(o => { if (id !== searchId) return; tt = o; pending--; paint(); });
+  }
   if (geo) { near = []; close = []; pending -= 2; }   // Geoapify: one search ranked around you does it all (each request costs time and a credit)
   else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   let deeperAsked = false;
@@ -1457,21 +1471,22 @@ async function search(which, q, now) {
     if (deeperAsked || id !== searchId) return; deeperAsked = true; pending++;
     Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
   };
+  // The main search sometimes takes many seconds for a query. After 3 s the list stops waiting for it (what the
+  // place list found stays up); a late answer is still added when it comes.
+  let farDone = false;
+  const farWait = setTimeout(() => { if (farDone || id !== searchId) return; farDone = true; pending--; paint(); }, now ? 5000 : 3000);
   get(base + '&limit=' + (geo ? 20 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => {
+    clearTimeout(farWait);
+    const late = farDone; farDone = true;
     far = f;
-    if (geo && deeper && !isAddress && (!f || f.length < 3)) askDeeper();   // thin answer: try the address search too
+    if (late) { if (id === searchId && f && f.length) { painted = false; paint(); } return; }
+    if (geo && deeper && !isAddress && (!f || f.length < 3) && !(tt && tt.length)) askDeeper();   // thin answer: try the address search too
     if (geo && f && !isAddress && !cat && q.length >= 3) {
       // Near the US-Mexico border: the search fills up with one side, so ask the other side too and list both by distance
       const mine = (f.find(p => p.cc) || {}).cc || '', side = mine === 'mx' ? 'us' : mine === 'us' ? 'mx' : '';
       if (side && nearBorder(ref) && f.filter(p => p.cc === side).length < 2) {
         pending++;
         get(base + '&limit=10&cc=' + side).then(o => { if (id !== searchId) return; if (o) far = (far || []).concat(o); pending--; paint(); });
-      }
-      // No named place matches what you typed (say a restaurant the open map data does not have): ask TomTom's place list
-      const known = f.some(p => p.named && words.every(w => p.main.toLowerCase().includes(w)));
-      if (!known && words.length) {
-        pending++;
-        poiSearch(q, ref, ctl.signal).then(o => { if (id !== searchId) return; if (o.length) far = (far || []).concat(o); pending--; paint(); });
       }
     }
     pending--; paint();

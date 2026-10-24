@@ -115,7 +115,7 @@ await p.fill('#to', 'oxxo'); await p.waitForTimeout(2500);
 const ox = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
 console.log('oxxo list:', ox);
 check(ox.length === 3 && ox.some(x => /San Ysidro/.test(x)) && /Rosarito/.test(ox[0]), 'search near the border lists both countries, nearest first');
-check(calls.slice(cb).filter(c => c === 'geo autocomplete').length === 2 && !calls.slice(cb).some(c => c.startsWith('poi')), 'one extra request for the other side, none to the place list when names match');
+check(calls.slice(cb).filter(c => c === 'geo autocomplete').length === 2 && calls.slice(cb).filter(c => c.startsWith('poi')).length === 1, 'one extra request for the other side, one to the place list');
 // A business the open map data lacks comes from the place list
 await p.fill('#to', 'hacienda km 43'); await p.waitForTimeout(2500);
 const hk = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
