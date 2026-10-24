@@ -100,7 +100,7 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
 
 // The app's web view, with BrinaMaps' own native pieces registered
 class BrinaViewController: CAPBridgeViewController {
-    override open func capacitorDidLoad() {
+    override func capacitorDidLoad() {
         bridge?.registerPluginInstance(VoicePlugin())
     }
 }
