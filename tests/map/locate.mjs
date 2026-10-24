@@ -25,7 +25,7 @@ console.log('on screen', JSON.stringify(near));
 check(near.minZ >= 14.9 && near.endZ >= 15, 'on screen: no zooming out');
 const town = await run([-117.06, 32.37], 14);   // Rosarito, about 40 km away
 console.log('40 km away', JSON.stringify(town));
-check(town.minZ > 7.5 && town.minZ < 13.5 && town.endZ >= 15, 'off screen nearby: pulls back to about the region, then zooms in on you');
+check(town.minZ > 6 && town.minZ < 13.5 && town.endZ >= 15, 'off screen nearby: one flight out and back in on you');
 const far = await run([-99.1, 19.4], 12);   // Mexico City
 console.log('far away', JSON.stringify(far));
 check(far.minZ >= 3 && far.endZ >= 15, 'very far: never the whole world, ends on you');

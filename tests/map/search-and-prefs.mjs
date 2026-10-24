@@ -30,7 +30,7 @@ await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1200);
 console.log('picked:', await p.textContent('#destName'), '| sheet', await p.isVisible('#bottom'));
 await p.click('#openPrefs'); await p.click('[data-mapset=units] [data-v=km]'); await p.click('[data-mapset=labels] [data-v=l]'); await p.click('[data-map=showBuildings]'); await p.waitForTimeout(800);
 console.log('km:', (await p.innerText('#routes')).replace(/\n/g,' / '), '| prefs', await p.evaluate(()=>JSON.stringify([prefs.units,prefs.labels,prefs.showBuildings])), '| route layer back', await p.evaluate(()=>!!map.getLayer('sel')));
-await p.click('[data-map=autoNight]'); await p.waitForTimeout(300); await p.click('#themes button >> nth=16'); await p.waitForTimeout(600);
+await p.click('[data-map=autoNight]'); await p.waitForTimeout(300); await p.click('#themes details summary'); await p.click('#themes details .themeGrid button:has-text("Night") >> nth=0'); await p.waitForTimeout(600);
 console.log('auto night: day theme', await p.evaluate(()=>prefs.theme), 'night theme', await p.evaluate(()=>prefs.nightTheme), 'showing', await p.evaluate(()=>themeKey()), 'ui', await p.evaluate(()=>document.documentElement.dataset.ui));
 await p.waitForTimeout(5500); await p.click('#closePrefs'); console.log('strip later:', await p.textContent('#strip'));
 console.log('errors', errs); await b.close();

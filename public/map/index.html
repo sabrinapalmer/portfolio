@@ -184,16 +184,26 @@
   .list li { display:flex; align-items:center; gap:8px; padding:6px 4px 6px 12px; border-radius:14px; background:var(--bg); margin-bottom:6px; }
   .list li span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .list li button { padding:6px 12px; font-size:13px; }
-  #themes { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
-  #themes button { padding:6px 6px 8px; border-radius:16px; background:var(--bg); border:2px solid var(--line); color:var(--muted); font-size:13px; white-space:normal; }
-  #themes h4 { grid-column:1 / -1; margin:6px 0 0; font-size:12px; font-weight:600; color:var(--muted); }
-  #themes h4:first-child { margin-top:0; }
-  #themes button.on { border-color:var(--accent); color:var(--fg); }
-  #themes button::after { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--dot); margin-left:6px; vertical-align:middle; }
-  #themes i { display:block; height:44px; border-radius:11px; margin-bottom:6px; position:relative; overflow:hidden; }
-  #themes i::before, #themes i::after { content:""; position:absolute; }
-  #themes i::before { left:-10%; right:-10%; top:55%; height:7px; background:var(--r1); transform:rotate(-12deg); box-shadow:0 0 0 1.5px var(--rc); }
-  #themes i::after { top:-10%; bottom:-10%; left:62%; width:4px; background:var(--r2); transform:rotate(18deg); box-shadow:0 0 0 1px var(--rc); }
+  .themeGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
+  .themeGrid button { padding:6px 6px 8px; border-radius:16px; background:var(--bg); border:2px solid var(--line); color:var(--muted); font-size:13px; white-space:normal; }
+  .themeGrid h4 { grid-column:1 / -1; margin:6px 0 0; font-size:12px; font-weight:600; color:var(--muted); }
+  .themeGrid h4:first-child { margin-top:0; }
+  .themeGrid button.on { border-color:var(--accent); color:var(--fg); }
+  .themeGrid button::after { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--dot); margin-left:6px; vertical-align:middle; }
+  .themeGrid i { display:block; height:44px; border-radius:11px; margin-bottom:6px; position:relative; overflow:hidden; }
+  .themeGrid i::before, .themeGrid i::after { content:""; position:absolute; }
+  .themeGrid i::before { left:-10%; right:-10%; top:55%; height:7px; background:var(--r1); transform:rotate(-12deg); box-shadow:0 0 0 1.5px var(--rc); }
+  .themeGrid i::after { top:-10%; bottom:-10%; left:62%; width:4px; background:var(--r2); transform:rotate(18deg); box-shadow:0 0 0 1px var(--rc); }
+  details.picker { border:2px solid var(--line); border-radius:18px; margin:8px 0; background:var(--bg); }
+  details.picker[open] { border-color:var(--accent); }
+  details.picker summary { list-style:none; display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; }
+  details.picker summary::-webkit-details-marker { display:none; }
+  details.picker summary .lbl { color:var(--muted); font-size:13px; min-width:74px; }
+  details.picker summary b { flex:1; }
+  details.picker summary i { width:46px; height:28px; border-radius:8px; display:block; position:relative; overflow:hidden; }
+  details.picker summary::after { content:"\25BE"; color:var(--muted); }
+  details.picker[open] summary::after { content:"\25B4"; }
+  details.picker .themeGrid, details.picker .chips { padding:0 10px 12px; }
   .sheet a { color:var(--accent); font-weight:600; text-decoration:none; }
 
   #meet .who { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
@@ -415,19 +425,29 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <h2>Settings <button id="closePrefs" class="go">Done</button></h2>
   <p>How the app looks, talks and stores maps. Avoiding tolls, highways and the like is under Route options.</p>
   <h3>Map colours</h3>
+  <div class="chips"><button data-map="autoNight">Dark map at night</button></div>
   <div id="themes"></div>
   <h3>Font</h3>
-  <div class="chips" id="fonts"></div>
+  <details class="picker" id="fontPick"><summary><span class="lbl">Font</span><b id="fontNow"></b></summary><div class="chips" id="fonts"></div></details>
   <h3>Map details</h3>
   <div class="chips">
     <button data-map="showPois">Shop and cafe icons</button>
     <button data-map="showBuildings">Buildings</button>
-    <button data-map="autoNight">Dark theme at night</button>
   </div>
+  <h3>Show on my map</h3>
+  <p>Kinds of places to mark clearly on the map, everywhere you go.</p>
+  <div class="chips" id="poiKinds"></div>
+  <h3>Places I like</h3>
+  <p>Chains or names to stand out on the map in gold, so you notice when you pass one (for example Dunkin' or Oxxo).</p>
+  <div class="rig"><div class="field" style="flex:1"><input id="favIn" type="text" placeholder="Add a name" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"></div><button id="favAdd">Add</button></div>
+  <div class="chips" id="favList"></div>
   <h3>Label size</h3>
   <div class="chips" data-mapset="labels"><button data-v="s">Small</button><button data-v="m">Standard</button><button data-v="l">Large</button></div>
   <h3>Distances</h3>
   <div class="chips" data-mapset="units"><button data-v="mi">Miles</button><button data-v="km">Kilometres</button></div>
+  <h3>Speeds</h3>
+  <p>For your speed and the speed limit while driving. In Mexico the signs are in km/h.</p>
+  <div class="chips" data-mapset="speedUnits"><button data-v="mph">mph</button><button data-v="kmh">km/h</button></div>
   <h3>Voice directions</h3>
   <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>On-screen directions</h3>
@@ -438,8 +458,13 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div class="chips" data-set="northUp"><button data-v="false">Faces my direction</button><button data-v="true">North up</button></div>
   <h3>Home and work</h3>
   <p>They show first under the search box.</p>
-  <div class="placeRow"><b>Home</b><span id="homeNow"></span><button id="homeHere" class="pill">This place</button><button id="homeFind" class="pill">Search</button><button id="homeDel" class="ghost">Remove</button></div>
-  <div class="placeRow"><b>Work</b><span id="workNow"></span><button id="workHere" class="pill">This place</button><button id="workFind" class="pill">Search</button><button id="workDel" class="ghost">Remove</button></div>
+  <div class="placeRow"><b>Home</b><span id="homeNow"></span><button id="homeHere" class="pill">This destination</button><button id="homeMe" class="pill">My location</button><button id="homeFind" class="pill">Search</button><button id="homeMap" class="pill">On the map</button><button id="homeDel" class="ghost">Remove</button></div>
+  <div class="placeRow"><b>Work</b><span id="workNow"></span><button id="workHere" class="pill">This destination</button><button id="workMe" class="pill">My location</button><button id="workFind" class="pill">Search</button><button id="workMap" class="pill">On the map</button><button id="workDel" class="ghost">Remove</button></div>
+  <h3>My places</h3>
+  <p>Name places only you use (for example My spa or Mom's). They show with home and work when you search.</p>
+  <ul class="list" id="mineList"></ul>
+  <div class="rig"><div class="field" style="flex:1"><input id="mineName" type="text" placeholder="Name, for example My spa" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"></div></div>
+  <div class="chips" id="mineHow"><button data-how="find">Search its address</button><button data-how="here">My location</button><button data-how="map">On the map</button></div>
   <h3>Saved places</h3>
   <ul class="list" id="savedList"></ul>
   <h3>Offline map</h3>
@@ -672,7 +697,7 @@ const hasTraffic = () => !!prefs.ttKey || (premium.active && passOk());
 const tParam = () => passOk() ? '&t=' + encodeURIComponent(premium.pass.pass) : '';
 const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}${tParam()}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ lane: 'standard', fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ poiKinds: [], favNames: [], lane: 'standard', fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 let places = store('map.places') || { home: null, work: null }, visits = store('map.visits') || {}, settingPlace = null;   // visits: how often you go to each place
 const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
@@ -718,7 +743,8 @@ function fmtDist(mi) {
   const v = mi < 10 ? mi.toFixed(1) : String(Math.round(mi));
   return v + (v === '1.0' || v === '1' ? ' mile' : ' miles');   // spelled out: "mi" read like minutes next to drive times
 }
-const fmtSpeed = mph => prefs.units === 'km' ? Math.round(mph * 1.60934) + ' km/h' : Math.round(mph) + ' mph';
+const kmhSpeeds = () => (prefs.speedUnits || (prefs.units === 'km' ? 'kmh' : 'mph')) === 'kmh';
+const fmtSpeed = mph => kmhSpeeds() ? Math.round(mph * 1.60934) + ' km/h' : Math.round(mph) + ' mph';
 function fmtTime(s) { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 function labelOf(p) {
@@ -889,6 +915,53 @@ async function themedStyle() {
 // Picked per theme to stand apart from every road colour: deep royal blue on light maps, bright sky blue on dark maps
 // (whose roads are muted greys), bright cyan on the purple themes. Never a traffic colour (red, orange, yellow, green).
 const routeColor = t => t.route || (t.ui === 'dark' ? '#3ec6ff' : '#1a3fe0');
+// ---------- Show on my map: kinds of places and favourite names, drawn from the map's own place data ----------
+const POI_KINDS = [
+  ['gas', 'Gas', ['fuel'], ['fuel']], ['coffee', 'Coffee', ['cafe'], ['cafe', 'coffee']], ['food', 'Food', ['restaurant', 'fast_food'], ['restaurant', 'fast_food', 'food_court']],
+  ['grocery', 'Groceries', ['grocery'], ['supermarket', 'convenience', 'greengrocer']], ['pharmacy', 'Pharmacies', ['pharmacy'], ['pharmacy', 'chemist']],
+  ['ev', 'EV charging', [], ['charging_station']], ['restroom', 'Restrooms', ['toilets'], ['toilets']], ['atm', 'Banks and ATMs', ['bank'], ['bank', 'atm']],
+  ['hotel', 'Hotels', ['lodging'], ['hotel', 'motel', 'hostel', 'guest_house']], ['parking', 'Parking', ['parking'], ['parking']], ['hospital', 'Hospitals', ['hospital'], ['hospital', 'clinic']],
+  ['beach', 'Beaches', ['beach'], ['beach']], ['camp', 'Campgrounds', ['campsite'], ['camp_site', 'caravan_site']]
+];
+function myPlacesFilter() {
+  const kinds = POI_KINDS.filter(k => prefs.poiKinds.includes(k[0])), cls = [...new Set(kinds.flatMap(k => k[2]))], sub = [...new Set(kinds.flatMap(k => k[3]))];
+  const any = ['any'];
+  if (cls.length) any.push(['in', ['get', 'class'], ['literal', cls]]);
+  if (sub.length) any.push(['in', ['get', 'subclass'], ['literal', sub]]);
+  return any.length > 1 ? any : ['boolean', false];
+}
+function favFilter() {
+  const names = prefs.favNames.map(n => n.toLowerCase().trim()).filter(Boolean);
+  return names.length ? ['any', ...names.map(n => ['in', n, ['downcase', ['coalesce', ['get', 'name:latin'], ['get', 'name'], '']]])] : ['boolean', false];
+}
+function addMyPlaces() {
+  if (!map.getSource('openmaptiles')) return;
+  ['my-poi', 'my-poi-label', 'fav-poi', 'fav-poi-label'].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+  const t = theme(), dark = t.ui === 'dark', font = ['Noto Sans Bold'], glyphs = !!map.getStyle().glyphs;
+  map.addLayer({ id: 'my-poi', type: 'circle', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 11, filter: myPlacesFilter(),
+    paint: { 'circle-color': t.accent || '#8b5cf6', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 16, 7], 'circle-stroke-color': dark ? '#1b1838' : '#ffffff', 'circle-stroke-width': 2 } });
+  map.addLayer({ id: 'fav-poi', type: 'circle', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 9, filter: favFilter(),
+    paint: { 'circle-color': '#ffb020', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4.5, 16, 9], 'circle-stroke-color': dark ? '#1b1838' : '#ffffff', 'circle-stroke-width': 2.5 } });
+  if (glyphs) {
+    map.addLayer({ id: 'my-poi-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 13, filter: myPlacesFilter(),
+      layout: { 'text-field': ['coalesce', ['get', 'name:latin'], ['get', 'name']], 'text-font': font, 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-optional': true },
+      paint: { 'text-color': t.accent || '#6d28d9', 'text-halo-color': dark ? '#0f0d24' : '#ffffff', 'text-halo-width': 1.6 } });
+    map.addLayer({ id: 'fav-poi-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 10, filter: favFilter(),
+      layout: { 'text-field': ['coalesce', ['get', 'name:latin'], ['get', 'name']], 'text-font': font, 'text-size': 12, 'text-offset': [0, 1.2], 'text-anchor': 'top', 'text-allow-overlap': false },
+      paint: { 'text-color': dark ? '#ffcf5c' : '#b26a00', 'text-halo-color': dark ? '#0f0d24' : '#ffffff', 'text-halo-width': 1.8 } });
+  }
+}
+function drawMyPlacesUi() {
+  const box = $('poiKinds'); box.innerHTML = '';
+  POI_KINDS.forEach(([k, label]) => { const b = el('button', prefs.poiKinds.includes(k) ? 'on' : '', label); b.onclick = () => { prefs.poiKinds = prefs.poiKinds.includes(k) ? prefs.poiKinds.filter(x => x !== k) : prefs.poiKinds.concat(k); savePrefs(); drawMyPlacesUi(); if (map) addMyPlaces(); }; box.appendChild(b); });
+  const fl = $('favList'); fl.innerHTML = '';
+  prefs.favNames.forEach(n => { const b = el('button', 'on', '\u2605 ' + n + '  \u00d7'); b.title = 'Remove'; b.onclick = () => { prefs.favNames = prefs.favNames.filter(x => x !== n); savePrefs(); drawMyPlacesUi(); if (map) addMyPlaces(); }; fl.appendChild(b); });
+}
+function addFav() {
+  const n = $('favIn').value.trim().replace(/\s+/g, ' '); if (!n) return;
+  if (!prefs.favNames.some(x => x.toLowerCase() === n.toLowerCase())) prefs.favNames = prefs.favNames.concat(n);
+  $('favIn').value = ''; savePrefs(); drawMyPlacesUi(); if (map) addMyPlaces();
+}
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
@@ -903,9 +976,11 @@ function addRouteLayers() {
   if (dark) line('glow', true, { 'line-color': rc, 'line-width': z(12, 30), 'line-blur': z(6, 14), 'line-opacity': .45 });
   line('casing', true, { 'line-color': shade(rc, dark ? .55 : .7), 'line-width': z(6, 14.5) });
   line('sel', true, { 'line-color': rc, 'line-width': z(4, 10.5) });
+  addMyPlaces();
   map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
   map.addLayer({ id: 'zone-line', type: 'line', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'fire'], '#c0392b', '#6b6b6b'], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } }, 'alt');
+  map.addLayer({ id: 'heat-dot', type: 'circle', source: 'zones', minzoom: 9, filter: ['==', ['get', 'kind'], 'heatpt'], paint: { 'circle-color': '#9a96a8', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3, 14, 5], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5, 'circle-opacity': 0.8 } });
   map.addLayer({ id: 'fire-dot', type: 'circle', source: 'zones', filter: ['==', ['get', 'kind'], 'firept'], paint: { 'circle-color': '#e4572e', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 10, 9], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-blur': 0.05 } });
   if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['all', ['==', ['get', 'kind'], 'fire'], ['==', ['geometry-type'], 'Polygon']], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
   drawZones();
@@ -927,20 +1002,32 @@ function setTheme(name) {   // with "dark at night" on, picking a dark theme set
 }
 setInterval(() => { if (themeKey() !== shownTheme) refreshStyle(); }, 300000);   // switch over at dusk and dawn
 function drawThemes() {
-  const box = $('themes'); box.innerHTML = '';
-  let group = '';
-  Object.keys(THEMES).forEach(k => {
-    const t = THEMES[k], b = el('button', k === prefs.theme || (prefs.autoNight && k === prefs.nightTheme) ? 'on' : ''), sw = el('i');
-    if (t.group !== group) { group = t.group; box.appendChild(el('h4', '', group)); }
-    sw.style.cssText = `background:linear-gradient(135deg, ${t.bg} 0 58%, ${t.park} 58% 78%, ${t.water} 78%);--r1:${t.major};--r2:${t.motorway || t.minor};--rc:${t.casing}`;
-    b.style.setProperty('--dot', t.accent);
-    b.append(sw, document.createTextNode(t.label)); b.onclick = () => setTheme(k); box.appendChild(b);
-  });
+  // One picker per time of day: it shows the current choice, and opens to the options
+  const box = $('themes'), openNow = [...box.querySelectorAll('details[open]')].map(d => d.dataset.k); box.innerHTML = '';
+  const swatch = t => { const sw = el('i'); sw.style.cssText = `background:linear-gradient(135deg, ${t.bg} 0 58%, ${t.park} 58% 78%, ${t.water} 78%);--r1:${t.major};--r2:${t.motorway || t.minor};--rc:${t.casing}`; return sw; };
+  const picker = (key, label, current, keys, pick) => {
+    const d = el('details', 'picker'); d.dataset.k = key; if (openNow.includes(key)) d.open = true;
+    const sm = el('summary'); sm.append(el('span', 'lbl', label), swatch(THEMES[current]), el('b', '', THEMES[current].label)); d.appendChild(sm);
+    const grid = el('div', 'themeGrid'); let group = '';
+    keys.forEach(k => {
+      const t = THEMES[k], b = el('button', k === current ? 'on' : '');
+      if (t.group !== group) { group = t.group; grid.appendChild(el('h4', '', group)); }
+      b.style.setProperty('--dot', t.accent); b.append(swatch(t), document.createTextNode(t.label));
+      b.onclick = () => { pick(k); d.open = false; }; grid.appendChild(b);
+    });
+    d.appendChild(grid); box.appendChild(d);
+  };
+  const all = Object.keys(THEMES), light = all.filter(k => THEMES[k].ui !== 'dark'), darkK = all.filter(k => THEMES[k].ui === 'dark');
+  if (prefs.autoNight) {
+    picker('day', 'Day map', THEMES[prefs.theme] && THEMES[prefs.theme].ui !== 'dark' ? prefs.theme : 'brina', light, k => { prefs.theme = k; savePrefs(); drawThemes(); refreshStyle(); });
+    picker('night', 'Night map', THEMES[prefs.nightTheme] ? prefs.nightTheme : 'twilight', darkK, k => { prefs.nightTheme = k; savePrefs(); drawThemes(); refreshStyle(); });
+  } else picker('one', 'Map', THEMES[prefs.theme] ? prefs.theme : 'brina', all, k => { prefs.theme = k; savePrefs(); drawThemes(); refreshStyle(); });
+  $('fontNow').textContent = (FONTS[prefs.font] || FONTS.jakarta).label; $('fontNow').style.fontFamily = (FONTS[prefs.font] || FONTS.jakarta).css + ', system-ui';
   fontLink('font-all', Object.values(FONTS).map(f => f.g).filter(Boolean));   // so each choice previews in its own face
   const fb = $('fonts'); fb.innerHTML = '';
   Object.keys(FONTS).forEach(k => {
     const b = el('button', k === prefs.font ? 'on' : '', FONTS[k].label); b.style.fontFamily = FONTS[k].css + ', system-ui';
-    b.onclick = () => { prefs.font = k; savePrefs(); applyFont(); drawThemes(); layout(); };
+    b.onclick = () => { prefs.font = k; savePrefs(); applyFont(); drawThemes(); layout(); $('fontPick').open = false; };
     fb.appendChild(b);
   });
 }
@@ -1006,9 +1093,18 @@ function drawAvoid() {
     const m = marker('avoid', [a.lat, a.lon]);
     m.getElement().onclick = e => {   // tap an avoided spot to stop avoiding it
       e.stopPropagation();
-      const div = el('div', 'pop'), b = el('button', 'go', a.r > 500 ? 'Stop avoiding this area' : 'Stop avoiding this spot');
-      b.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } avoid = avoid.filter(x => x !== a); store('map.avoid', avoid); drawAvoid(); drawLists(); if (nav) renav('Rerouting.'); else route(); };
-      div.append(el('small', '', a.label), b); openPop([a.lon, a.lat], div, { offset: 14 });
+      const SIZES = [120, 300, 800, 1600, 3200], idx = Math.max(0, SIZES.findIndex(x => x >= (a.r || 120)));
+      const size = r => r < 200 ? 'just this spot' : r < 1000 ? 'about ' + fmtDist(r / 1609.34) + ' around' : fmtDist(r / 1609.34) + ' around';
+      const redo = () => { if (mapPop) { mapPop.remove(); mapPop = null; } store('map.avoid', avoid); drawAvoid(); drawLists(); if (nav) renav('Rerouting.'); else if (routes.length) route(); };
+      const div = el('div', 'pop'), row = el('div', 'chips');
+      const smaller = el('button', '', '\u2212 Smaller'), wider = el('button', '', '+ Wider');
+      smaller.disabled = idx === 0; wider.disabled = idx === SIZES.length - 1;
+      smaller.onclick = () => { a.r = SIZES[Math.max(0, idx - 1)]; redo(); m.getElement().click(); };
+      wider.onclick = () => { a.r = SIZES[Math.min(SIZES.length - 1, idx + 1)]; redo(); m.getElement().click(); };
+      row.append(smaller, wider);
+      const b = el('button', 'go', 'Stop avoiding');
+      b.onclick = () => { avoid = avoid.filter(x => x !== a); redo(); };
+      div.append(el('b', '', 'Avoiding ' + size(a.r || 120)), el('small', '', a.label), row, b); openPop([a.lon, a.lat], div, { offset: 14 });
     };
     return m;
   }) : [];
@@ -1023,12 +1119,13 @@ function openPop(lngLat, div, opts) {
   return mapPop;
 }
 function onMapClick(e) {
-  if (picking) { pickedStop(e.lngLat); return; }
+  if (picking) { const fn = typeof picking === 'function' ? picking : pickedStop; picking = false; document.body.classList.remove('picking'); fn(e.lngLat); return; }
   if (mapPop && Date.now() - mapPopAt > 500) { mapPop.remove(); mapPop = null; return; }
-  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ['fire-dot', 'zone-fill'] }).find(f => /^fire/.test(f.properties.kind));
+  const fire = map.getLayer('zone-fill') && map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ['fire-dot', 'zone-fill', 'heat-dot'] }).find(f => /^fire|heatpt/.test(f.properties.kind));
   if (fire) {
     const p = fire.properties, div = el('div', 'pop');
-    div.append(el('b', '', p.title), el('small', '', p.info), el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
+    div.append(el('b', '', p.title), el('small', '', p.info));
+    if (p.kind !== 'heatpt') div.append(el('small', '', p.active ? 'Routes keep at least half a mile away.' : 'Fully contained, so routes are not changed.'));
     const around = namesAround([p.lat, p.lon], p.reach + 1500);   // so you can place it: the neighbourhoods and places in and around it
     if (around.areas.length) div.append(el('small', 'around', 'Neighbourhoods: ' + around.areas.join(', ')));
     if (around.spots.length) div.append(el('small', 'around', 'Places: ' + around.spots.join(', ')));
@@ -1077,10 +1174,18 @@ function placeAt(e) {
   div.appendChild(go);
   openPop(ll, div);
 }
+async function saveSpot(ll) {   // saved places from a press on the map, with a name you can change
+  const p = await placeFromSpot(ll);
+  saved.push({ lat: p.lat, lon: p.lon, label: p.label, name: p.name }); store('map.saved', saved); drawQuick();
+  const div = el('div', 'pop'), f = el('div', 'field'), inp = el('input'), ok = el('button', 'go', 'Save name');
+  inp.value = p.name; inp.setAttribute('aria-label', 'Name'); f.appendChild(inp);
+  ok.onclick = () => { const s2 = saved[saved.length - 1]; const n = inp.value.trim(); if (n && s2) { s2.name = n; s2.label = n + ', ' + p.label.replace(/^[^,]*, /, ''); store('map.saved', saved); } if (mapPop) { mapPop.remove(); mapPop = null; } status('Saved to your places.'); };
+  div.append(el('b', '', 'Saved'), el('small', '', 'Give it a name if you like:'), f, ok); openPop(ll, div);
+}
 function mapMenu(lngLat) {
   const lat = lngLat.lat, lon = lngLat.lng, div = el('div', 'pop');
-  const items = nav ? [['Avoid this spot', 'go', () => addAvoid(lat, lon)], ['Avoid this area (1 mile)', '', () => addAvoid(lat, lon, 1600)]]   // during a trip the only map action is to avoid a spot
-    : [['Go here', 'go', () => setPointFromLatLng('to', lat, lon)], ['Start here', '', () => setPointFromLatLng('from', lat, lon)], ['Avoid this spot', '', () => addAvoid(lat, lon)], ['Avoid this area (1 mile)', '', () => addAvoid(lat, lon, 1600)]];
+  const items = nav ? [['Avoid this spot', 'go', () => addAvoid(lat, lon)], ['Save this place', '', () => saveSpot(lngLat)]]   // during a trip: avoid it, or keep it for later
+    : [['Go here', 'go', () => setPointFromLatLng('to', lat, lon)], ['Start here', '', () => setPointFromLatLng('from', lat, lon)], ['Save this place', '', () => saveSpot(lngLat)], ['Avoid this spot', '', () => addAvoid(lat, lon)]];
   items.forEach(([txt, cls, fn]) => { const b = el('button', cls, txt); b.onclick = () => { if (mapPop) { mapPop.remove(); mapPop = null; } fn(); }; div.appendChild(b); });
   openPop(lngLat, div);
 }
@@ -1213,7 +1318,7 @@ async function geoFetchNet(ep, qs, signal, body) {
 function geoProps(x) {   // a Geoapify feature's properties in the free search server's shape
   const p = x.properties || x, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || p.result_type || '';
   return { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.town || p.village || p.county, state: p.state, country: p.country, countrycode: p.country_code,
-    osm_type: raw.osm_type, osm_id: raw.osm_id, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours };
+    osm_type: raw.osm_type, osm_id: raw.osm_id, rtype: p.result_type, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours };
 }
 const geoPhoton = d => ({ features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => ({ geometry: x.geometry, properties: geoProps(x) })) });
 const rectOf = (s, w, n, e) => 'rect:' + [Math.min(w, e), Math.min(s, n), Math.max(w, e), Math.max(s, n)].map(v => (+v).toFixed(5)).join(',');
@@ -1330,7 +1435,13 @@ function exitSearch() {
   status(''); syncClear();
   drawStrip();
 }
-['to', 'from'].forEach(w => { $(w).closest('.field').addEventListener('pointerdown', () => enterSearch(w)); $(w).addEventListener('focus', () => enterSearch(w)); });
+// One tap opens the keyboard: a tap anywhere on the box focuses the text field during the tap itself (iOS only opens
+// the keyboard for a focus inside the tap), and the screen switches to search mode only once the field has focus, so
+// nothing moves under your finger while the tap is still happening
+['to', 'from'].forEach(w => {
+  $(w).closest('.field').addEventListener('pointerdown', e => { if (e.target !== $(w) && !e.target.closest('button')) { e.preventDefault(); $(w).focus(); } });
+  $(w).addEventListener('focus', () => requestAnimationFrame(() => enterSearch(w)));
+});
 $('cancelSearch').onclick = exitSearch;
 $('searchScrim').addEventListener('pointerdown', e => { e.preventDefault(); exitSearch(); });
 ['from', 'to', 'friend'].forEach(which => {
@@ -1371,7 +1482,12 @@ function shortcuts(which) {
   searchId++;
   if (here && which === 'from') list.appendChild(suggestion(which, 'My location', null, '', { lat: here[0], lon: here[1], label: 'My location' }));
   const add = (title, arr) => { if (!arr.length) return; list.appendChild(el('li', 'head', title)); arr.forEach(p => list.appendChild(suggestion(which, p.name || p.label.split(',')[0], restOf(p), here ? fmtDist(meters(here, [p.lat, p.lon]) / 1609.34) : '', p))); };
-  add('Saved', saved); add('Recent', recent);
+  const hw = [[places.home, 'Home'], [places.work, 'Work']].concat((places.mine || []).map(m => [m, m.name])).filter(([p2]) => p2);
+  if (hw.length && which === 'to') { list.appendChild(el('li', 'head', 'Your places')); hw.forEach(([p2, t]) => list.appendChild(suggestion(which, t, p2.label, here ? fmtDist(meters(here, [p2.lat, p2.lon]) / 1609.34) : '', p2))); }
+  const used = new Set(hw.map(([p2]) => p2.label)), fresh = arr => arr.filter(p2 => p2 && !used.has(p2.label) && used.add(p2.label));
+  add('Saved', fresh(saved));
+  add('Often', fresh(Object.values(visits).filter(v => v.n >= 2).sort((a, b) => b.n - a.n || b.at - a.at).slice(0, 4).map(v => v.p)));
+  add('Recent', fresh(recent).slice(0, 6));
   list.style.display = list.children.length ? 'block' : 'none';
 }
 
@@ -1477,6 +1593,19 @@ function mapNames(q, ref) {
   }
   return out.sort((a, b) => a.d - b.d).slice(0, 8);
 }
+// What a search result is, in a word or two: Street, City, Neighbourhood, Supermarket, Restaurant...
+const MORE_KINDS = { supermarket: 'Supermarket', department_store: 'Store', convenience: 'Convenience store', mall: 'Mall', marketplace: 'Market', clothes: 'Clothing store', hardware: 'Hardware store',
+  doityourself: 'Hardware store', bakery: 'Bakery', ice_cream: 'Ice cream', pub: 'Bar', nightclub: 'Club', cinema: 'Cinema', theatre: 'Theatre', library: 'Library', university: 'University', kindergarten: 'School',
+  dentist: 'Dentist', veterinary: 'Vet', car_repair: 'Car repair', car_wash: 'Car wash', charging_station: 'EV charging', parking: 'Parking', toilets: 'Restrooms', viewpoint: 'Viewpoint', camp_site: 'Campground',
+  caravan_site: 'RV park', motel: 'Motel', guest_house: 'Guest house', hostel: 'Hostel', winery: 'Winery', brewery: 'Brewery', gym: 'Gym', fitness_centre: 'Gym', spa: 'Spa', beauty: 'Beauty salon', hairdresser: 'Hair salon',
+  food_court: 'Food court', commercial: 'Business', catering: 'Restaurant', service: 'Service', building: 'Building', residential: 'Address' };
+const TYPE_KINDS = { street: 'Street', city: 'City', town: 'Town', village: 'Village', hamlet: 'Place', suburb: 'Neighbourhood', district: 'Neighbourhood', neighbourhood: 'Neighbourhood', locality: 'Place',
+  postcode: 'Postcode', county: 'County', state: 'State', country: 'Country', building: 'Address', house: 'Address' };
+function kindOf(pr) {
+  const v = String(pr.osm_value || '').toLowerCase(), t = String(pr.rtype || pr.type || '').toLowerCase();
+  if (t && t !== 'amenity' && TYPE_KINDS[t] && !(t === 'building' && pr.name)) return TYPE_KINDS[t];
+  return KIND_WORDS[v] || MORE_KINDS[v] || (TYPE_KINDS[v] || '') || (v && v !== 'yes' ? v.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) : '');
+}
 const nearBorder = c => PORTS.some(([, , lat, lon]) => meters(c, [lat, lon]) < 150000);
 let poiDownUntil = 0;
 async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from TomTom's place list, through the app's server
@@ -1484,7 +1613,7 @@ async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from Tom
   try {
     const r = await fetch(API + '/poi?q=' + encodeURIComponent(q) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
     if (!r.ok) { if (r.status >= 500) poiDownUntil = Date.now() + 600000; return []; }
-    return ((await r.json()).places || []).map(p => ({ main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '' }));
+    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '' }));
   } catch (e) { return []; }
 }
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
@@ -1524,12 +1653,13 @@ async function search(which, q, now) {
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const JUNK = /^(taxi|bus_stop|platform|stop_position|parking|parking_entrance|parking_space|bicycle_parking|vending_machine|atm)$/;
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).filter(f => !JUNK.test(f.properties.osm_value || '') || /taxi|bus|park|atm/i.test(q))
-    .map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], cc: String(f.properties.countrycode || '').toLowerCase(), named: !!f.properties.name }))).catch(() => null);
+    .map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], cc: String(f.properties.countrycode || '').toLowerCase(), named: !!f.properties.name, kind: kindOf(f.properties) }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
   let near, close, far, exact = [], pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   const ql = q.toLowerCase(), mine = [], words = fold(ql).replace(/\bkm\b/g, ' ').split(/[^a-z0-9]+/).filter(w => w.length > 1);
   [[places.home, 'Home'], [places.work, 'Work']].forEach(([pl, t]) => { if (pl && (t.toLowerCase().startsWith(ql) || (pl.label || '').toLowerCase().includes(ql))) mine.push(pl); });
+  (places.mine || []).forEach(m => { if (fold(m.name).includes(fold(ql)) && !mine.includes(m)) mine.push(m); });
   saved.concat(Object.values(visits).sort((a, b) => b.n - a.n).map(v => v.p), recent).forEach(pl => { if (pl && ((pl.name || '').toLowerCase().includes(ql) || (pl.label || '').toLowerCase().split(',')[0].includes(ql)) && !mine.some(o => o.label === pl.label)) mine.push(pl); });
   const own = mine.slice(0, 4).map(pl => {
     const main = pl === places.home ? 'Home' : pl === places.work ? 'Work' : pl.name || pl.label.split(',')[0];
@@ -1584,7 +1714,7 @@ async function search(which, q, now) {
       if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
       const st = p.hours ? openState(p.hours, new Date()) : null;
       const eta = etaOf(p);
-      const li = suggestion(which, p.main, p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours });
+      const li = suggestion(which, p.main, p.kind && p.kind !== p.sub ? p.kind + (p.sub ? ' \u00b7 ' + p.sub : '') : p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours });
       if (st && !st.open) li.classList.add('shut');
       list.appendChild(li);
     });
@@ -1664,7 +1794,8 @@ async function setPointFromLatLng(which, lat, lon) {
 
 function setPoint(which, p) {
   if (which === 'to' && settingPlace) {
-    const kind = settingPlace; settingPlace = null; $('to').placeholder = 'Where to?'; $('to').value = '';
+    const kind = settingPlace; settingPlace = null; $('to').placeholder = 'Where to?'; $('to').value = ''; exitSearch();
+    if (typeof kind === 'object') { addMine(kind.name, p); return; }
     savePlace(kind, p); status((kind === 'home' ? 'Home' : 'Work') + ' saved: ' + (p.name || p.label.split(',')[0]) + '.'); return;
   }
   if (which === 'from' && !p.auto && !planning) setPlanning(true, true);   // a hand-picked start means you are planning
@@ -1721,20 +1852,30 @@ function drawQuick() {
   const q = $('quick'); q.innerHTML = '';
   const seen = new Set(), chips = [];
   const push = (p, kind, title) => { if (!p || seen.has(p.label)) return; seen.add(p.label); chips.push([p, kind, title || p.name || p.label.split(',')[0]]); };
-  push(places.home, 'home', 'Home'); push(places.work, 'work', 'Work');
-  saved.forEach(p => push(p, 'saved'));
-  Object.values(visits).filter(v => v.n >= 2).sort((a, b) => b.n - a.n || b.at - a.at).slice(0, 6).forEach(v => push(v.p, 'often'));
-  recent.forEach(p => { if (chips.length < 8) push(p, 'recent'); });
-  chips.slice(0, 10).forEach(([p, kind, title]) => {
+  push(places.home, 'home', 'Home'); push(places.work, 'work', 'Work');   // saved, frequent and recent places live in the search list instead
+  chips.forEach(([p, kind, title]) => {
     const b = el('button', kind); b.innerHTML = ICON[kind] || ''; b.appendChild(el('span', '', title)); b.title = p.label;
     b.onclick = () => setPoint('to', p); q.appendChild(b);
   });
-  if (!places.home && !places.work) { const b = el('button', 'add'); b.innerHTML = ICON.home; b.appendChild(el('span', '', 'Set home')); b.onclick = () => setPlaceBySearch('home'); q.appendChild(b); }
+  if (!places.home) { const b = el('button', 'add'); b.innerHTML = ICON.home; b.appendChild(el('span', '', 'Set home')); b.onclick = () => setPlaceBySearch('home'); q.appendChild(b); }
+  if (!places.work && places.home) { const b = el('button', 'add'); b.innerHTML = ICON.work || ICON.home; b.appendChild(el('span', '', 'Set work')); b.onclick = () => setPlaceBySearch('work'); q.appendChild(b); }
 }
-function setPlaceBySearch(kind) {
+function setPlaceBySearch(kind) {   // kind: 'home', 'work', or { name } for one of your own places
   settingPlace = kind; closeSheets();
-  $('to').placeholder = kind === 'home' ? 'Search for your home address' : 'Search for your work address';
-  $('to').value = ''; $('to').focus(); status('Pick your ' + kind + ' from the results.');
+  const what = typeof kind === 'object' ? kind.name : kind;
+  $('to').placeholder = 'Search for the address of ' + (typeof kind === 'object' ? kind.name : 'your ' + kind);
+  $('to').value = ''; $('to').focus(); status('Pick ' + (typeof kind === 'object' ? what : 'your ' + what) + ' from the results.');
+}
+// Your own named places ("My spa", "Mom's"): only on this device, listed with home and work
+function addMine(name, p) {
+  places.mine = (places.mine || []).filter(x => x.name.toLowerCase() !== name.toLowerCase()).concat({ name, lat: p.lat, lon: p.lon, label: name + ', ' + (p.label.startsWith(name + ', ') ? p.label.slice(name.length + 2) : p.label) });
+  store('map.places', places); drawPlaces(); drawQuick(); status(name + ' saved to your places.');
+}
+function setPlaceTo(kind, how) {   // how: 'here' (where you are now) or 'map' (tap the map)
+  const name = typeof kind === 'object' ? kind.name : '';
+  const done = p => { if (typeof kind === 'object') addMine(kind.name, p); else { savePlace(kind, p); status((kind === 'home' ? 'Home' : 'Work') + ' saved.'); } };
+  if (how === 'here') { if (!here) { status('Your location is not known yet.'); return; } placeFromSpot({ lat: here[0], lng: here[1] }, name).then(done); closeSheets(); return; }
+  pickOnMap('Tap the map where ' + (name || 'your ' + kind) + ' is', ll => placeFromSpot(ll, name).then(done));
 }
 function savePlace(kind, p) {
   places[kind] = p ? { lat: p.lat, lon: p.lon, label: p.label, name: p.name } : null;
@@ -1747,6 +1888,8 @@ function drawPlaces() {
     $(kind + 'Here').style.display = pts.to && !pts.to.raw ? '' : 'none';
     $(kind + 'Del').style.display = p ? '' : 'none';
   });
+  const ul = $('mineList'); ul.innerHTML = '';
+  (places.mine || []).forEach(m => { const li = el('li'), b = el('button', '', 'Remove'); b.onclick = () => { places.mine = places.mine.filter(x => x !== m); store('map.places', places); drawPlaces(); drawQuick(); }; li.append(el('span', '', m.label), b); ul.appendChild(li); });
 }
 function drawLists() {
   const fill = (id, arr, empty, remove) => {
@@ -2046,7 +2189,7 @@ async function satFires(box) {
     const c = [g.pts.reduce((n, q) => n + q[0], 0) / g.pts.length, g.pts.reduce((n, q) => n + q[1], 0) / g.pts.length];
     const r = Math.min(15000, Math.max(...g.pts.map(q => meters(c, q))) + 1200), last = Math.max(...g.pts.map(q => q[3]));
     const seen = Math.max(...g.pts.map(q => q[5] || 0)), regular = seen >= 3;   // hot here on several other days in the last 3 months
-    return { kind: 'fire', sat: true, name: 'Satellite-detected', title: regular ? 'Regular heat source (satellite)' : 'Fire seen by satellite', c, r, active: !regular && Date.now() - last < 36 * 3600000, regular,
+    return { kind: 'fire', sat: true, name: 'Satellite-detected', title: regular ? 'Regular heat source' : 'Fire seen by satellite', c, r, active: !regular && Date.now() - last < 36 * 3600000, regular,
       info: g.pts.length + ' heat spots seen by NASA satellites in the last 2 days, latest ' + ago(last) + '. ' + (regular
         ? 'The same spot was hot on ' + seen + ' other days in the last 3 months, which points to something there that is often hot (a factory, power station, gas flare or dump) rather than a new fire. Routes are not changed.'
         : (hist ? 'Not seen there in the last 3 months, so it looks new. ' : '') + 'Not confirmed by a fire agency: it can be a controlled or farm burn. A circle around the spots is avoided.') };
@@ -2062,6 +2205,10 @@ function drawZones() {
   const feats = [];
   if (prefs.fires) fires.forEach(f => {
     const reach = f.c ? f.r : meters([f.box[1], f.box[0]], [f.box[3], f.box[2]]) / 2 + 500, mid = f.c || [(f.box[1] + f.box[3]) / 2, (f.box[0] + f.box[2]) / 2];
+    if (f.regular) {   // a regular heat source: a small grey dot to tap for details, no area and no warning colours
+      feats.push({ type: 'Feature', properties: { kind: 'heatpt', title: 'Regular heat source', info: f.info, lat: mid[0], lon: mid[1], reach: 300 }, geometry: { type: 'Point', coordinates: [mid[1], mid[0]] } });
+      return;
+    }
     feats.push({ type: 'Feature', properties: { kind: 'fire', active: f.active, title: f.title || f.name + ' Fire', info: f.info, lat: mid[0], lon: mid[1], reach }, geometry: { type: 'Polygon', coordinates: f.rings ? f.rings : [circleRing(f.c, f.r)] } });
     const c = f.c ? [f.c[1], f.c[0]] : [(f.box[0] + f.box[2]) / 2, (f.box[1] + f.box[3]) / 2];
     if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.title || f.name + ' Fire', info: f.info, lat: mid[0], lon: mid[1], reach }, geometry: { type: 'Point', coordinates: c } });
@@ -2807,22 +2954,22 @@ async function loadLimits(rt) {
     nav.limits = { pts: pts2, lim, at: 0 };
   } catch (e) {}
 }
-function limitHere(ll) {   // mph, rounded to the nearest 5; 0 when unknown
+function limitHere(ll) {   // in your speed units, rounded to the nearest 5; 0 when unknown
   const L = nav.limits; if (!L) return 0;
   let best = Infinity, bi = -1;
   const scan = (a, b) => { for (let i = Math.max(0, a); i < Math.min(L.pts.length, b); i++) { const d = meters(L.pts[i], ll); if (d < best) { best = d; bi = i; } } };
   scan(L.at - 30, L.at + 150); if (best > 60) scan(0, L.pts.length);
   if (best > 60) return 0;
   L.at = bi;
-  return Math.round(L.lim[bi] / 1.609344 / 5) * 5;
+  return Math.round((kmhSpeeds() ? L.lim[bi] : L.lim[bi] / 1.609344) / 5) * 5;
 }
 function drawSpeed(ll, speed) {
-  const box = $('speedo'), driving = prefs.mode === 'auto' || prefs.mode === 'rig', lim = driving ? limitHere(ll) : 0, mph = Math.round(speed * 2.23694);
+  const box = $('speedo'), driving = prefs.mode === 'auto' || prefs.mode === 'rig', lim = driving ? limitHere(ll) : 0, mph = Math.round(speed * (kmhSpeeds() ? 3.6 : 2.23694));   // in your speed units
   const show = prefs.showSpeed && driving && (speed > 0.5 || lim > 0);
   box.classList.toggle('on', !!show); if (!show) return;
-  $('spdNow').textContent = speed > 0.5 ? mph : ''; $('spdUnit').style.display = speed > 0.5 ? '' : 'none';
+  $('spdNow').textContent = speed > 0.5 ? mph : ''; $('spdUnit').style.display = speed > 0.5 ? '' : 'none'; $('spdUnit').textContent = kmhSpeeds() ? 'km/h' : 'mph';
   $('spdLim').innerHTML = lim ? 'LIMIT<span>' + lim + '</span>' : '';
-  box.classList.toggle('over', lim > 0 && mph >= lim + 5);
+  box.classList.toggle('over', lim > 0 && mph >= lim + (kmhSpeeds() ? 8 : 5));
 }
 // Swipe the direction card: left shows the turns after this one, right goes back; it returns to now after a few seconds
 let peekTimer = 0;
@@ -3307,8 +3454,16 @@ function showStopOpts(list) {
 }
 // Pick on the map: the panel steps aside, the next tap on the map becomes a stop
 let picking = false;
-$('pickMap').onclick = () => { picking = true; closeSheets(); clearStopOpts(); document.body.classList.add('picking'); if (nav) { nav.follow = false; document.body.classList.add('free'); } };
+function pickOnMap(text, fn) {   // the next tap on the map chooses a spot (for a stop, home, work or one of your places)
+  picking = fn || true; closeSheets(); exitSearch(); $('pickBar').querySelector('span').textContent = text;
+  document.body.classList.add('picking'); if (nav) { nav.follow = false; document.body.classList.add('free'); }
+}
+$('pickMap').onclick = () => { clearStopOpts(); pickOnMap('Tap the map where you want to stop'); };
 $('pickCancel').onclick = () => { picking = false; document.body.classList.remove('picking'); };
+async function placeFromSpot(ll, name) {
+  const n = await reverseName(ll.lat, ll.lng).catch(() => null);
+  return { lat: ll.lat, lon: ll.lng, name: name || (n ? n.main : 'Dropped pin'), label: (name ? name + ', ' : '') + (n ? n.label : ll.lat.toFixed(5) + ', ' + ll.lng.toFixed(5)) };
+}
 async function pickedStop(ll) {
   picking = false; document.body.classList.remove('picking');
   const n = await reverseName(ll.lat, ll.lng).catch(() => null);
@@ -3420,11 +3575,12 @@ $('arrivedOk').onclick = () => { document.body.classList.remove('arrived'); clea
 $('recenter').onclick = () => { if (!nav) return; nav.follow = true; nav.zoomHold = 0; nav.peek = null; document.body.classList.remove('free'); map.stop(); if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 } }); };
 
 function syncPrefs() {
+  drawMyPlacesUi();
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === prefs.mode));
   document.querySelectorAll('[data-pref]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.pref]));
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === String(prefs[g.dataset.set]))));
   document.querySelectorAll('[data-map]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.map]));
-  document.querySelectorAll('[data-mapset]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === prefs[g.dataset.mapset])));
+  document.querySelectorAll('[data-mapset]').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === (g.dataset.mapset === 'speedUnits' ? (kmhSpeeds() ? 'kmh' : 'mph') : prefs[g.dataset.mapset]))));
   document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.nav]));
   document.querySelectorAll('[data-traffic]').forEach(b => b.classList.toggle('on', !!prefs[b.dataset.traffic]));
   if (document.activeElement !== $('ttKey')) $('ttKey').value = prefs.ttKey || '';
@@ -3509,7 +3665,7 @@ document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { pre
 $('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();
 $('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };
 $('ttSave').onclick = () => { prefs.ttKey = $('ttKey').value.trim(); savePrefs(); $('ttMsg').textContent = prefs.ttKey ? 'Key saved. Traffic shows on your next route.' : 'Key removed. Traffic is off.'; addTraffic(); if (routes.length) loadTraffic().then(drawTiming); };
-const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
+const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units' || k === 'speedUnits') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
 document.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prefs[b.dataset.map] = !prefs[b.dataset.map]; mapPrefChanged(b.dataset.map); });
 document.querySelectorAll('[data-mapset] button').forEach(b => b.onclick = () => { prefs[b.parentElement.dataset.mapset] = b.dataset.v; mapPrefChanged(b.parentElement.dataset.mapset); });
 [['rigH', 'h'], ['rigL', 'l'], ['rigW', 'w']].forEach(([id, k]) => $(id).onchange = () => { const v = parseFloat($(id).value); if (v > 0) { prefs.rig[k] = v; savePrefs(); if (prefs.mode === 'rig') route(); } });
@@ -3522,7 +3678,14 @@ function drawOptsSum() {
   const parts = [on.length && 'Avoiding ' + on.join(', '), style.length && style.join(', ')].filter(Boolean);
   $('optsSum').textContent = (parts.length ? parts.join(' \u00b7 ') : 'No route options on') + '  \u203a  Change';
 }
+$('mineHow').querySelectorAll('button').forEach(b => b.onclick = () => {
+  const name = $('mineName').value.trim(); if (!name) { $('mineName').focus(); $('mineName').placeholder = 'First give it a name'; return; }
+  $('mineName').value = '';
+  if (b.dataset.how === 'find') setPlaceBySearch({ name }); else setPlaceTo({ name }, b.dataset.how);
+});
 ['home', 'work'].forEach(kind => {
+  $(kind + 'Me').onclick = () => setPlaceTo(kind, 'here');
+  $(kind + 'Map').onclick = () => setPlaceTo(kind, 'map');
   $(kind + 'Here').onclick = () => { if (pts.to) savePlace(kind, pts.to); };
   $(kind + 'Find').onclick = () => setPlaceBySearch(kind);
   $(kind + 'Del').onclick = () => savePlace(kind, null);
@@ -3533,6 +3696,7 @@ $('openPrefs').onclick = () => {
   document.body.classList.add('prefs');
 };
 $('closePrefs').onclick = $('closeMeet').onclick = $('scrim').onclick = closeSheets;
+$('favAdd').onclick = addFav; $('favIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addFav(); $('favIn').blur(); } });
 $('openMeet').onclick = () => { syncMeet(); document.body.classList.add('meet'); };
 $('meetGo').onclick = findMeet;
 $('meetMore').onclick = () => { const o = $('meetOpts'); o.hidden = !o.hidden; $('meetMore').textContent = o.hidden ? 'Options' : 'Fewer options'; };
@@ -3574,22 +3738,18 @@ $('toggleSteps').onclick = () => {
   $('toggleSteps').textContent = show ? 'Hide steps' : 'Show steps';
   layout();
 };
-// Back to you: if you are on screen, glide there; if not, first pull back at once so you can see where you are
-// relative to what you were looking at, then zoom in on you
+// Back to you in one smooth motion that stays centred on you: a short glide when you are close, and when you are
+// far off it rises just enough to show the way to you and comes down on you (one flight, no second jump)
 function goToMe() {
   map.stop();
   const me = [here[1], here[0]], pad = viewPad(), z = Math.max(map.getZoom(), 15), c = map.getContainer();
   const pt = map.project(me), onScreen = pt.x > pad.left && pt.x < c.clientWidth - pad.right && pt.y > pad.top && pt.y < c.clientHeight - pad.bottom;
-  if (onScreen) { map.easeTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, duration: 450 }); return; }
-  // Pull back just far enough to show both where you were looking and where you are (never further than needed,
-  // never zooming out past the whole region), then zoom in on you
-  const from = map.getCenter(), mid = [(from.lng + me[0]) / 2, (from.lat + me[1]) / 2];
-  const span = Math.max(Math.abs(from.lng - me[0]) * Math.cos(me[1] * Math.PI / 180), Math.abs(from.lat - me[1]), 0.002);   // degrees
-  const usable = Math.max(120, Math.min(c.clientWidth - pad.left - pad.right, c.clientHeight - pad.top - pad.bottom) - 80);   // pixels
-  const outZ = Math.max(3, Math.min(map.getZoom() - 0.5, Math.log2(usable * 360 / (512 * span * 1.15))));
-  if (!isFinite(outZ) || span > 40) { map.jumpTo({ center: me, zoom: z, bearing: 0, pitch: 0 }); return; }
-  map.easeTo({ center: mid, zoom: outZ, bearing: 0, pitch: 0, padding: pad, duration: 350 });
-  map.once('moveend', () => { if (followMe) map.easeTo({ center: me, zoom: z, padding: pad, duration: 650 }); });
+  const km = meters([map.getCenter().lat, map.getCenter().lng], here) / 1000;
+  if ((onScreen || km < 2) && z - map.getZoom() < 1.5) { map.easeTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, duration: 500, easing: t => 1 - Math.pow(1 - t, 3) }); return; }
+  if (onScreen) { map.flyTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, curve: 1, duration: 900, essential: true }); return; }   // zoomed out with you in view: zoom straight in on you
+  if (km > 4000) { map.jumpTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad }); return; }
+  // (a fixed duration: MapLibre's maxDuration turns a long flight into an instant jump)
+  map.flyTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, curve: 1.3, duration: Math.round(Math.min(1800, 700 + 260 * Math.log2(1 + km))), essential: true });
 }
 $('locate').onclick = () => {
   if (nav) { $('recenter').onclick(); return; }
