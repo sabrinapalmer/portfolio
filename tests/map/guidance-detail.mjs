@@ -42,9 +42,9 @@ await at(shape[6]); await at(shape[6]);
 console.log('DETAILED banner:', JSON.stringify(await banner()), '| lookups:', calls.filter(c=>/lookup/.test(c)).join(', '));
 await at([corner[0],corner[1]-0.0003]);
 console.log('voice (detailed):', JSON.stringify(await p.evaluate(()=>window.__said)));
-await p.click('#openMenu'); await p.click('#navMenu [data-set=banner] [data-v=brief]'); await p.click('#navMenu [data-nav=lanes]'); await p.click('#navMenu [data-close]'); await p.waitForTimeout(400);
+await p.click('#openMenu'); await p.click('#mSettings'); await p.click('#prefs [data-set=banner] [data-v=brief]'); await p.click('#prefs [data-nav=lanes]'); await p.evaluate(() => closeSheets()); await p.waitForTimeout(400);
 console.log('BRIEF banner:', JSON.stringify(await banner()));
-await p.click('#openMenu'); await p.click('#navMenu [data-set=banner] [data-v=standard]'); await p.click('#navMenu [data-close]'); await p.waitForTimeout(400);
+await p.click('#openMenu'); await p.click('#mSettings'); await p.click('#prefs [data-set=banner] [data-v=standard]'); await p.evaluate(() => closeSheets()); await p.waitForTimeout(400);
 console.log('STANDARD banner, lanes off:', JSON.stringify(await banner()));
 await p.click('#endNav'); await p.waitForTimeout(300);
 // brief voice run
