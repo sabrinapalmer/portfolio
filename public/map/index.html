@@ -81,7 +81,6 @@
   #searchScrim { position:fixed; inset:0; z-index:9; background:rgba(12,10,32,.32); display:none; }
   body.searching #searchScrim { display:block; animation:fadeIn .15s ease-out; }
   @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
-  body.searching #strip { color:var(--accent); }
   #suggest { list-style:none; margin:8px 0 0; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:min(52vh, calc(100vh - var(--kb, 0px) - 150px)); overflow:auto; }
   #suggest li { padding:10px 12px; border-radius:14px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:center; }
   #suggest li:active { background:var(--soft); }
@@ -602,15 +601,20 @@ function realUrl(key) {   // 't/z/x/y' -> tile address, 'g/fontstack/range' -> l
   if (key[0] === 't') { const [z, x, y] = rest.split('/'); return OFF.tiles ? OFF.tiles.replace('{z}', z).replace('{x}', x).replace('{y}', y) : ''; }
   const cut = rest.lastIndexOf('/'); return OFF.glyphs ? OFF.glyphs.replace('{fontstack}', rest.slice(0, cut)).replace('{range}', rest.slice(cut + 1)) : '';
 }
-async function offFetch(key, signal, keepForever) {   // stored copy first, then the network (and remember it)
-  const hit = await offGet(key);
-  if (hit) return hit;
-  const url = realUrl(key); if (!url) throw new Error('offline');
-  const r = await fetch(url, { signal });
+async function offFetch(key, signal, keepForever) {
+  // Online, map tiles come straight from the network (the phone's own web cache makes repeats instant) and are copied
+  // to the database in the background; the database is read first only for label fonts, saved areas and when offline.
+  // Reading the database before every tile made the map slow to fill in on phones.
+  const online = navigator.onLine !== false && key[0] === 't' && !keepForever;
+  if (!online) { const hit = await offGet(key); if (hit) return hit; }
+  const url = realUrl(key); if (!url) { const hit = await offGet(key); if (hit) return hit; throw new Error('offline'); }
+  let r;
+  try { r = await fetch(url, { signal }); }
+  catch (e) { if (e.name === 'AbortError') throw e; const hit = await offGet(key); if (hit) return hit; throw e; }
   if (r.status === 404 || r.status === 204) return new ArrayBuffer(0);
-  if (!r.ok) throw new Error('tile ' + r.status);
+  if (!r.ok) { const hit = await offGet(key); if (hit) return hit; throw new Error('tile ' + r.status); }
   const buf = await r.arrayBuffer();
-  if (keepForever || key[0] === 'g') offSave(key, buf); else offSeen(key, buf);
+  if (keepForever || key[0] === 'g') offSave(key, buf); else setTimeout(() => offSeen(key, buf), 1500);   // stored after the map has drawn
   return buf;
 }
 async function offlineStyle(st) {   // point the style's tiles and label fonts at the stored copies
@@ -690,7 +694,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 let statusTimer = 0;
 // Problem reports: script errors and failed searches or routes go to the app's server log (no location or search text),
 // at most 25 per session, so problems people hit on their phones can be found and fixed
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 let reportQ = [], reportN = 0, reportT = 0;
 function report(kind, msg) {
   if (reportN >= 25 || /^(localhost|127\.)/.test(location.hostname) && !NATIVE) return;
@@ -946,10 +950,14 @@ mapReady = (async () => {
   let style = STYLE; shownTheme = themeKey();
   try { style = await themedStyle(); } catch (e) {}
   const v = store('map.view');
-  map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false });
+  // Speed on phones: draw at no more than 2x pixel density (iPhones are 3x, which is 2.25 times the pixels to draw
+  // for no visible gain on a map), quicker label fades, and a bigger tile cache so panning back does not refetch
+  map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 2), fadeDuration: 120, maxTileCacheSize: 400, refreshExpiredTiles: false });
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
   map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 4.5) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
-  map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
+  map.on('moveend', () => { const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); nameIdx = null; });
+  map.on('idle', () => { nameIdx = null; });   // new tiles may have come in
   map.on('dragstart', e => {
     if (!e.originalEvent) return;   // only your own drags, not the map's own moves
     followMe = false; $('locate').classList.remove('on');
@@ -1443,20 +1451,29 @@ const fold = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '
 // English words for common Spanish place words, so "angels camp" finds "Campo Ángeles"
 const ES_WORDS = { camp: 'campo', camping: 'campo', angels: 'angel', angel: 'angel', beach: 'playa', saint: 'san', lake: 'lago', river: 'rio', hill: 'cerro', mountain: 'cerro',
   bay: 'bahia', point: 'punta', valley: 'valle', ranch: 'rancho', church: 'iglesia', market: 'mercado', spring: 'ojo', springs: 'ojo', island: 'isla', canyon: 'canon', creek: 'arroyo', port: 'puerto', new: 'nuevo' };
-function mapNames(q, ref) {
-  if (!map || !map.getSource('openmaptiles') || q.length < 3) return [];
-  const words = fold(q).split(/[^a-z0-9]+/).filter(w => w.length > 1); if (!words.length) return [];
+let nameIdx = null;
+function nameIndex() {   // every name on the loaded tiles, folded for matching; built once, rebuilt after the map moves
+  if (nameIdx) return nameIdx;
   const out = [], seen = new Set();
   for (const layer of ['place', 'poi', 'water_name', 'waterway', 'mountain_peak', 'park', 'aerodrome_label', 'transportation_name']) {
     let feats = []; try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: layer }); } catch (e) {}
     for (const f of feats) {
       const pr = f.properties, name = pr['name:latin'] || pr.name; if (!name) continue;
-      const n = fold(name + ' ' + (pr.name_en || '')); if (!words.every(w => n.includes(w) || (ES_WORDS[w] && n.includes(ES_WORDS[w])))) continue;
       let c = f.geometry.coordinates; while (Array.isArray(c[0])) c = c[0];
-      const key = fold(name) + Math.round(c[1] * 200) + ',' + Math.round(c[0] * 200); if (seen.has(key)) continue; seen.add(key);
+      const key = name + Math.round(c[1] * 200) + ',' + Math.round(c[0] * 200); if (seen.has(key)) continue; seen.add(key);
       const kind = layer === 'transportation_name' ? 'Street' : layer === 'waterway' ? 'Stream' : KIND_WORDS[pr.subclass] || KIND_WORDS[pr.class] || (layer === 'park' ? 'Park' : layer === 'water_name' ? 'Water' : 'Place');
-      out.push({ main: name, sub: kind, lat: c[1], lon: c[0], named: true, osm: '', d: meters(ref, [c[1], c[0]]) });
+      out.push({ name, n: fold(name + ' ' + (pr.name_en || '')), kind, lat: c[1], lon: c[0] });
     }
+  }
+  return (nameIdx = out);
+}
+function mapNames(q, ref) {
+  if (!map || !map.getSource('openmaptiles') || q.length < 3) return [];
+  const words = fold(q).split(/[^a-z0-9]+/).filter(w => w.length > 1); if (!words.length) return [];
+  const out = [];
+  for (const e of nameIndex()) {
+    if (!words.every(w => e.n.includes(w) || (ES_WORDS[w] && e.n.includes(ES_WORDS[w])))) continue;
+    out.push({ main: e.name, sub: e.kind, lat: e.lat, lon: e.lon, named: true, osm: '', d: meters(ref, [e.lat, e.lon]) });
   }
   return out.sort((a, b) => a.d - b.d).slice(0, 8);
 }
@@ -3122,7 +3139,7 @@ async function loadTraffic() {
 // One line of glanceable text under the browser bar. Nothing here is tappable.
 let hereName = '', hereAt = null, hereWhen = 0, stripRoute = '';
 function drawStrip() {
-  const t = document.body.classList.contains('searching') ? 'Search places, addresses and businesses' : !navigator.onLine ? 'Offline: maps and search need a connection'
+  const t = !navigator.onLine ? 'Offline: maps and search need a connection'
     : nav ? (nav.info || 'Starting...')
     : routes.length && pts.to ? stripRoute
     : hereName ? 'Near ' + hereName : here ? 'Showing your location'
@@ -3554,12 +3571,17 @@ $('toggleSteps').onclick = () => {
 // relative to what you were looking at, then zoom in on you
 function goToMe() {
   map.stop();
-  const me = [here[1], here[0]], pad = viewPad(), z = Math.max(map.getZoom(), 15);
-  const onScreen = (() => { const pt = map.project(me), c = map.getContainer(); return pt.x > pad.left && pt.x < c.clientWidth - pad.right && pt.y > pad.top && pt.y < c.clientHeight - pad.bottom; })();
+  const me = [here[1], here[0]], pad = viewPad(), z = Math.max(map.getZoom(), 15), c = map.getContainer();
+  const pt = map.project(me), onScreen = pt.x > pad.left && pt.x < c.clientWidth - pad.right && pt.y > pad.top && pt.y < c.clientHeight - pad.bottom;
   if (onScreen) { map.easeTo({ center: me, zoom: z, bearing: 0, pitch: 0, padding: pad, duration: 450 }); return; }
-  const b = new maplibregl.LngLatBounds(me, me).extend(map.getCenter());
-  const cam = map.cameraForBounds(b, { padding: { top: pad.top + 40, bottom: pad.bottom + 40, left: pad.left + 40, right: pad.right + 40 } });
-  map.easeTo(Object.assign({}, cam, { bearing: 0, pitch: 0, duration: 350, padding: { top: 0, bottom: 0, left: 0, right: 0 } }));
+  // Pull back just far enough to show both where you were looking and where you are (never further than needed,
+  // never zooming out past the whole region), then zoom in on you
+  const from = map.getCenter(), mid = [(from.lng + me[0]) / 2, (from.lat + me[1]) / 2];
+  const span = Math.max(Math.abs(from.lng - me[0]) * Math.cos(me[1] * Math.PI / 180), Math.abs(from.lat - me[1]), 0.002);   // degrees
+  const usable = Math.max(120, Math.min(c.clientWidth - pad.left - pad.right, c.clientHeight - pad.top - pad.bottom) - 80);   // pixels
+  const outZ = Math.max(3, Math.min(map.getZoom() - 0.5, Math.log2(usable * 360 / (512 * span * 1.15))));
+  if (!isFinite(outZ) || span > 40) { map.jumpTo({ center: me, zoom: z, bearing: 0, pitch: 0 }); return; }
+  map.easeTo({ center: mid, zoom: outZ, bearing: 0, pitch: 0, padding: pad, duration: 350 });
   map.once('moveend', () => { if (followMe) map.easeTo({ center: me, zoom: z, padding: pad, duration: 650 }); });
 }
 $('locate').onclick = () => {
