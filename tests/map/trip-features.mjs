@@ -42,7 +42,7 @@ await p.click('#openMenu'); await p.waitForTimeout(200); await p.click('#mSettin
 console.log('north up: bearing', await p.evaluate(()=>Math.round(map.getBearing())+' pitch '+Math.round(map.getPitch())+' voice '+prefs.voice));
 await p.click('#openMenu'); await p.waitForTimeout(200); await p.click('#mOther'); await p.waitForTimeout(1200); console.log('avoid road ahead ->', reqs.at(-1), '| menu open', await p.evaluate(()=>document.body.classList.contains('menu')));
 await p.mouse.click(200, 520, {button:'right'}); await p.waitForTimeout(400); console.log('nav map tap popup:', await p.$$eval('.pop button',e=>e.map(x=>x.textContent)));
-await p.click('.pop button'); await p.waitForTimeout(1200); console.log('avoid in nav ->', reqs.at(-1), '| markers', await p.$$eval('.avoid',e=>e.length), '| still nav', await p.evaluate(()=>!!nav));
+await p.waitForTimeout(2500); await p.click('.pop button'); await p.waitForTimeout(1200); console.log('avoid in nav ->', reqs.at(-1), '| markers', await p.$$eval('.avoid',e=>e.length), '| still nav', await p.evaluate(()=>!!nav));
 await p.click('#openMenu'); await p.click('#mOverview'); await p.waitForTimeout(900); console.log('overview: free', await p.evaluate(()=>document.body.classList.contains('free')), 'recenter visible', await p.isVisible('#recenter'));
 await p.click('#recenter'); await p.click('#endNav'); await p.waitForTimeout(600);
 await p.$eval('.avoid',e=>e.click()); await p.waitForTimeout(400); console.log('avoid marker popup:', await p.$$eval('.pop button',e=>e.map(x=>x.textContent)));
