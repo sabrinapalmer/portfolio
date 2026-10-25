@@ -13,6 +13,9 @@ const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFacto
 const p = await ctx.newPage();
 p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
 await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
   if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
   if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
@@ -26,7 +29,7 @@ await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({conte
   if(u.includes('photon')) { const q=new URL(u).searchParams.get('q'); return J({features: q==='Target'?[F(31,'Target',41.925,-87.68),F(32,'Target',42.3,-88.2)]:q==='Starbucks'&&u.includes('bbox=')?[F(41,'Starbucks',41.92,-87.68),F(42,'Starbucks',41.921,-87.675)]:u.includes('bbox=')?[F(2,'Museum',41.94,-87.66)]:[]}); }
   return r.abort();});
 await p.goto('http://localhost/map'); await p.waitForTimeout(1800);
-await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1200);
+await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head):not(.cats)'); await p.waitForTimeout(1200);
 console.log('fab visible on route:', await p.isVisible('#fabStop'), JSON.stringify(await p.$eval('#fabStop',e=>{const r=e.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top)]})), 'bottom top', await p.$eval('#bottom',e=>Math.round(e.getBoundingClientRect().top)));
 await p.click('#addStop'); await p.fill('#stopQ','Target'); await p.waitForTimeout(2500);
 console.log('stop search:', await p.$$eval('#stopList li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), '|', await p.textContent('#stopMsg'));

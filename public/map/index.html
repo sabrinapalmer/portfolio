@@ -2562,7 +2562,7 @@ async function satFires(box) {
   const sq = squares(box); if (sq.length > 40) return null;
   const parts = await Promise.all(sq.map(q => fetch(API + '/firms?bbox=' + q.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined }).then(r => r.ok ? r.json() : null).catch(() => null)));
   if (!parts.some(Boolean)) return null;
-  const d = { spots: parts.flatMap(x => x ? x.spots || [] : []), history: parts.some(x => x && x.history) }, hist = !!d.history;
+  const seenSpot = new Set(), d = { spots: parts.flatMap(x => x ? x.spots || [] : []).filter(s => { const k = s.join(','); if (seenSpot.has(k)) return false; seenSpot.add(k); return true; }), history: parts.some(x => x && x.history) }, hist = !!d.history;   // a spot on the edge of two squares comes back twice
   const spots = (d.spots || []).filter(s => !inUS(s[0], s[1]) && s[0] >= box[1] && s[0] <= box[3] && s[1] >= box[0] && s[1] <= box[2]);
   const groups = [];
   spots.forEach(s => {
