@@ -1815,7 +1815,7 @@ async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from Tom
   try {
     const r = await fetch(API + '/poi?q=' + encodeURIComponent(q) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
     if (!r.ok) { if (r.status >= 500) poiDownUntil = Date.now() + 600000; return []; }
-    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/^important /i, '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '', ranges: p.open, phone: p.phone, url: p.url }));
+    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/^important /i, '').replace(/:.*$/, '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '', ranges: p.open, phone: p.phone, url: p.url }));
   } catch (e) { return []; }
 }
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
