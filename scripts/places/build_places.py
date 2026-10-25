@@ -250,8 +250,26 @@ def trim(v, n):
     return v[:n] if isinstance(v, str) else v
 
 
+EVERYDAY = {'amenity:restaurant', 'amenity:fast_food', 'amenity:cafe', 'amenity:bar', 'amenity:fuel', 'amenity:charging_station', 'shop:supermarket', 'shop:convenience',
+            'amenity:pharmacy', 'amenity:bank', 'amenity:atm', 'amenity:hospital', 'amenity:clinic', 'leisure:park', 'tourism:hotel', 'tourism:motel', 'amenity:parking',
+            'shop:bakery', 'shop:hardware', 'tourism:camp_site', 'amenity:toilets', 'amenity:ice_cream', 'amenity:post_office', 'amenity:library'}
+RARELY = ('real_estate', 'legal', 'professional_service', 'home_service', 'technical_service', 'financial_service', 'business_to_business', 'b2b', 'industrial')
+
+
+def score(p):
+    """Which places to keep when the database cannot hold them all: likely searched for from a car, and well described"""
+    c = p.get('cat') or ''
+    s = p.get('conf') or 0
+    if p.get('hours'): s += 0.25
+    if p.get('src') == 'osm': s += 0.2
+    if p.get('wikidata'): s += 0.1
+    if c in EVERYDAY or c.startswith('place:'): s += 0.15
+    if any(w in c for w in RARELY) and c not in ('amenity:bank', 'amenity:atm'): s -= 0.2
+    return s
+
+
 def upload(rows, run_id):
-    rows.sort(key=lambda p: -(p.get('conf') or 0))
+    rows.sort(key=lambda p: -score(p))
     if len(rows) > MAX_ROWS:
         notice('keeping the', MAX_ROWS, 'most confident of', len(rows))
         rows = rows[:MAX_ROWS]
