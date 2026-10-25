@@ -1379,7 +1379,17 @@ function factsOf(raw, pr) {
   if (YES(raw.outdoor_seating) || fac.outdoor_seating) f.push('Outdoor seating');
   if (YES(raw.internet_access) || fac.internet_access) f.push('Wi-Fi');
   if (YES(raw.wheelchair) || fac.wheelchair) f.push('Wheelchair accessible');
+  const pop = +(raw.population || 0);
+  if (pop >= 1000) f.push('Population ' + pop.toLocaleString());
   return f.slice(0, 4).join(' · ');
+}
+// A Wikidata id ("Q656189") -> the English Wikipedia article ("en:Ensenada, Baja California"), else Wikidata's one-line description
+async function wikidataOf(q) {
+  if (!/^Q\d+$/.test(String(q || ''))) return {};
+  const r = await fetch('https://www.wikidata.org/w/api.php?action=wbgetentities&ids=' + q + '&props=sitelinks%7Cdescriptions&sitefilter=enwiki&languages=en&format=json&origin=*', { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
+  if (!r.ok) return {};
+  const e = ((await r.json()).entities || {})[q] || {}, t = ((e.sitelinks || {}).enwiki || {}).title, d = ((e.descriptions || {}).en || {}).value || '';
+  return { wiki: t ? 'en:' + t : '', line: d ? d[0].toUpperCase() + d.slice(1) + '.' : '' };
 }
 async function wikiSummary(tag) {   // "en:Rosarito Beach" -> its first two sentences
   const m = String(tag || '').match(/^([a-z-]{2,12}):(.+)$/); if (!m) return '';
@@ -1404,9 +1414,13 @@ async function loadDetails(p) {
         p.extra = factsOf(raw, pr);
         p.desc = String(raw['description:en'] || raw.description || '').slice(0, 280);
         p.wiki = raw['wikipedia:en'] ? 'en:' + raw['wikipedia:en'] : raw.wikipedia || (pr.wiki_and_media || {}).wikipedia || '';
+        p.wikidata = raw.wikidata || (pr.wiki_and_media || {}).wikidata || '';
       }
     }
+    let line = '';
+    if (!p.desc && p.wikidata && !/^en:/.test(p.wiki || '')) { const w = await wikidataOf(p.wikidata); if (w.wiki) p.wiki = w.wiki; line = w.line || ''; }
     if (!p.desc && p.wiki) p.desc = await wikiSummary(p.wiki);
+    if (!p.desc) p.desc = line;
   } catch (e) {}
   if (pts.to === p) { drawHours(); drawInfo(); }
 }
@@ -1616,7 +1630,7 @@ const KIND_ICON = [[/^street$|road|highway/i, 'road'], [/^(city|town|village|cou
   [/park|playground|garden|campground|viewpoint|beach|peak|nature|golf/i, 'tree'], [/hotel|motel|guest|hostel|lodging/i, 'bed'], [/hospital|clinic|pharmacy|dentist|doctor|vet/i, 'health'],
   [/parking/i, 'parking'], [/bank|atm/i, 'money'], [/school|college|university|library|kindergarten/i, 'school'], [/airport/i, 'plane'], [/station|bus/i, 'bus'],
   [/museum|attraction|stadium|theatre|cinema|worship|town hall/i, 'landmark'], [/water|bay|ocean|sea|lake|river|marina/i, 'water'],
-  [/supermarket|grocery|store|shop|mall|market|business|convenience|salon|gym|spa|car |service/i, 'bag']];
+  [/supermarket|grocery|store|shop|mall|market|business|company|office|convenience|salon|gym|spa|car |service/i, 'bag']];
 const KIND_SVG = { road: '<path d="M8 3 5 21M16 3l3 18M12 4v3M12 11v3M12 18v2"/>', city: '<path d="M3 21V9l6-3v15M9 21V4l8 3v14M17 21v-9l4 2v7M2 21h20"/>',
   area: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/>', home: '<path d="M3 11l9-7 9 7M5 10v10h14V10"/>',
   cup: '<path d="M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6zM17 10h2a2 2 0 0 1 0 4h-2M8 2v3M12 2v3"/>', food: '<path d="M7 2v20M4 2v6a3 3 0 0 0 6 0V2M17 22V2c-2 2-3 5-3 8h3"/>',
