@@ -9,7 +9,7 @@ const lane = l => !l ? null : { status: l.operational_status || '', minutes: l.d
 
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
-  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
+  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
   else if (origin) return new Response('{"error":"origin not allowed"}', { status: 403, headers: { 'Content-Type': 'application/json' } });
   let data;
   try {
@@ -24,5 +24,5 @@ export default async function handler(req) {
     return { port: p.port_name || '', crossing: p.crossing_name || '', number: p.port_number || '', status: p.port_status || '', hours: p.hours || '',
       standard: lane(pv.standard_lanes), sentri: lane(pv.NEXUS_SENTRI_lanes), ready: lane(pv.ready_lanes) };
   });
-  return new Response(JSON.stringify({ at: Date.now(), ports }), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'public, s-maxage=300, max-age=120' }, cors) });
+  return new Response(JSON.stringify({ at: Date.now(), ports }), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600, max-age=120' }, cors) });
 }

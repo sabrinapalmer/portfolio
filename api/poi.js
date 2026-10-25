@@ -14,7 +14,7 @@ const stamp = t => t && t.date ? t.date + 'T' + pad(t.hour || 0) + ':' + pad(t.m
 
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
-  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
+  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
   // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
   // scripts that find the URL cannot spend the paid service quota
   else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
@@ -39,5 +39,5 @@ export default async function handler(req) {
       open: ((x.poi.openingHours || {}).timeRanges || []).map(t => [stamp(t.startTime), stamp(t.endTime)]).filter(r => r[0] && r[1]),
       phone: x.poi.phone || '', url: x.poi.url || '' };
   });
-  return json(200, { places }, Object.assign({ 'Cache-Control': 'public, s-maxage=86400, max-age=3600' }, cors));
+  return json(200, { places }, Object.assign({ 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=86400, max-age=3600' }, cors));
 }

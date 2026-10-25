@@ -10,7 +10,7 @@ const ENDPOINTS = {
   reverse: { path: '/v1/geocode/reverse', cache: 86400 },
   places: { path: '/v2/places', cache: 3600 },
   details: { path: '/v2/place-details', cache: 2592000 },   // 30 days: hours and phone numbers rarely change
-  routing: { path: '/v1/routing', cache: 0 },
+  routing: { path: '/v1/routing', cache: 3600 },   // the same trip asked again within the hour comes from the edge
   matrix: { path: '/v1/routematrix', cache: 0, post: true },   // travel times: search results, stops, meet in the middle
 };
 
@@ -23,7 +23,7 @@ const json = (status, obj, headers) => new Response(JSON.stringify(obj), { statu
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '';
   const cors = {};
-  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
+  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
   // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
   // scripts that find the URL cannot spend the paid service quota
   else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
@@ -62,6 +62,6 @@ export default async function handler(req) {
   if (r.status === 401 || r.status === 403) return json(502, { error: 'map service rejected the server key' }, cors);
   const text = (await r.text()).split(key).join('');
   const headers = Object.assign({ 'Server-Timing': 'upstream;dur=' + (Date.now() - t0), 'Timing-Allow-Origin': '*', 'Content-Type': r.headers.get('content-type') || 'application/json',
-    'Cache-Control': r.ok && ep.cache ? `public, s-maxage=${ep.cache}, max-age=300` : 'no-store' }, cors);
+    'Cache-Control': r.ok && ep.cache ? `public, s-maxage=${ep.cache}, stale-while-revalidate=${ep.cache}, max-age=300` : 'no-store' }, cors);
   return new Response(text, { status: r.status, headers });
 }

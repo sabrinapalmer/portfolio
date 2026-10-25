@@ -1510,7 +1510,7 @@ let geoDownUntil = 0, geoOff = false;   // geoOff: the site's server has no key 
 const useGeo = () => Date.now() > geoDownUntil && (!!prefs.geoKey || !geoOff);
 // Answers kept on the phone (and across app restarts), so retyping a search or reopening a place costs nothing.
 // Searches are kept a day, place details a week; travel times 10 minutes; routes never.
-const GEO_KEEP = { autocomplete: 86400000, search: 86400000, reverse: 86400000, places: 3600000, details: 7 * 86400000, matrix: 600000 };
+const GEO_KEEP = { autocomplete: 86400000, search: 86400000, reverse: 86400000, places: 3600000, details: 7 * 86400000, matrix: 600000, routing: 600000 };
 const geoCache = new Map(Object.entries(store('map.geoCache') || {}).filter(([, e]) => e && Date.now() < e.until));
 let geoSaveT = 0;
 async function geoFetch(ep, params, signal, body) {
@@ -2490,15 +2490,16 @@ async function loadFires(box) {   // box [west, south, east, north]
   const fresh = Date.now() - fireAt < 600000;
   if (fresh && fireBoxes.some(b => b[0] <= box[0] && b[1] <= box[1] && b[2] >= box[2] && b[3] >= box[3])) return;
   const big = [box[0] - 0.3, box[1] - 0.3, box[2] + 0.3, box[3] + 0.3], b = big.map(n => n.toFixed(3));
-  const geo = `&geometry=${b.join(',')}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outSR=4326&f=geojson`;
   const satP = satFires(big).catch(() => null);   // NASA satellite heat spots, for Mexico and Canada
-  const get = async url => { const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000); try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error('fire data ' + r.status); return await r.json(); } finally { clearTimeout(t); } };
   try {
-    const [per, loc] = await Promise.all([
-      get(WFIGS + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=poly_IncidentName,attr_IncidentSize,attr_PercentContained,poly_DateCurrent&geometryPrecision=4&maxAllowableOffset=0.002' + geo),
-      get(WFIGS + 'WFIGS_Incident_Locations_Current/FeatureServer/0/query?where=' + encodeURIComponent("IncidentTypeCategory='WF'") + '&outFields=IncidentName,IncidentSize,PercentContained,FireDiscoveryDateTime' + geo)
-    ]);
-    if (per.error || loc.error) throw new Error('fire data ' + ((per.error || loc.error).message || 'error'));
+    // US fire service data through the app's server, in 2-degree squares it keeps for an hour (warmed hourly), so this
+    // answers at once instead of asking the fire service for each trip
+    const sq = squares(big);
+    if (sq.length > 40) throw new Error('trip too long for fire data');
+    const parts = await Promise.all(sq.map(q => fetch(API + '/fires?bbox=' + q.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined }).then(r => r.ok ? r.json() : null).catch(() => null)));
+    if (!parts.some(Boolean)) throw new Error('fire data unavailable');
+    const seen = new Set(), uniq = arr => arr.filter(f => { const k = JSON.stringify(f.properties || {}); if (seen.has(k)) return false; seen.add(k); return true; });   // a fire across two squares comes back twice
+    const per = { features: uniq(parts.flatMap(x => x ? x.per.features : [])) }, loc = { features: uniq(parts.flatMap(x => x ? x.loc.features : [])) };
     if (!fresh) { fires = []; fireBoxes = []; }
     const acres = n => n ? Math.round(n).toLocaleString() + ' acres' : 'size not reported';
     const ago = t => { const h = (Date.now() - t) / 3600000; return h < 1 ? 'under an hour ago' : h < 48 ? Math.round(h) + ' hours ago' : Math.round(h / 24) + ' days ago'; };
@@ -2542,12 +2543,13 @@ function inUS(lat, lon) {   // rough: the lower 48 (south of 49°N, east to Main
   for (let i = 1; i < MX_LINE.length; i++) { const [x1, y1] = MX_LINE[i - 1], [x2, y2] = MX_LINE[i]; if (lon >= x1 && lon <= x2) return lat > y1 + (y2 - y1) * (lon - x1) / (x2 - x1); }
   return true;
 }
+// 2-degree squares on even degrees covering a box: fire data is asked and kept per square, so trips share answers
+const squares = box => { const out = []; for (let x = Math.floor(box[0] / 2) * 2; x < box[2]; x += 2) for (let y = Math.floor(box[1] / 2) * 2; y < box[3]; y += 2) out.push([x, y, x + 2, y + 2]); return out; };
 async function satFires(box) {
-  const b = [Math.floor(box[0]), Math.floor(box[1]), Math.ceil(box[2]), Math.ceil(box[3])];
-  if (b[2] - b[0] > 20 || b[3] - b[1] > 20) return null;
-  const r = await fetch(API + '/firms?bbox=' + b.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined });
-  if (!r.ok) return null;
-  const d = await r.json(), hist = !!d.history;
+  const sq = squares(box); if (sq.length > 40) return null;
+  const parts = await Promise.all(sq.map(q => fetch(API + '/firms?bbox=' + q.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined }).then(r => r.ok ? r.json() : null).catch(() => null)));
+  if (!parts.some(Boolean)) return null;
+  const d = { spots: parts.flatMap(x => x ? x.spots || [] : []), history: parts.some(x => x && x.history) }, hist = !!d.history;
   const spots = (d.spots || []).filter(s => !inUS(s[0], s[1]) && s[0] >= box[1] && s[0] <= box[3] && s[1] >= box[0] && s[1] <= box[2]);
   const groups = [];
   spots.forEach(s => {
@@ -2885,6 +2887,12 @@ async function geoapifyRoutes(quiet) {
     try { return geoParse(await geoFetch('routing', p)); }
     catch (e) { if (e.status === 400) return []; throw e; }   // 400: no route with these rules
   };
+  // The alternatives are asked at the same time as the main route, not one after another, so the wait is the slowest
+  // single answer. The toll-free one only when there are toll booths between start and destination.
+  const wantAlt = !quiet && !pts.stops.length && motor && !prefs.shortest;
+  const wantFree = !quiet && motor && !prefs.noToll && await tollsLikely();
+  const altP = wantAlt ? ask({ type: 'short' }).catch(() => []) : null;
+  const freeP = wantFree ? ask({}, ['tolls:1']).catch(() => []) : null;
   let trips = await ask({});
   let stuck = false;
   if (!trips.length && rules.some(r => r.startsWith('location:'))) {   // no way around the avoided spots: route through and say so
@@ -2893,7 +2901,7 @@ async function geoapifyRoutes(quiet) {
   }
   if (!trips.length) { const e = new Error('No route found.'); e.noRoute = true; throw e; }
   valhallaRoutes.stuck = stuck; geoapifyRoutes.blocked = 0;   // the route card reads the stuck flag from here
-  if (!quiet && !pts.stops.length && motor && !prefs.shortest) { const alt = await ask({ type: 'short' }).catch(() => []); trips = trips.concat(alt); }
+  if (altP) trips = trips.concat(await altP);
   // Areas to avoid (fires, "avoid this area") and the paved / alley / border settings: block the roads the route used
   // that break them and ask again, up to three times. Each extra request costs a credit, so this only runs when needed.
   const problems = t => {
@@ -2916,7 +2924,7 @@ async function geoapifyRoutes(quiet) {
   }
   // Every way uses tolls: ask once more with tolls avoided and offer that too (for example Mexico 1 libre next to the 1D)
   if (!quiet && motor && !prefs.noToll && trips[0].steps.some(st => st.toll) && trips.every(t => t.steps.some(st => st.toll) || problems(t).length)) {   // the fastest way has tolls: also offer a way without (listed after it)
-    const free = (await ask({}, ['tolls:1']).catch(() => [])).filter(t => mostlyFree(t, trips[0]) && !problems(t).length).slice(0, 1);
+    const free = (await (freeP || ask({}, ['tolls:1']).catch(() => []))).filter(t => mostlyFree(t, trips[0]) && !problems(t).length).slice(0, 1);
     trips = trips.concat(free);
   }
   const missing = geoMissing(), left = geoBreaks(trips[0]), said = { unpaved: 'unpaved road', alley: 'service road or alley', border: 'border crossing' };
@@ -3106,6 +3114,12 @@ let boothList = null;
 const loadBooths = () => boothList || (boothList = fetch((NATIVE ? 'https://www.sabrinapalmer.com' : '') + '/map/data/tolls.json')
   .then(r => r.ok ? r.json() : null).then(d => d && Array.isArray(d.booths) && d.booths.length > 100 ? d.booths : null).catch(() => null)
   .then(v => { if (!v) boothList = null; return v; }));
+async function tollsLikely() {   // any toll booth near the straight line of the trip (padded about 15 km)
+  const list = await loadBooths(); if (!list) return true;
+  const q = tripPts(); if (q.length < 2) return false;
+  const w = Math.min(...q.map(p => p.lon)) - 0.15, e = Math.max(...q.map(p => p.lon)) + 0.15, s = Math.min(...q.map(p => p.lat)) - 0.15, n = Math.max(...q.map(p => p.lat)) + 0.15;
+  return list.some(([lat, lon]) => lon >= w && lon <= e && lat >= s && lat <= n);
+}
 async function boothsIn(cell) {
   if (boothCache.has(cell)) return boothCache.get(cell);
   const [x, y] = cell.split(',').map(Number), box = [x * 0.25, y * 0.25, x * 0.25 + 0.25, y * 0.25 + 0.25];

@@ -24,7 +24,7 @@ async function rpc(fn, args) {
 
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
-  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
+  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
   else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' }, cors) });
   const u = new URL(req.url), q = u.searchParams;
@@ -40,7 +40,7 @@ export default async function handler(req) {
       // Columns once, then one array per place: about half the size of plain objects
       const cols = COLS.filter(k => k !== 'region');
       return json(200, { tile, cols, rows: rows.map(r => cols.map(k => r[k] === null || r[k] === undefined ? null : r[k])) },
-        Object.assign({ 'Cache-Control': rows.length ? 'public, s-maxage=604800, max-age=86400' : 'public, s-maxage=600, max-age=60' }, cors));
+        Object.assign({ 'Cache-Control': rows.length ? 'public, s-maxage=604800, stale-while-revalidate=604800, max-age=86400' : 'public, s-maxage=600, max-age=60' }, cors));
     }
     const lat = num(q.get('lat'), -90, 90), lon = num(q.get('lon'), -180, 180);
     if (lat === null || lon === null) return json(400, { error: 'bad position' }, noStore);
@@ -48,12 +48,12 @@ export default async function handler(req) {
     if (cats.length) {
       const r = Math.min(num(q.get('r'), 0.5, 60) || 5, 60);
       const rows = await rpc('places_near', { cats, at_lat: lat, at_lon: lon, radius_km: r, lim: 20 });
-      return json(200, { places: rows.map(slim) }, Object.assign({ 'Cache-Control': rows.length ? 'public, s-maxage=86400, max-age=600' : 'public, s-maxage=600, max-age=60' }, cors));
+      return json(200, { places: rows.map(slim) }, Object.assign({ 'Cache-Control': rows.length ? 'public, s-maxage=86400, stale-while-revalidate=86400, max-age=600' : 'public, s-maxage=600, max-age=60' }, cors));
     }
     const text = (q.get('q') || '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (text.length < 2 || text.length > 80) return json(400, { error: 'bad query' }, noStore);
     const rows = await rpc('search_places', { q: text, at_lat: lat, at_lon: lon, radius_km: 150, lim: 15 });
-    return json(200, { places: rows.map(slim) }, Object.assign({ 'Cache-Control': rows.length ? 'public, s-maxage=86400, max-age=600' : 'public, s-maxage=600, max-age=60' }, cors));
+    return json(200, { places: rows.map(slim) }, Object.assign({ 'Cache-Control': rows.length ? 'public, s-maxage=86400, stale-while-revalidate=86400, max-age=600' : 'public, s-maxage=600, max-age=60' }, cors));
   } catch (e) {
     return json(502, { error: 'place list unavailable' }, noStore);
   }

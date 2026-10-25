@@ -23,7 +23,7 @@ function parse(csv, keepLow) {   // CSV rows -> [lat, lon, frp, time ms, day (1/
 
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
-  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
+  if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
   // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
   // scripts that find the URL cannot spend the paid service quota
   else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
@@ -56,5 +56,5 @@ export default async function handler(req) {
     const near = (a, b2) => Math.abs(a[0] - b2[0]) < 0.008 && Math.abs(a[1] - b2[1]) < 0.009;   // about 800 m
     spots = spots.map(sp => { const days = new Set(old.filter(o => near(o, sp)).map(o => new Date(o[3]).toISOString().slice(0, 10))); return sp.concat(days.size); });
   }
-  return json(200, Object.assign({ at: Date.now(), spots, history }, new URL(req.url).searchParams.get('debug') ? { why } : {}), Object.assign({ 'Cache-Control': 'public, s-maxage=1800, max-age=600' }, cors));
+  return json(200, Object.assign({ at: Date.now(), spots, history }, new URL(req.url).searchParams.get('debug') ? { why } : {}), Object.assign({ 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=7200, max-age=600' }, cors));
 }
