@@ -6,7 +6,8 @@ Two open sources, merged:
 A place found in both keeps Overture's coverage fields and gains OpenStreetMap's details.
 
 Run by .github/workflows/places.yml. Settings come from the environment:
-  REGIONS        "west,south,east,north;..." boxes to cover
+  REGIONS        "name:west,south,east,north:share;..." boxes to cover, each with its share of MAX_ROWS (shares are
+                 weights; a region that has fewer good places than its share leaves the rest to the others)
   OSM_EXTRACTS   space-separated Geofabrik .osm.pbf URLs covering those boxes
   MIN_CONF       lowest Overture confidence kept (0..1)
   MAX_ROWS       most places loaded (the free database tier holds about a million)
@@ -17,7 +18,11 @@ from collections import defaultdict
 
 import duckdb
 
-REGIONS = [tuple(float(v) for v in r.split(',')) for r in os.environ['REGIONS'].split(';') if r.strip()]
+def _region(r):
+    name, box, share = (r.split(':') + ['1'])[:3] if ':' in r else ('area', r, '1')
+    return name.strip(), tuple(float(v) for v in box.split(',')), float(share)
+AREAS = [_region(r) for r in os.environ['REGIONS'].split(';') if r.strip()]
+REGIONS = [a[1] for a in AREAS]
 OSM_EXTRACTS = os.environ.get('OSM_EXTRACTS', '').split()
 MIN_CONF = float(os.environ.get('MIN_CONF', '0.6'))
 MAX_ROWS = int(os.environ.get('MAX_ROWS', '1000000'))
@@ -276,9 +281,27 @@ def upload(rows, run_id):
     seen = set()   # the map extracts overlap at the border: the same place can come from both
     rows = [r for r in rows if not (r['id'] in seen or seen.add(r['id']))]
     rows.sort(key=lambda p: -score(p))
-    if len(rows) > MAX_ROWS:
-        notice('keeping the', MAX_ROWS, 'most confident of', len(rows))
-        rows = rows[:MAX_ROWS]
+    # Each region gets its share of the room (Texas alone has more candidates than the database holds), filled with its
+    # most useful places; room a region cannot use goes to the others
+    def area_of(p):
+        for name, (w, s_, e, n), _ in AREAS:
+            if w <= p['lon'] <= e and s_ <= p['lat'] <= n:
+                return name
+        return AREAS[0][0]
+    by = {}
+    for p in rows:
+        by.setdefault(area_of(p), []).append(p)
+    total_w = sum(a[2] for a in AREAS)
+    quota = {a[0]: int(MAX_ROWS * a[2] / total_w) for a in AREAS}
+    spare = sum(max(0, quota[n] - len(by.get(n, []))) for n in quota)
+    keep = []
+    for n, q in quota.items():
+        keep += by.get(n, [])[:q]
+    if spare:   # hand unused room to the regions with places left over, best first
+        extra = sorted((p for n, q in quota.items() for p in by.get(n, [])[q:]), key=lambda p: -score(p))
+        keep += extra[:spare]
+    notice('kept per region:', {n: min(len(by.get(n, [])), quota[n]) for n in quota}, '| candidates:', {n: len(v) for n, v in by.items()}, '| total', len(keep))
+    rows = keep
     lens = {'name': 160, 'addr': 200, 'city': 80, 'region': 80, 'phone': 40, 'website': 200, 'hours': 300, 'facts': 160, 'wikidata': 20, 'wikipedia': 160, 'brand': 80, 'kind': 60, 'cat': 80}
     rows = [{k: trim(v, lens.get(k, 400)) for k, v in r.items() if v not in (None, '')} for r in rows]
     if DRY:
@@ -288,7 +311,13 @@ def upload(rows, run_id):
         notice('top categories:', Counter(r.get('cat') for r in rows).most_common(25))
         notice('approx size MB:', round(sum(len(json.dumps(r)) for r in rows) / 1e6))
         return
-    total, size = 0, 500   # small batches stay under the database's per-request time limit
+    # A load starts from an empty table without search indexes (quick inserts); the database rebuilds the indexes in
+    # the background afterwards. While that runs, the app uses the paid searches.
+    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_begin', data=json.dumps({'token': TOKEN}).encode(), method='POST',
+                                 headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        log('table emptied for the load:', r.read().decode())
+    total, size = 0, 1000
     for i in range(0, len(rows), size):
         body = json.dumps({'token': TOKEN, 'run_id': run_id, 'rows': rows[i:i + size]}).encode()
         for attempt in range(5):
@@ -305,16 +334,10 @@ def upload(rows, run_id):
             sys.exit('loading failed')
         if (i // size) % 100 == 0:
             log('loaded', total, 'of', len(rows))
-    removed = 0
-    for _ in range(200):   # stale places go 20,000 at a time, so each call stays under the database's time limit
-        req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_finish', data=json.dumps({'token': TOKEN, 'run_id': run_id, 'min_rows': max(1000, len(rows) // 2)}).encode(),
-                                     method='POST', headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=120) as r:
-            res = json.loads(r.read())
-        removed += res.get('removed', 0)
-        if not res.get('removed'):
-            break
-    notice('finished: loaded', total, 'removed', removed, res)
+    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_finish', data=json.dumps({'token': TOKEN, 'run_id': run_id}).encode(),
+                                 method='POST', headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        notice('finished: loaded', total, r.read().decode())
 
 
 if __name__ == '__main__':
