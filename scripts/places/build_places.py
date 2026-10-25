@@ -149,7 +149,8 @@ def load_overture(release):
 
 
 # ---------- OpenStreetMap
-POI_KEYS = ('amenity', 'shop', 'tourism', 'leisure')
+POI_KEYS = ('amenity', 'shop', 'tourism', 'leisure', 'place')
+PLACE_KINDS = {'city': 'City', 'town': 'Town', 'village': 'Village', 'hamlet': 'Place', 'suburb': 'Neighbourhood', 'neighbourhood': 'Neighbourhood', 'quarter': 'Neighbourhood', 'locality': 'Place'}
 
 
 def load_osm():
@@ -186,15 +187,20 @@ def load_osm():
                     continue
                 key = next(k for k in POI_KEYS if k in t)
                 val = t[key]
-                cat, kind = category(val)
-                if cat.startswith('other:'):
+                if key == 'place':
+                    if val not in PLACE_KINDS:
+                        continue
+                    cat, kind = 'place:' + val, PLACE_KINDS[val]
+                else:
+                    cat, kind = category(val)
+                if cat.startswith('other:') and key != 'place':
                     cat, kind = f'{key}:{val}', pretty(val)
                 street = ' '.join(x for x in (t.get('addr:housenumber'), t.get('addr:street')) if x)
                 pois.append({'id': 'osm:' + str(f.get('id') or ''), 'name': t['name'], 'cat': cat, 'kind': kind, 'lat': round(lat, 6), 'lon': round(lon, 6),
                              'addr': street or None, 'city': t.get('addr:city'), 'phone': t.get('phone') or t.get('contact:phone'),
                              'website': t.get('website') or t.get('contact:website'), 'hours': t.get('opening_hours'), 'facts': facts(t),
                              'wikidata': t.get('wikidata'), 'wikipedia': ('en:' + t['wikipedia:en']) if t.get('wikipedia:en') else t.get('wikipedia'),
-                             'brand': t.get('brand'), 'src': 'osm', 'conf': 0.8})
+                             'brand': t.get('brand'), 'src': 'osm', 'conf': 0.99 if key == 'place' else 0.8})
                 n += 1
         log(name, 'points of interest:', n)
     return pois

@@ -96,6 +96,11 @@
   #destMeta { display:flex; align-items:center; gap:8px; padding:4px 16px 6px; font-size:13px; color:var(--muted); } #destMeta:empty { display:none; } #destMeta .ic { flex-basis:26px; width:26px; height:26px; } #destMeta .ic svg { width:14px; height:14px; }
   #destDesc { margin:0 0 8px; padding:0 16px; font-size:13px; line-height:1.45; } #destDesc:empty { display:none; }
   #destLinks { display:flex; gap:8px; padding:0 16px 8px; flex-wrap:wrap; } #destLinks:empty { display:none; }
+  #hoursForm { padding:0 16px 10px; display:flex; flex-direction:column; gap:6px; } #hoursForm[hidden] { display:none; }
+  #hoursForm label { font-size:12px; font-weight:600; color:var(--muted); }
+  #hoursBtns { display:flex; gap:8px; margin-top:4px; } #hoursBtns button { flex:1; height:44px; }
+  #hoursFine, #hoursMsg { margin:0; font-size:12px; color:var(--muted); line-height:1.4; } #hoursMsg:empty { display:none; }
+  #destLinks button { padding:7px 14px; border-radius:999px; background:var(--soft); color:var(--ink, inherit); font-size:13px; font-weight:600; border:0; }
   #destLinks a { padding:7px 14px; border-radius:999px; background:var(--soft); color:var(--ink, inherit); font-size:13px; font-weight:600; text-decoration:none; }
   #suggest em { flex:0 0 auto; font-style:normal; font-size:12px; color:var(--muted); }
   #suggest .head { font-size:12px; color:var(--muted); padding:6px 12px 2px; cursor:default; text-transform:uppercase; letter-spacing:.05em; }
@@ -388,6 +393,15 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div id="destHours"></div>
   <p id="destDesc"></p>
   <div id="destLinks"></div>
+  <div id="hoursForm" hidden>
+    <label for="hoursIn">Opening hours</label>
+    <div class="field"><input id="hoursIn" type="text" maxlength="300" placeholder="Mon–Fri 9 AM–6 PM, Sat 10 AM–2 PM" autocomplete="off"></div>
+    <label for="hoursNote">Note (optional)</label>
+    <div class="field"><input id="hoursNote" type="text" maxlength="400" placeholder="Closed on holidays" autocomplete="off"></div>
+    <div id="hoursBtns"><button id="hoursSend" class="go" type="button">Send</button><button id="hoursCancel" class="ghost" type="button">Cancel</button></div>
+    <p id="hoursFine">Shared publicly as an OpenStreetMap note, so volunteer mappers can check it and add it to the map for everyone.</p>
+    <p id="hoursMsg" role="status"></p>
+  </div>
   <div id="routeRow"><div id="routes"></div><button id="go" class="go">Start</button></div>
   <div id="why"></div>
   <div id="timing">
@@ -512,7 +526,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div id="ttMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <h3>About</h3>
   <p>No ads, no sponsored places, no account. Your places and settings stay on this device.</p>
-  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, which anyone can correct. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search and routing <a href="https://www.geoapify.com/" target="_blank" rel="noopener">powered by Geoapify</a>. Traffic &copy; TomTom. Fire data from NIFC and NASA FIRMS. Border waits from US Customs and Border Protection.</p>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, which anyone can correct. Places also from <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a>. Map tiles by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, schema &copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>. Search and routing <a href="https://www.geoapify.com/" target="_blank" rel="noopener">powered by Geoapify</a>. Traffic &copy; TomTom. Fire data from NIFC and NASA FIRMS. Border waits from US Customs and Border Protection.</p>
   <p><a id="report" target="_blank" rel="noopener">Report a map problem</a></p>
 </div>
 
@@ -696,8 +710,21 @@ async function saveArea() {
   let done = 0, failed = 0, bytes = 0, next = 0;
   const work = async () => { while (next < keys.length) { const k = keys[next++]; try { const hit = await idbDo('saved', 'readonly', s => s.get(k)); const buf = hit || await offFetch(k, undefined, true); bytes += buf.byteLength; } catch (e) { failed++; } if (++done % 20 === 0) msg('Saving ' + done + ' of ' + keys.length + '...'); } };
   await Promise.all([work(), work(), work(), work(), work(), work()]);
+  // The places in the area too (names, hours, phone numbers), so search works without a connection
+  const [px0, py0] = ptile(Math.min(85, b.getNorth()), b.getWest()), [px1, py1] = ptile(Math.max(-85, b.getSouth()), b.getEast()), pkeys = [];
+  for (let x = px0; x <= px1; x++) for (let y = py0; y <= py1; y++) pkeys.push([x, y]);
+  let placesSaved = 0;
+  if (pkeys.length <= 40) for (const [x, y] of pkeys) {
+    try {
+      const r = await fetch(API + '/places?tile=' + PZ + '/' + x + '/' + y); if (!r.ok) continue;
+      const buf = await r.arrayBuffer(); bytes += buf.byteLength;
+      await offSave('p/' + PZ + '/' + x + '/' + y, buf); placeTiles.delete('p/' + PZ + '/' + x + '/' + y);
+      placesSaved += (JSON.parse(new TextDecoder().decode(buf)).rows || []).length;
+    } catch (e) {}
+  }
   saveArea.busy = false;
   const areas = store('map.areas') || []; areas.push({ at: Date.now(), tiles: keys.length - failed, mb: +(bytes / 1048576).toFixed(1) }); store('map.areas', areas);
+  if (placesSaved) status(placesSaved.toLocaleString() + ' places saved for searching offline.');
   msg(failed ? 'Saved ' + (keys.length - failed) + ' of ' + keys.length + ' map pieces. ' + failed + ' failed; try again with a better connection.' : 'Saved. This area now works without a connection (' + (bytes / 1048576).toFixed(1) + ' MB).');
   drawOffline();
 }
@@ -1432,8 +1459,34 @@ function drawInfo() {
   desc.textContent = p.desc || '';
   if (p.phone) { const a = el('a', '', 'Call'); a.href = 'tel:' + String(p.phone).split(/[;,]/)[0].replace(/[^\d+]/g, ''); links.appendChild(a); }
   if (p.url) { const u = String(p.url).split(/[;\s]/)[0], a = el('a', '', 'Website'); a.href = /^https?:\/\//i.test(u) ? u : 'https://' + u; a.target = '_blank'; a.rel = 'noopener'; links.appendChild(a); }
+  // No hours known for a business: ask the person, and pass it on to OpenStreetMap
+  const placeLike = p.kind && !/^(street|city|town|village|county|state|country|place|neighbourhood|postcode|address|building)$/i.test(p.kind);
+  if (placeLike && !p.mine && !p.hours && !(p.ranges && p.ranges.length) && !p.reported) {
+    const b = el('button', '', 'Add hours'); b.type = 'button';
+    b.onclick = () => { $('hoursForm').hidden = false; $('hoursMsg').textContent = ''; $('hoursIn').focus(); layout(); };
+    links.appendChild(b);
+  }
+  if (!p || p !== hoursForm.for) { $('hoursForm').hidden = true; hoursForm.for = p; }
   if (typeof layout === 'function' && document.body.classList.contains('dest')) layout();
 }
+const hoursForm = { for: null };
+$('hoursCancel').onclick = () => { $('hoursForm').hidden = true; layout(); };
+$('hoursSend').onclick = async () => {
+  const p = pts.to, hours = $('hoursIn').value.trim(), note = $('hoursNote').value.trim(), msg = t => { $('hoursMsg').textContent = t; };
+  if (!p) return;
+  if (hours.length < 3) { msg('Type the opening hours first, for example Mon–Fri 9 AM–6 PM.'); return; }
+  $('hoursSend').disabled = true; msg('Sending...');
+  try {
+    const r = await fetch(API + '/report', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ place_id: p.dbid || p.pid || p.osm || '', name: p.name || p.label.split(',')[0], lat: p.lat, lon: p.lon, hours, note }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { msg(d.error || 'That did not go through. Try again later.'); return; }
+    p.reported = true; $('hoursIn').value = ''; $('hoursNote').value = '';
+    msg('Thanks! Mappers will check it and add it to the map.'); drawInfo(); $('hoursForm').hidden = false;
+    setTimeout(() => { if (pts.to === p) { $('hoursForm').hidden = true; layout(); } }, 4000);
+  } catch (e) { msg('No connection. Try again when you are back online.'); }
+  finally { $('hoursSend').disabled = false; }
+};
 function drawHours() {
   const box = $('destHours'), p = pts.to;
   const rt = routes[selected], h = p ? hoursText(p, rt ? new Date(Date.now() + rt.time * 1000) : null) : null;
@@ -1731,6 +1784,11 @@ function categoryOf(q) {
   return c ? { tags: c[1], word: c[2], title: c[3] } : null;
 }
 async function nearbyKind(ref, cat, radius) {   // radius in km; without one, looks 5 km around and widens if little is found
+  {   // the app's own place list first: free, and it has hours
+    let own = await ownNear(cat.tags, ref, radius || 5);
+    if (!radius && own.length < 3) { const wide = await ownNear(cat.tags, ref, 30); if (wide.length > own.length) own = wide; }
+    if (own.length >= (radius ? 1 : 3)) return own;
+  }
   const tags = cat.tags.map(t => '&osm_tag=' + t).join(''), at = `lat=${ref[0].toFixed(5)}&lon=${ref[1].toFixed(5)}`;
   const named = d => (d.features || []).filter(f => f.properties.name).map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }));
   try {
@@ -1827,6 +1885,50 @@ async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from Tom
     return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/^important /i, '').replace(/:.*$/, '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '', ranges: p.open, phone: p.phone, url: p.url }));
   } catch (e) { return []; }
 }
+// ---------- BrinaMaps' own place list (Overture Maps + OpenStreetMap, on the app's server) ----------
+// Asked first: it costs nothing per search and already carries hours, phone, website and details. The paid search
+// services are only asked when it has too little (streets, house numbers, places outside the covered area).
+const STREETY = /\b(calle|av|ave|avenida|blvd|boulevard|st|street|rd|road|dr|drive|ln|lane|way|hwy|highway|carretera|camino|privada|calz|calzada|ct|court|pl|place|pkwy)\b/i;
+function dbPlace(r) {
+  const city = r.city && !(r.addr || '').includes(r.city) ? r.city : null;
+  return { main: r.name, sub: [r.addr, city, r.cc && r.cc !== 'us' ? r.region : r.region].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '),
+    lat: r.lat, lon: r.lon, kind: r.kind, cc: r.cc, named: true, osm: '', hours: r.hours || '', phone: r.phone, url: r.website, extra: r.facts,
+    wikidata: r.wikidata, wiki: r.wikipedia, dbid: r.id };
+}
+let dbDownUntil = 0;
+async function ownSearch(q, ref, signal) {
+  if (Date.now() < dbDownUntil) return offlinePlaces(q, ref);
+  try {
+    const r = await fetch(API + '/places?q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
+    if (!r.ok) { if (r.status >= 500) dbDownUntil = Date.now() + 120000; return offlinePlaces(q, ref); }
+    return ((await r.json()).places || []).map(dbPlace);
+  } catch (e) { if (e.name === 'AbortError') throw e; return offlinePlaces(q, ref); }
+}
+async function ownNear(tags, ref, km) {
+  if (Date.now() < dbDownUntil) return offlinePlaces(null, ref, tags);
+  try {
+    const r = await fetch(API + '/places?cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
+    if (!r.ok) return offlinePlaces(null, ref, tags);
+    return ((await r.json()).places || []).map(dbPlace);
+  } catch (e) { return offlinePlaces(null, ref, tags); }
+}
+// Place tiles saved with an offline area: searched on the phone when there is no connection
+const PZ = 12, ptile = (lat, lon) => { const n = 2 ** PZ, la = lat * Math.PI / 180; return [Math.floor((lon + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n)]; };
+const placeTiles = new Map();
+async function offlinePlaces(q, ref, tags) {
+  const [cx, cy] = ptile(ref[0], ref[1]), words = q ? fold(q).split(/[^a-z0-9]+/).filter(w => w.length > 1) : [], out = [];
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+    const k = 'p/' + PZ + '/' + (cx + dx) + '/' + (cy + dy);
+    let t = placeTiles.get(k);
+    if (t === undefined) { try { const buf = await idbDo('saved', 'readonly', s => s.get(k)); t = buf ? JSON.parse(new TextDecoder().decode(buf)) : null; } catch (e) { t = null; } placeTiles.set(k, t); }
+    if (!t) continue;
+    t.rows.forEach(row => {
+      const r = {}; t.cols.forEach((c, i) => { r[c] = row[i]; });
+      if (words.length ? words.every(w => fold(r.name).includes(w)) : tags && tags.some(g => r.cat === g || (r.cat || '').split(':')[0] === g)) out.push(dbPlace(r));
+    });
+  }
+  return out.sort((a, b) => meters(ref, [a.lat, a.lon]) - meters(ref, [b.lat, b.lon])).slice(0, 20);
+}
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
   try {
     const d = await nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 0.5)}&q=${encodeURIComponent(q)}`, signal);
@@ -1866,7 +1968,7 @@ async function search(which, q, now) {
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).filter(f => !JUNK.test(f.properties.osm_value || '') || /taxi|bus|park|atm/i.test(q))
     .map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], cc: String(f.properties.countrycode || '').toLowerCase(), named: !!f.properties.name, kind: kindOf(f.properties) }))).catch(() => null);
   const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
-  let near, close, far, exact = [], pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
+  let near, close, far, exact = [], db = null, pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   const ql = q.toLowerCase(), mine = [], words = fold(ql).replace(/\bkm\b/g, ' ').split(/[^a-z0-9]+/).filter(w => w.length > 1);
   [[places.home, 'Home'], [places.work, 'Work']].forEach(([pl, t]) => { if (pl && (t.toLowerCase().startsWith(ql) || (pl.label || '').toLowerCase().includes(ql))) mine.push(pl); });
@@ -1889,7 +1991,7 @@ async function search(which, q, now) {
   function paint() {
     if (id !== searchId) return;
     if (pending > 0 && painted) return;   // keep what is showing until everything is in, so the list does not jump
-    if (pending > 0 && !far && !exact.length && !(tt && tt.length)) return;   // the first answer to arrive is shown at once
+    if (pending > 0 && !far && !exact.length && !(tt && tt.length) && !(db && db.length)) return;   // the first answer to arrive is shown at once
     if (near === null && close === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
       backup = true; pending++;
       nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
@@ -1903,14 +2005,14 @@ async function search(which, q, now) {
     const add = arr => (arr || []).forEach(p => {
       const o = items.find(o2 => same(o2, p));
       if (!o) { items.push(p); return; }
-      ['kind', 'hours', 'ranges', 'phone', 'url', 'pid'].forEach(k => { if ((o[k] == null || o[k] === '' || (Array.isArray(o[k]) && !o[k].length)) && p[k] != null && p[k] !== '') o[k] = p[k]; });
+      ['kind', 'hours', 'ranges', 'phone', 'url', 'pid', 'extra', 'wikidata', 'wiki'].forEach(k => { if ((o[k] == null || o[k] === '' || (Array.isArray(o[k]) && !o[k].length)) && p[k] != null && p[k] !== '') o[k] = p[k]; });
     });
     const exactNear = exact.filter(p => dist(p) <= NEARBY).sort(byDist);
     // Street addresses: the exact match leads. Names (a store, a chain): everything near you in one list, closest first,
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
-    if (isAddress || cat) { add(exactNear); add((close || []).concat(near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
+    if (isAddress || cat) { add(exactNear); add((db || []).concat(close || [], near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
     else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
-      const all = exact.concat(close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => fold(p.main).includes(w));
+      const all = (db || []).concat(exact, close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => fold(p.main).includes(w));
       const lead = p => fold(p.main).startsWith(fold(ql));   // "Costco" before "Saldos Costco"
       add(own);
       // A town or city named exactly what you typed ("Rosarito", "Tijuana") comes before shops and buildings that share the name
@@ -1933,7 +2035,7 @@ async function search(which, q, now) {
       if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
       const st = stateOf(p, new Date());
       const eta = etaOf(p);
-      const li = suggestion(which, p.main, p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours, ranges: p.ranges, kind: p.kind, pid: p.pid, phone: p.phone, url: p.url }, { kind: p.kind, mine: p.mine, hours: hoursShort(st) });
+      const li = suggestion(which, p.main, p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours, ranges: p.ranges, kind: p.kind, pid: p.pid, phone: p.phone, url: p.url, extra: p.extra, wikidata: p.wikidata, wiki: p.wiki }, { kind: p.kind, mine: p.mine, hours: hoursShort(st) });
       list.appendChild(li);
     });
     list.style.display = shown.length ? 'block' : 'none';
@@ -1955,13 +2057,19 @@ async function search(which, q, now) {
   // Business names: TomTom's place list answers in about a third of a second and knows places the open map data lacks,
   // so it is asked alongside the main search and whichever answers first is shown
   let tt = null;
-  // Asked only once typing pauses: each TomTom search is a paid request and the free allowance is small
+  // The app's own place list answers first. When it has enough near you (and the text is not a street or an address),
+  // the paid searches are not asked at all.
+  pending++;
+  const dbP = (cat ? Promise.resolve([]) : ownSearch(q, ref, ctl.signal).catch(() => [])).then(o => { if (id === searchId) { db = o; pending--; paint(); } return o; });
+  const dbEnough = o => !isAddress && !STREETY.test(q) && o.filter(p => meters(ref, [p.lat, p.lon]) <= NEARBY).length >= 3;
+  // TomTom (paid, smallest allowance): only once typing pauses, and only when the own list came up short
   if (!isAddress && !cat && q.length >= 3 && words.length) {
     pending++;
-    setTimeout(() => {
+    Promise.all([dbP, pause(now ? 0 : 450)]).then(([o]) => {
       if (id !== searchId || ctl.signal.aborted) return;
-      poiSearch(q, ref, ctl.signal).then(o => { if (id !== searchId) return; tt = o; pending--; paint(); });
-    }, now ? 0 : 450);
+      if (o.filter(p => meters(ref, [p.lat, p.lon]) <= NEARBY).length >= 2) { tt = []; pending--; paint(); return; }
+      poiSearch(q, ref, ctl.signal).then(o2 => { if (id !== searchId) return; tt = o2; pending--; paint(); });
+    });
   }
   if (geo) { near = []; close = []; pending -= 2; }   // Geoapify: one search ranked around you does it all (each request costs time and a credit)
   else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
@@ -1972,8 +2080,9 @@ async function search(which, q, now) {
   };
   // The main search sometimes takes many seconds for a query. After 3 s the list stops waiting for it (what the
   // place list found stays up); a late answer is still added when it comes.
-  let farDone = false;
-  const farWait = setTimeout(() => { if (farDone || id !== searchId) return; farDone = true; pending--; paint(); }, now ? 5000 : 3000);
+  let farDone = false, farWait = 0;
+  const askFar = () => {
+  farWait = setTimeout(() => { if (farDone || id !== searchId) return; farDone = true; pending--; paint(); }, now ? 5000 : 3000);
   get(base + '&limit=' + (geo ? 20 : 8) + '&zoom=9&location_bias_scale=0.4').then(f => {
     clearTimeout(farWait);
     const late = farDone; farDone = true;
@@ -1989,6 +2098,13 @@ async function search(which, q, now) {
       }
     }
     pending--; paint();
+  });
+  };
+  if (cat || !geo) askFar();
+  else dbP.then(o => {
+    if (id !== searchId) return;
+    if (dbEnough(o)) { farDone = true; far = []; pending--; paint(); }   // the own list covered it: no paid search
+    else askFar();
   });
   const cLat = 0.12, cLon = cLat / Math.cos(ref[0] * Math.PI / 180);   // about 13 km around you, so local branches are not crowded out by bigger ones further off
   if (!geo) get(base + `&limit=10&bbox=${(ref[1] - cLon).toFixed(4)},${(ref[0] - cLat).toFixed(4)},${(ref[1] + cLon).toFixed(4)},${(ref[0] + cLat).toFixed(4)}`).then(f => { close = f; pending--; paint(); });
