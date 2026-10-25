@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/valhalla/:ep",
+      "destination": "/api/valhalla?ep=:ep"
+    },
+    {
       "source": "/networth",
       "destination": "/networth/index.html"
     },
