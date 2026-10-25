@@ -10,7 +10,7 @@ Run by .github/workflows/places.yml. Settings come from the environment:
                  weights; a region that has fewer good places than its share leaves the rest to the others)
   OSM_EXTRACTS   space-separated Geofabrik .osm.pbf URLs covering those boxes
   MIN_CONF       lowest Overture confidence kept (0..1)
-  MAX_ROWS       most places loaded (the free database tier holds about a million)
+  MAX_ROWS       most places loaded
   SUPABASE_URL, SUPABASE_KEY (publishable key), IMPORT_TOKEN (the load token)
 """
 import json, os, re, subprocess, sys, time, unicodedata, urllib.request, xml.etree.ElementTree as ET
