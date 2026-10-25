@@ -6,9 +6,9 @@ Two open sources, merged:
 A place found in both keeps Overture's coverage fields and gains OpenStreetMap's details.
 
 Run by .github/workflows/places.yml. Settings come from the environment:
-  REGIONS        "name:west,south,east,north:share;..." boxes to cover, each with its share of MAX_ROWS (shares are
-                 weights; a region that has fewer good places than its share leaves the rest to the others)
-  OSM_EXTRACTS   space-separated Geofabrik .osm.pbf URLs covering those boxes
+  REGIONS        "name:west,south,east,north:share;..." boxes to cover, each with its share of MAX_ROWS
+  OSM_EXTRACTS   "name=url url;name=url" Geofabrik .osm.pbf files for each region
+Regions are done ONE AT A TIME (read, merge, load, then free the memory), so the build machine never holds them all.
   MIN_CONF       lowest Overture confidence kept (0..1)
   MAX_ROWS       most places loaded
   SUPABASE_URL, SUPABASE_KEY (publishable key), IMPORT_TOKEN (the load token)
@@ -23,7 +23,7 @@ def _region(r):
     return name.strip(), tuple(float(v) for v in box.split(',')), float(share)
 AREAS = [_region(r) for r in os.environ['REGIONS'].split(';') if r.strip()]
 REGIONS = [a[1] for a in AREAS]
-OSM_EXTRACTS = os.environ.get('OSM_EXTRACTS', '').split()
+OSM_EXTRACTS = {k.strip(): v.split() for k, v in (x.split('=', 1) for x in os.environ.get('OSM_EXTRACTS', '').split(';') if '=' in x)}
 MIN_CONF = float(os.environ.get('MIN_CONF', '0.6'))
 MAX_ROWS = int(os.environ.get('MAX_ROWS', '1000000'))
 SB_URL, SB_KEY, TOKEN = os.environ['SUPABASE_URL'].rstrip('/'), os.environ['SUPABASE_KEY'], os.environ.get('IMPORT_TOKEN', '')
@@ -39,8 +39,8 @@ def notice(*a):   # shown on the run's summary page (and readable through GitHub
     print('::notice::' + ' '.join(str(x) for x in a).replace('\n', ' ')[:900], flush=True)
 
 
-def inside(lon, lat):
-    return any(w <= lon <= e and s <= lat <= n for w, s, e, n in REGIONS)
+def inside(lon, lat, boxes):
+    return any(w <= lon <= e and s <= lat <= n for w, s, e, n in boxes)
 
 
 def fold(t):
@@ -129,12 +129,13 @@ def overture_release():
     return rel[-1]
 
 
-def load_overture(release):
+def load_overture(release, boxes):
     con = duckdb.connect()
+    con.execute("SET memory_limit='6GB'; SET threads=4;")
     for ext in ('httpfs', 'spatial'):
         con.execute(f'INSTALL {ext}; LOAD {ext};')
     con.execute("SET s3_region='us-west-2';")
-    where = ' OR '.join(f'(bbox.xmin BETWEEN {w} AND {e} AND bbox.ymin BETWEEN {s} AND {n})' for w, s, e, n in REGIONS)
+    where = ' OR '.join(f'(bbox.xmin BETWEEN {w} AND {e} AND bbox.ymin BETWEEN {s} AND {n})' for w, s, e, n in boxes)
     q = f"""
       SELECT id, names.primary AS name, basic_category AS basic, taxonomy.primary AS tax,
              websites[1] AS website, phones[1] AS phone, brand.names.primary AS brand, brand.wikidata AS brand_wd,
@@ -145,16 +146,21 @@ def load_overture(release):
         AND coalesce(operating_status, 'open') = 'open'
     """
     log('reading Overture', release)
-    rows = con.execute(q).fetchall()
-    cols = [d[0] for d in con.description]
+    cur = con.execute(q)
+    cols = [d[0] for d in cur.description]
     out = []
-    for r in rows:
-        d = dict(zip(cols, r))
-        cat, kind = category(d['basic'] or d['tax'])
-        out.append({'id': 'ov:' + d['id'], 'name': d['name'], 'cat': cat, 'kind': kind, 'lat': round(d['lat'], 6), 'lon': round(d['lon'], 6),
-                    'addr': d['addr'], 'city': d['city'], 'region': d['region'], 'cc': (d['cc'] or '').lower() or None,
-                    'phone': d['phone'], 'website': d['website'], 'brand': d['brand'], 'src': 'overture', 'conf': round(d['conf'] or 0, 3)})
-    notice('Overture places kept:', len(out))
+    while True:   # in chunks, so only the trimmed places are held
+        chunk = cur.fetchmany(100000)
+        if not chunk:
+            break
+        for r in chunk:
+            d = dict(zip(cols, r))
+            cat, kind = category(d['basic'] or d['tax'])
+            out.append({'id': 'ov:' + d['id'], 'name': d['name'], 'cat': cat, 'kind': kind, 'lat': round(d['lat'], 6), 'lon': round(d['lon'], 6),
+                        'addr': d['addr'], 'city': d['city'], 'region': d['region'], 'cc': (d['cc'] or '').lower() or None,
+                        'phone': d['phone'], 'website': d['website'], 'brand': d['brand'], 'src': 'overture', 'conf': round(d['conf'] or 0, 3)})
+    con.close()
+    log('Overture places:', len(out))
     return out
 
 
@@ -163,9 +169,9 @@ POI_KEYS = ('amenity', 'shop', 'tourism', 'leisure', 'place')
 PLACE_KINDS = {'city': 'City', 'town': 'Town', 'village': 'Village', 'hamlet': 'Place', 'suburb': 'Neighbourhood', 'neighbourhood': 'Neighbourhood', 'quarter': 'Neighbourhood', 'locality': 'Place'}
 
 
-def load_osm():
+def load_osm(urls, boxes):
     pois = []
-    for url in OSM_EXTRACTS:
+    for url in urls:
         name = url.rsplit('/', 1)[-1]
         log('downloading', name)
         subprocess.run(['curl', '-sSfL', '-o', name, url], check=True)
@@ -193,7 +199,7 @@ def load_osm():
                     if not ring:
                         continue
                     lon, lat = sum(c[0] for c in ring) / len(ring), sum(c[1] for c in ring) / len(ring)
-                if not inside(lon, lat):
+                if not inside(lon, lat, boxes):
                     continue
                 key = next(k for k in POI_KEYS if k in t)
                 val = t[key]
@@ -212,7 +218,7 @@ def load_osm():
                              'wikidata': t.get('wikidata'), 'wikipedia': ('en:' + t['wikipedia:en']) if t.get('wikipedia:en') else t.get('wikipedia'),
                              'brand': t.get('brand'), 'src': 'osm', 'conf': 0.99 if key == 'place' else 0.8})
                 n += 1
-        notice(name, 'points of interest:', n)
+        log(name, 'points of interest:', n)
     return pois
 
 
@@ -251,7 +257,7 @@ def merge(ov, osm):
         else:
             out.append(o)
             added += 1
-    notice('OpenStreetMap: matched', matched, 'added', added)
+    log('OpenStreetMap: matched', matched, 'added', added)
     return out
 
 
@@ -277,70 +283,61 @@ def score(p):
     return s
 
 
-def upload(rows, run_id):
-    seen = set()   # the map extracts overlap at the border: the same place can come from both
-    rows = [r for r in rows if not (r['id'] in seen or seen.add(r['id']))]
-    rows.sort(key=lambda p: -score(p))
-    # Each region gets its share of the room (Texas alone has more candidates than the database holds), filled with its
-    # most useful places; room a region cannot use goes to the others
-    def area_of(p):
-        for name, (w, s_, e, n), _ in AREAS:
-            if w <= p['lon'] <= e and s_ <= p['lat'] <= n:
-                return name
-        return AREAS[0][0]
-    by = {}
-    for p in rows:
-        by.setdefault(area_of(p), []).append(p)
-    total_w = sum(a[2] for a in AREAS)
-    quota = {a[0]: int(MAX_ROWS * a[2] / total_w) for a in AREAS}
-    spare = sum(max(0, quota[n] - len(by.get(n, []))) for n in quota)
-    keep = []
-    for n, q in quota.items():
-        keep += by.get(n, [])[:q]
-    if spare:   # hand unused room to the regions with places left over, best first
-        extra = sorted((p for n, q in quota.items() for p in by.get(n, [])[q:]), key=lambda p: -score(p))
-        keep += extra[:spare]
-    notice('kept per region:', {n: min(len(by.get(n, [])), quota[n]) for n in quota}, '| candidates:', {n: len(v) for n, v in by.items()}, '| total', len(keep))
-    rows = keep
-    lens = {'name': 160, 'addr': 200, 'city': 80, 'region': 80, 'phone': 40, 'website': 200, 'hours': 300, 'facts': 160, 'wikidata': 20, 'wikipedia': 160, 'brand': 80, 'kind': 60, 'cat': 80}
-    rows = [{k: trim(v, lens.get(k, 400)) for k, v in r.items() if v not in (None, '')} for r in rows]
-    if DRY:
-        from collections import Counter
-        notice('dry run: would load', len(rows), '| with hours:', sum(1 for r in rows if r.get('hours')), '| with phone:', sum(1 for r in rows if r.get('phone')),
-            '| with website:', sum(1 for r in rows if r.get('website')), '| from OSM only:', sum(1 for r in rows if r.get('src') == 'osm'))
-        notice('top categories:', Counter(r.get('cat') for r in rows).most_common(25))
-        notice('approx size MB:', round(sum(len(json.dumps(r)) for r in rows) / 1e6))
-        return
-    # A load starts from an empty table without search indexes (quick inserts); the database rebuilds the indexes in
-    # the background afterwards. While that runs, the app uses the paid searches.
-    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_begin', data=json.dumps({'token': TOKEN}).encode(), method='POST',
+def rpc(fn, payload, timeout=120):
+    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/' + fn, data=json.dumps(payload).encode(), method='POST',
                                  headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        log('table emptied for the load:', r.read().decode())
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode()
+
+
+LENS = {'name': 160, 'addr': 200, 'city': 80, 'region': 80, 'phone': 40, 'website': 200, 'hours': 300, 'facts': 160, 'wikidata': 20, 'wikipedia': 160, 'brand': 80, 'kind': 60, 'cat': 80}
+
+
+def send(rows, run_id):
+    """Loads one region's places in batches of 1,000; returns how many went in"""
     total, size = 0, 1000
     for i in range(0, len(rows), size):
-        body = json.dumps({'token': TOKEN, 'run_id': run_id, 'rows': rows[i:i + size]}).encode()
+        payload = {'token': TOKEN, 'run_id': run_id, 'rows': rows[i:i + size]}
         for attempt in range(5):
             try:
-                req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_places', data=body, method='POST',
-                                             headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=120) as r:
-                    total += int(r.read())
+                total += int(rpc('import_places', payload))
                 break
             except Exception as e:
                 log('batch', i, 'failed:', e, '- retrying')
                 time.sleep(5 * (attempt + 1))
         else:
             sys.exit('loading failed')
-        if (i // size) % 100 == 0:
+        if (i // size) % 200 == 0:
             log('loaded', total, 'of', len(rows))
-    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_finish', data=json.dumps({'token': TOKEN, 'run_id': run_id}).encode(),
-                                 method='POST', headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        notice('finished: loaded', total, r.read().decode())
+    return total
+
+
+def main():
+    release = overture_release()
+    run_id = release + '/' + time.strftime('%Y%m%d')
+    if not DRY:   # the table is emptied and its search indexes dropped (quick inserts); rebuilt in the background at the end
+        log('table emptied for the load:', rpc('import_begin', {'token': TOKEN}))
+    total_w = sum(a[2] for a in AREAS)
+    seen, loaded, summary = set(), 0, {}
+    for name, box, share in AREAS:   # one region at a time: read, merge, load, then let go of it
+        quota = int(MAX_ROWS * share / total_w)
+        rows = merge(load_overture(release, [box]), load_osm(OSM_EXTRACTS.get(name, []), [box]))
+        rows = [r for r in rows if not (r['id'] in seen or seen.add(r['id']))]   # boxes overlap at the border
+        rows.sort(key=lambda p: -score(p))
+        candidates = len(rows)
+        rows = [{k: trim(v, LENS.get(k, 400)) for k, v in r.items() if v not in (None, '')} for r in rows[:quota]]
+        stats = {'kept': len(rows), 'of': candidates, 'hours': sum(1 for r in rows if r.get('hours')), 'osm_only': sum(1 for r in rows if r.get('src') == 'osm')}
+        if not DRY:
+            stats['loaded'] = send(rows, run_id)
+            loaded += stats['loaded']
+        summary[name] = stats
+        notice(name, stats)
+        del rows
+    if DRY:
+        notice('dry run, nothing loaded:', summary)
+        return
+    notice('finished: loaded', loaded, rpc('import_finish', {'token': TOKEN, 'run_id': run_id}))
 
 
 if __name__ == '__main__':
-    release = overture_release()
-    places = merge(load_overture(release), load_osm())
-    upload(places, release + '/' + time.strftime('%Y%m%d'))
+    main()
