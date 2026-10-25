@@ -1453,12 +1453,21 @@ const GEO_CAT = { 'amenity:cafe': 'catering.cafe', 'amenity:restaurant': 'cateri
 const GEO_EP = { details: '/v2/place-details', autocomplete: '/v1/geocode/autocomplete', search: '/v1/geocode/search', reverse: '/v1/geocode/reverse', places: '/v2/places', routing: '/v1/routing', matrix: '/v1/routematrix' };
 let geoDownUntil = 0, geoOff = false;   // geoOff: the site's server has no key set up (website only: the free servers are used)
 const useGeo = () => Date.now() > geoDownUntil && (!!prefs.geoKey || !geoOff);
-const geoCache = new Map();
+// Answers kept on the phone (and across app restarts), so retyping a search or reopening a place costs nothing.
+// Searches are kept a day, place details a week; travel times 10 minutes; routes never.
+const GEO_KEEP = { autocomplete: 86400000, search: 86400000, reverse: 86400000, places: 3600000, details: 7 * 86400000, matrix: 600000 };
+const geoCache = new Map(Object.entries(store('map.geoCache') || {}).filter(([, e]) => e && Date.now() < e.until));
+let geoSaveT = 0;
 async function geoFetch(ep, params, signal, body) {
-  const qs = new URLSearchParams(params).toString(), ck = !body && ep !== 'routing' ? ep + '?' + qs : '';
-  if (ck && geoCache.has(ck) && Date.now() - geoCache.get(ck).at < 600000) return geoCache.get(ck).d;
+  const qs = new URLSearchParams(params).toString(), ck = !body && GEO_KEEP[ep] ? ep + '?' + qs : '';
+  if (ck && geoCache.has(ck) && Date.now() < geoCache.get(ck).until) return geoCache.get(ck).d;
   const d = await geoFetchNet(ep, qs, signal, body);
-  if (ck) { geoCache.set(ck, { at: Date.now(), d }); if (geoCache.size > 300) geoCache.delete(geoCache.keys().next().value); }
+  if (ck) {
+    geoCache.set(ck, { until: Date.now() + GEO_KEEP[ep], d });
+    while (geoCache.size > 200) geoCache.delete(geoCache.keys().next().value);
+    clearTimeout(geoSaveT);   // written to storage a moment later, only the small answers, so storage stays well under its limit
+    geoSaveT = setTimeout(() => { const keep = {}; geoCache.forEach((e, k) => { if (GEO_KEEP[k.split('?')[0]] > 600000 && JSON.stringify(e.d).length < 40000) keep[k] = e; }); store('map.geoCache', keep); }, 1500);
+  }
   return d;
 }
 async function geoFetchNet(ep, qs, signal, body) {
@@ -1611,7 +1620,7 @@ $('searchScrim').addEventListener('pointerdown', e => { e.preventDefault(); exit
     clearTimeout(debounce);
     const q = input.value.trim();
     if (!q) { shortcuts(which); return; }
-    debounce = setTimeout(() => search(which, q), 150);
+    debounce = setTimeout(() => search(which, q), 250);   // a pause in typing, not every letter: each search is a paid request
   });
   input.addEventListener('keydown', e => {   // Return puts the keyboard away and shows the options (and pins them); it never picks one for you
     if (e.key !== 'Enter') return;
@@ -1846,7 +1855,7 @@ async function fillEtas(list) {
 async function search(which, q, now) {
   const list = listFor(which);
   if (searchCtl) searchCtl.abort();
-  if (q.length < 2) { list.style.display = 'none'; return; }
+  if (q.length < 3 && !/^\d/.test(q)) { list.style.display = 'none'; return; }
   const m = q.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);   // raw "lat, lon"
   if (m) { list.style.display = 'none'; const p = { lat: +m[1], lon: +m[3], label: q }; if (which === 'friend') meetPick(p); else setPoint(which, p); return; }
   const c = map.getCenter(), ref = here || [c.lat, c.lng], id = ++searchId;
@@ -1935,7 +1944,7 @@ async function search(which, q, now) {
     settleEnter();
     if (!pending && shown.length && etaFrom() && useGeo()) {   // travel times for the top few once the list settles (Geoapify only: each costs a lookup)
       clearTimeout(etaTimer);
-      etaTimer = setTimeout(() => { if (id === searchId) fillEtas(shown.slice(0, 6)).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); }); }, now ? 0 : 700);
+      etaTimer = setTimeout(() => { if (id === searchId) fillEtas(shown.slice(0, 3)).then(got => { if (got && id === searchId && list.style.display !== 'none') paint(); }); }, now ? 0 : 1200);
     }
     if (cat && !pending && !hoursAsked && shown.length) {   // one lookup for the opening hours of the places listed
       hoursAsked = true;
