@@ -1,25 +1,43 @@
 name: Router data
-# Builds the routing data for BrinaMaps' own route server (Valhalla) from OpenStreetMap: California and all of Mexico.
-# Published as a release the server downloads; runs on the 5th of each month and on demand.
+# Builds routing data for BrinaMaps' own route server (Valhalla) from OpenStreetMap, ONE region per run, each region on
+# its own day of the month so no machine is busy with all of them at once:
+#   west (California + Mexico) on the 5th, texas on the 12th, illinois on the 19th.
+# Each build is published as a release named router-<region>-<date>; the server picks it up within the hour.
 on:
   workflow_dispatch:
+    inputs:
+      region:
+        description: 'Region to build'
+        type: choice
+        options: [west, texas, illinois]
+        default: west
   schedule:
     - cron: '41 6 5 * *'
-  push:
-    branches: [master]
-    paths: ['.github/workflows/router.yml']
+    - cron: '41 6 12 * *'
+    - cron: '41 6 19 * *'
 permissions:
   contents: write
 concurrency:
   group: router
-  cancel-in-progress: true
+  cancel-in-progress: false   # a second build waits for the first instead of replacing it
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 340
-    env:
-      TILE_URLS: 'https://download.geofabrik.de/north-america/us/california-latest.osm.pbf https://download.geofabrik.de/north-america/mexico-latest.osm.pbf'
     steps:
+      - name: Pick the region
+        run: |
+          region="${{ inputs.region }}"
+          case "${{ github.event.schedule }}" in '41 6 5 * *') region=west;; '41 6 12 * *') region=texas;; '41 6 19 * *') region=illinois;; esac
+          region=${region:-west}
+          case "$region" in
+            west) urls='https://download.geofabrik.de/north-america/us/california-latest.osm.pbf https://download.geofabrik.de/north-america/mexico-latest.osm.pbf';;
+            texas) urls='https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf';;
+            illinois) urls='https://download.geofabrik.de/north-america/us/illinois-latest.osm.pbf';;
+            *) echo "::error::unknown region $region"; exit 1;;
+          esac
+          echo "REGION=$region" >> "$GITHUB_ENV"; echo "TILE_URLS=$urls" >> "$GITHUB_ENV"
+          echo "::notice::building $region"
       - name: Make room on the runner
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
@@ -45,9 +63,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=router-$(date -u +%Y%m%d-%H%M)
-          gh release create "$tag" "$RUNNER_TEMP"/out/router.part.* --repo "$GITHUB_REPOSITORY" --title "Router data $(date -u +%Y-%m-%d)" \
-            --notes "Valhalla routing tiles for California and Mexico, built from OpenStreetMap (© OpenStreetMap contributors, ODbL). Downloaded by the BrinaMaps route server." --latest=false
+          tag=router-$REGION-$(date -u +%Y%m%d-%H%M)
+          gh release create "$tag" "$RUNNER_TEMP"/out/router.part.* --repo "$GITHUB_REPOSITORY" --title "Router data: $REGION $(date -u +%Y-%m-%d)" \
+            --notes "Valhalla routing tiles ($REGION), built from OpenStreetMap (© OpenStreetMap contributors, ODbL). Downloaded by the BrinaMaps route server." --latest=false
           # keep the two newest builds
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' | grep '^router-' | sort -r | tail -n +3 | while read t; do gh release delete "$t" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; done
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep "^router-$REGION-" | sort -r | tail -n +3 | while read t; do gh release delete "$t" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; done
           echo "::notice::published $tag"
