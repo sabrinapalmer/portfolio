@@ -301,10 +301,16 @@ def upload(rows, run_id):
             sys.exit('loading failed')
         if (i // size) % 100 == 0:
             log('loaded', total, 'of', len(rows))
-    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_finish', data=json.dumps({'token': TOKEN, 'run_id': run_id, 'min_rows': max(1000, len(rows) // 2)}).encode(),
-                                 method='POST', headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        notice('finished:', r.read().decode())
+    removed = 0
+    for _ in range(200):   # stale places go 20,000 at a time, so each call stays under the database's time limit
+        req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_finish', data=json.dumps({'token': TOKEN, 'run_id': run_id, 'min_rows': max(1000, len(rows) // 2)}).encode(),
+                                     method='POST', headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            res = json.loads(r.read())
+        removed += res.get('removed', 0)
+        if not res.get('removed'):
+            break
+    notice('finished: loaded', total, 'removed', removed, res)
 
 
 if __name__ == '__main__':
