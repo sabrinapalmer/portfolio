@@ -1990,13 +1990,12 @@ async function search(which, q, now) {
     list.style.display = 'block';
   }
   let painted = false, showMore = false, catWait = !!cat;
-  if (cat) setTimeout(() => { if (catWait && id === searchId) { catWait = false; paint(); } }, now ? 4000 : 2500);   // category answers get a moment to arrive first
+  if (cat) setTimeout(() => { if (catWait && id === searchId) { catWait = false; paint(); } }, 8000);   // never wait longer than this for the category answers
   function paint() {
     if (id !== searchId) return;
     if (pending > 0 && painted) return;   // keep what is showing until everything is in, so the list does not jump
     if (pending > 0 && !far && !exact.length && !(tt && tt.length) && !(db && db.length)) return;   // the first answer to arrive is shown at once
-    if (catWait && !exact.length) return;   // "coffee": wait for the coffee places near you, not names that happen to contain the word
-    catWait = false;
+    if (catWait) return;   // "coffee": wait for the coffee places near you, not names that happen to contain the word
     if (near === null && close === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
       backup = true; pending++;
       nominatim(`/search?format=jsonv2&addressdetails=1&limit=8&viewbox=${boxAround(ref, 1.5)}&q=${encodeURIComponent(q)}`, ctl.signal)
@@ -2145,7 +2144,7 @@ async function search(which, q, now) {
     nearbyKind(ref, cat).then(found => {
       if (id !== searchId) return;
       exact = found.sort((x, y) => dist(x) - dist(y)).filter((p, i, all) => !all.slice(0, i).some(o => meters([o.lat, o.lon], [p.lat, p.lon]) < 60)).slice(0, 10);
-      pending--; paint(); showPois(exact);
+      catWait = false; pending--; paint(); showPois(exact);
     });
   }, now ? 0 : 350);
   // Addresses and street names: asked as you type, once typing pauses for a moment (these free servers are rate limited)
@@ -2795,6 +2794,13 @@ function geoType(t) {   // Geoapify's maneuver name as Valhalla's maneuver numbe
   if (/^continue|straight/.test(k)) return 8;
   return 0;
 }
+// Degrees the route bends at point i (positive right, negative left), from the heading 40 m before to the heading 40 m after
+function bendAt(c, i) {
+  if (!c[i]) return 0;
+  const walk = dir => { let acc = 0, j = i; while (j + dir >= 0 && j + dir < c.length && acc < 40) { acc += meters(c[j], c[j + dir]); j += dir; } return j; };
+  const a = walk(-1), b = walk(1); if (a === i || b === i) return 0;
+  return ((bearing(c[i], c[b]) - bearing(c[a], c[i]) + 540) % 360) - 180;
+}
 function geoParse(d) {
   return (d.features || []).filter(f => f.geometry && f.properties && f.properties.legs).map(f => {
     const pr = f.properties, lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
@@ -2820,6 +2826,12 @@ function geoParse(d) {
           begin: st.from_index + off, end: st.to_index + off, length: (st.distance || 0) / 1609.34, time: st.time || 0, road: (ins.streets || [])[0] || st.name || '',
           angle: V_ANGLE[ty] || 0, left: ty >= 13 && ty <= 15, kind: stop ? 'stop' : arriving ? 'arrive' : ty === 26 ? 'roundabout' : (ty >= 9 && ty <= 16) ? 'turn' : 'other',
           highway: /motorway|trunk/.test(st.road_class || ''), toll: !!st.toll, rough: /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(st.surface || ''), ferry: !!st.ferry });
+        // A "U-turn" that is really a loop ramp off to the right (as onto MEX 1D at La Misión): the road first bends right,
+        // so say so. Checked against the route's own shape about 40 m either side of the maneuver.
+        if (/^TurnAround/i.test(ins.type || '') && bendAt(coords, st.from_index + off) > 25) {
+          const onto = (ins.streets || [])[0], t = 'Take the ramp on the right' + (onto ? ' onto ' + onto : '') + '.';
+          Object.assign(steps[steps.length - 1], { instruction: t, say: t, short: t, angle: 45, left: false, kind: 'turn' });
+        }
       });
     });
     return { time: pr.time, dist: pr.distance / 1609.34, coords, steps, segs };
