@@ -25,7 +25,7 @@ jobs:
     env:
       # name:west,south,east,north:share. Shares only matter if the regions together exceed MAX_ROWS (the Pro database holds several million)
       REGIONS: 'california:-124.6,32.5,-114.1,42.1:46;baja:-118.6,22.8,-109.3,32.75:10;illinois:-91.6,36.9,-87.0,42.6:17;texas:-106.7,25.8,-93.5,36.6:27'
-      OSM_EXTRACTS: 'https://download.geofabrik.de/north-america/us/california-latest.osm.pbf https://download.geofabrik.de/north-america/mexico-latest.osm.pbf https://download.geofabrik.de/north-america/us/illinois-latest.osm.pbf https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf'
+      OSM_EXTRACTS: 'california=https://download.geofabrik.de/north-america/us/california-latest.osm.pbf;baja=https://download.geofabrik.de/north-america/mexico-latest.osm.pbf;illinois=https://download.geofabrik.de/north-america/us/illinois-latest.osm.pbf;texas=https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf'
       MIN_CONF: '0.6'
       MAX_ROWS: '6000000'
       SUPABASE_URL: 'https://vtjkzkvimsywjjmuhrlg.supabase.co'
