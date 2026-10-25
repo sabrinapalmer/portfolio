@@ -486,7 +486,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div id="geoMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   </div>
   <div class="apponly">
-  <h3>Premium: live traffic</h3>
+  <h3>BrinaMaps Premium: live traffic</h3>
   <p>Routes around jams, arrival times that include traffic, and traffic colours on the map. Everything else is free.</p>
   <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
   <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
@@ -2519,7 +2519,7 @@ function geoParse(d) {
       // With road details, Geoapify splits the leg into road segments and only the segments where a maneuver happens
       // carry an instruction. Each maneuver becomes one step that runs until the next one.
       const raw = leg.steps || [], groups = [];
-      raw.forEach(sg => segs.push({ a: sg.from_index + off, b: sg.to_index + off, dist: sg.distance || 0, cls: sg.road_class || '', surf: sg.surface || '', cc: (sg.admin_area || []).map(cc) }));
+      raw.forEach(sg => segs.push({ a: sg.from_index + off, b: sg.to_index + off, dist: sg.distance || 0, cls: sg.road_class || '', surf: sg.surface || '', cc: (sg.admin_area || []).map(cc), lim: +sg.speed_limit || 0 }));
       raw.forEach(sg => { if (sg.instruction || !groups.length) groups.push({ head: sg, parts: [sg] }); else groups[groups.length - 1].parts.push(sg); });
       groups.forEach(({ head, parts }) => {
         const sum = k => parts.reduce((n, x) => n + (x[k] || 0), 0), dist = sum('distance') || 1, share = f => parts.reduce((n, x) => n + (f(x) ? x.distance || 0 : 0), 0) / dist;
@@ -3072,6 +3072,16 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // Speed limits for the route being driven, from the open router's map matching (one request per route). Limits exist only where OpenStreetMap has them.
 async function loadLimits(rt) {
   if (!prefs.showSpeed || !(prefs.mode === 'auto' || prefs.mode === 'rig')) return;
+  // Geoapify routes carry speed limits in their road details (km/h). The iPhone app uses only these; the community
+  // router below is for the website only.
+  const segs = rt.segs || [];
+  if (segs.some(s => s.lim > 0)) {
+    const lim = new Array(rt.coords.length).fill(0);
+    segs.forEach(s => { if (s.lim > 0 && s.lim < 200) for (let i = s.a; i <= s.b && i < lim.length; i++) lim[i] = s.lim; });
+    if (nav && nav.rt === rt) nav.limits = { pts: rt.coords, lim, at: 0 };
+    return;
+  }
+  if (!FREE_OK) return;
   try {
     const stride = Math.max(1, Math.ceil(rt.coords.length / 3000)), shape = rt.coords.filter((c, i) => i % stride === 0 || i === rt.coords.length - 1).map(c => ({ lat: c[0], lon: c[1] }));
     const r = await fetch(ROUTER + '/trace_attributes', { method: 'POST', body: JSON.stringify({ shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.speed_limit', 'edge.begin_shape_index', 'edge.end_shape_index', 'shape'], action: 'include' } }) });
@@ -3795,10 +3805,12 @@ document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
 document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { prefs[b.dataset.nav] = !prefs[b.dataset.nav]; savePrefs(); syncPrefs(); if (nav && here) refix(); });
 function syncPremium() {
   const C = window.CdvPurchase, S = C && C.store, price = id => { const pr = S && S.get(id) && S.get(id).pricing; return pr ? pr.price : ''; };
-  $('premM').textContent = 'Monthly' + (price(PREMIUM[0]) ? ' ' + price(PREMIUM[0]) : '');
-  $('premY').textContent = 'Yearly' + (price(PREMIUM[1]) ? ' ' + price(PREMIUM[1]) : '');
-  $('premM').style.display = $('premY').style.display = premium.active ? 'none' : '';
-  $('premMsg').textContent = premium.msg || (premium.active && passOk() ? 'Premium is on. Traffic is included in your routes.' : premium.active ? 'Confirming your subscription...' : !premium.ready ? 'Connecting to the App Store...' : '');
+  const pm = price(PREMIUM[0]), py = price(PREMIUM[1]);
+  $('premM').textContent = 'Monthly: ' + pm + ' per month';
+  $('premY').textContent = 'Yearly: ' + py + ' per year';
+  $('premM').style.display = premium.active || !pm ? 'none' : '';
+  $('premY').style.display = premium.active || !py ? 'none' : '';
+  $('premMsg').textContent = premium.msg || (premium.active && passOk() ? 'Premium is on. Traffic is included in your routes.' : premium.active ? 'Confirming your subscription...' : !premium.ready ? 'Connecting to the App Store...' : !(pm && py) ? 'Prices could not be loaded from the App Store. Check your connection and open this screen again.' : '');
   document.querySelectorAll('[data-traffic]').forEach(b => { b.style.display = hasTraffic() ? '' : 'none'; });
 }
 let storeTries = 0;
