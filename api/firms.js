@@ -24,7 +24,9 @@ function parse(csv, keepLow) {   // CSV rows -> [lat, lon, frp, time ms, day (1/
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
-  else if (origin) return json(403, { error: 'origin not allowed' });
+  // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
+  // scripts that find the URL cannot spend the paid service quota
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   const key = process.env.NASA_KEY || process.env.FIRMS_KEY;
   if (!key) return json(503, { error: 'not configured' }, cors);
   const b = (new URL(req.url).searchParams.get('bbox') || '').split(',').map(Number);

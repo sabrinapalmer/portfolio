@@ -10,7 +10,9 @@ const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]
 export async function GET(req) {
   const origin = req.headers.get('origin') || '', cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
-  else if (origin) return new Response('{"error":"origin not allowed"}', { status: 403, headers: { 'Content-Type': 'application/json' } });
+  // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
+  // scripts that find the URL cannot spend the paid service quota
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return new Response('{"error":"origin not allowed"}', { status: 403, headers: { 'Content-Type': 'application/json' } });
   const b = (new URL(req.url).searchParams.get('bbox') || '').split(',').map(Number);
   const bad = () => new Response('{"error":"bad box"}', { status: 400, headers: Object.assign({ 'Content-Type': 'application/json' }, cors) });
   if (b.length !== 4 || b.some(n => !isFinite(n))) return bad();
