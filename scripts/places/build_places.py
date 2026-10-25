@@ -220,6 +220,10 @@ def merge(ov, osm):
     matched = added = 0
     out = list(ov)
     for o in osm:
+        if o['cat'].startswith('place:'):   # towns and neighbourhoods are never folded into a business that shares the name
+            out.append(o)
+            added += 1
+            continue
         ci, cj = cell(o['lat'], o['lon'])
         best = None
         for di in (-1, 0, 1):

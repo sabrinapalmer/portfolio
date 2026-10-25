@@ -716,7 +716,7 @@ async function saveArea() {
   let placesSaved = 0;
   if (pkeys.length <= 40) for (const [x, y] of pkeys) {
     try {
-      const r = await fetch(API + '/places?tile=' + PZ + '/' + x + '/' + y); if (!r.ok) continue;
+      const r = await fetch(API + '/places?v=2&tile=' + PZ + '/' + x + '/' + y); if (!r.ok) continue;
       const buf = await r.arrayBuffer(); bytes += buf.byteLength;
       await offSave('p/' + PZ + '/' + x + '/' + y, buf); placeTiles.delete('p/' + PZ + '/' + x + '/' + y);
       placesSaved += (JSON.parse(new TextDecoder().decode(buf)).rows || []).length;
@@ -1899,7 +1899,7 @@ let dbDownUntil = 0;
 async function ownSearch(q, ref, signal) {
   if (Date.now() < dbDownUntil) return offlinePlaces(q, ref);
   try {
-    const r = await fetch(API + '/places?q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
+    const r = await fetch(API + '/places?v=2&q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
     if (!r.ok) { if (r.status >= 500) dbDownUntil = Date.now() + 120000; return offlinePlaces(q, ref); }
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { if (e.name === 'AbortError') throw e; return offlinePlaces(q, ref); }
@@ -1907,7 +1907,7 @@ async function ownSearch(q, ref, signal) {
 async function ownNear(tags, ref, km) {
   if (Date.now() < dbDownUntil) return offlinePlaces(null, ref, tags);
   try {
-    const r = await fetch(API + '/places?cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
+    const r = await fetch(API + '/places?v=2&cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
     if (!r.ok) return offlinePlaces(null, ref, tags);
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { return offlinePlaces(null, ref, tags); }
