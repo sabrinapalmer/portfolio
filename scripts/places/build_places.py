@@ -269,6 +269,8 @@ def score(p):
 
 
 def upload(rows, run_id):
+    seen = set()   # the map extracts overlap at the border: the same place can come from both
+    rows = [r for r in rows if not (r['id'] in seen or seen.add(r['id']))]
     rows.sort(key=lambda p: -score(p))
     if len(rows) > MAX_ROWS:
         notice('keeping the', MAX_ROWS, 'most confident of', len(rows))
