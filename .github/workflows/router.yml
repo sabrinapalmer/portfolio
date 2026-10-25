@@ -1,0 +1,49 @@
+name: Router data
+# Builds the routing data for BrinaMaps' own route server (Valhalla) from OpenStreetMap: California and all of Mexico.
+# Published as a release the server downloads; runs on the 5th of each month and on demand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 6 5 * *'
+  push:
+    branches: [master]
+    paths: ['.github/workflows/router.yml']
+permissions:
+  contents: write
+concurrency:
+  group: router
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      TILE_URLS: 'https://download.geofabrik.de/north-america/us/california-latest.osm.pbf https://download.geofabrik.de/north-america/mexico-latest.osm.pbf'
+    steps:
+      - name: Make room on the runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          sudo docker image prune -af >/dev/null || true
+          df -h / | tail -1; free -g | head -2
+      - name: Build routing tiles
+        run: |
+          mkdir -p /mnt/vh 2>/dev/null || sudo mkdir -p /mnt/vh; sudo chmod 777 /mnt/vh
+          docker run --rm -e tile_urls="$TILE_URLS" -e serve_tiles=False -e build_admins=True -e build_time_zones=True \
+            -e build_elevation=False -e build_tar=True -e server_threads=4 -v /mnt/vh:/custom_files ghcr.io/valhalla/valhalla-scripted:latest
+          ls -la /mnt/vh; du -sh /mnt/vh/* || true
+      - name: Package
+        run: |
+          cd /mnt/vh
+          sudo tar -cf - valhalla_tiles.tar admins.sqlite timezones.sqlite valhalla.json | zstd -T0 -9 -o /mnt/router.tar.zst
+          cd /mnt && split -b 1900m -d router.tar.zst router.part. && ls -la router.part.*
+          echo "::notice::router data $(du -h router.tar.zst | cut -f1)"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=router-$(date -u +%Y%m%d-%H%M)
+          gh release create "$tag" /mnt/router.part.* --repo "$GITHUB_REPOSITORY" --title "Router data $(date -u +%Y-%m-%d)" \
+            --notes "Valhalla routing tiles for California and Mexico, built from OpenStreetMap (© OpenStreetMap contributors, ODbL). Downloaded by the BrinaMaps route server." --latest=false
+          # keep the two newest builds
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' | grep '^router-' | sort -r | tail -n +3 | while read t; do gh release delete "$t" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; done
+          echo "::notice::published $tag"

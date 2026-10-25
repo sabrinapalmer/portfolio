@@ -614,6 +614,7 @@ const STYLE    = 'https://tiles.openfreemap.org/styles/bright';   // OpenFreeMap
 const GEOCODER = 'https://photon.komoot.io';             // Photon search
 const ROUTER   = 'https://valhalla1.openstreetmap.de';   // Valhalla routing (FOSSGIS)
 const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing (FOSSGIS)
+let ownDownUntil = 0;   // BrinaMaps' own route server (Valhalla, California and Mexico) through the app's server; set aside for a while when it fails
 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
@@ -633,7 +634,7 @@ if (KEYS && KEYS.addListener) {
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
 document.body.classList.toggle('native', NATIVE);
-const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api';   // www: the bare domain redirects, and the app's requests cannot follow a redirect
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api', OWN_ROUTER = API + '/valhalla';   // www: the bare domain redirects, and the app's requests cannot follow a redirect
 const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
@@ -2324,7 +2325,14 @@ const roughTime = (a, b, mode) => meters([a.lat, a.lon], [b.lat, b.lon]) * 1.3 /
 // so a hiccup on the routing server never leaves a place without a time.
 async function travelTimes(src, targets, mode, geoOnly) {   // geoOnly: no community-server fallbacks (search drive times)
   let times = null;
-  if (useGeo() || !FREE_OK) try {
+  if (Date.now() > ownDownUntil) try {   // own route server first (free)
+    const body = { sources: [{ lat: src.lat, lon: src.lon }], targets: targets.map(t => ({ lat: t.lat, lon: t.lon })), costing: COST[mode], units: 'miles' };
+    const r = await fetch(`${OWN_ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`);
+    if (r.status >= 500) ownDownUntil = Date.now() + 600000;
+    const d = r.ok ? await r.json() : {};
+    if (d.sources_to_targets && d.sources_to_targets[0].some(x => x && x.time != null)) times = d.sources_to_targets[0].map(x => x && x.time != null ? x.time : null);
+  } catch (e) {}
+  if (!times && (useGeo() || !FREE_OK)) try {
     const d = await geoFetch('matrix', {}, null, Object.assign(matrixOpts(mode), { sources: [{ location: [src.lon, src.lat] }], targets: targets.map(t => ({ location: [t.lon, t.lat] })) }));
     if (d.sources_to_targets) times = d.sources_to_targets[0].map(x => x && x.time != null ? x.time : null);
   } catch (e) {}
@@ -2593,7 +2601,7 @@ function tripBox() {
   const q = tripPts();
   return [Math.min(...q.map(x => x.lon)), Math.min(...q.map(x => x.lat)), Math.max(...q.map(x => x.lon)), Math.max(...q.map(x => x.lat))];
 }
-async function valhallaRoutes(quiet) {
+async function valhallaRoutes(quiet, base = ROUTER) {
   const veh = { use_highways: prefs.noHwy ? 0 : 1, use_tolls: prefs.noToll ? 0 : 0.5, use_ferry: prefs.noFerry ? 0 : 0.5, exclude_unpaved: !!prefs.noUnpaved, maneuver_penalty: prefs.simple ? 40 : 5,
     service_penalty: prefs.noAlleys ? 120 : 15, country_crossing_penalty: prefs.noBorders ? 3600 : 0, shortest: !!prefs.shortest };
   if (prefs.relaxed) veh.top_speed = 89;   // km/h
@@ -2613,7 +2621,11 @@ async function valhallaRoutes(quiet) {
   const skip = avoid.concat(tempAvoid ? [tempAvoid] : []).filter(a => (a.r || 120) <= 150).slice(0, 20);
   const circle = a => { const r = Math.min(a.r || 120, 150), out = []; for (let k = 0; k <= 10; k++) { const t = k / 10 * 2 * Math.PI; out.push([a.lon + r / 111320 / Math.cos(a.lat * Math.PI / 180) * Math.cos(t), a.lat + r / 111320 * Math.sin(t)]); } return out; };
   if (skip.length) body.exclude_polygons = skip.map(circle);
-  const ask = async () => { const r = await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()]; };
+  // The toll-free way is asked at the same time as the main one when toll booths are near the trip (answers in parallel)
+  const tollKinds = !quiet && (costing === 'auto' || costing === 'truck') && !prefs.noToll;
+  const freeBody = Object.assign({}, body, { alternates: 0, costing_options: { [costing]: Object.assign({}, opt, { use_tolls: 0 }) } });
+  const freeP = tollKinds && await tollsLikely() ? fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`).then(r => r.json()).catch(() => ({})) : null;
+  const ask = async () => { const r = await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()]; };
   let [r, data] = await ask(), stuck = false;
   if (!data.trip && skip.length) { delete body.exclude_polygons; [r, data] = await ask(); stuck = !!data.trip; }   // no way around: route through and say so
   if (!data.trip) { const e = new Error(data.error || data.message || 'No route found.'); e.noRoute = r.status === 400; throw e; }
@@ -2635,7 +2647,7 @@ async function valhallaRoutes(quiet) {
       picked.forEach(h => ex.push({ lat: h.p[0], lon: h.p[1] }));
       body.exclude_locations = ex; body.alternates = 0;
       let d2;
-      try { d2 = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json(); } catch (e) { d2 = {}; }
+      try { d2 = await (await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json(); } catch (e) { d2 = {}; }
       if (!d2.trip) break;   // no way around: keep the last route; the warning comes from zoneNote()
       trips = [d2.trip]; valhallaRoutes.blocked = ex.length;
     }
@@ -2645,8 +2657,7 @@ async function valhallaRoutes(quiet) {
   const tolled = t => t.legs.some(l => l.maneuvers.some(m => m.toll));
   if (!quiet && (costing === 'auto' || costing === 'truck') && !prefs.noToll && trips.every(tolled)) {
     try {
-      const free = Object.assign({}, body, { alternates: 0, costing_options: { [costing]: Object.assign({}, opt, { use_tolls: 0 }) } });
-      const d3 = await (await fetch(`${ROUTER}/route?json=${encodeURIComponent(JSON.stringify(free))}`)).json();
+      const d3 = freeP ? await freeP : await (await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`)).json();
       if (d3.trip && !tolled(d3.trip) && !zoneHits(shapeOf(d3.trip)).length) trips.push(d3.trip);
     } catch (e) {}
   }
@@ -2953,6 +2964,10 @@ async function route(quiet, afterFires) {
       if (ok.length) { const n = found.note; found = ok; found.note = n; } else found = null;
     }
     catch (e) { $('ttMsg').textContent = e.status === 403 || e.status === 401 ? 'TomTom did not accept that key. Using routes without traffic.' : 'Traffic routing failed (' + e.message + '). Using routes without traffic.'; }
+  }
+  if (!found && Date.now() > ownDownUntil) {   // own route server first: fast, and free per route
+    try { found = await valhallaRoutes(quiet, OWN_ROUTER); }
+    catch (e) { found = null; if (!e.noRoute) ownDownUntil = Date.now() + 600000; }   // outside its area (or no way): the next service is asked
   }
   if (!found && geoRouting()) {
     try { found = await geoapifyRoutes(quiet); }
@@ -3394,10 +3409,11 @@ async function loadLimits(rt) {
     if (nav && nav.rt === rt) nav.limits = { pts: rt.coords, lim, at: 0 };
     return;
   }
-  if (!FREE_OK) return;
+  const tracer = Date.now() > ownDownUntil ? OWN_ROUTER : FREE_OK ? ROUTER : null;   // speed limits along the route: own server, else the community one (website)
+  if (!tracer) return;
   try {
     const stride = Math.max(1, Math.ceil(rt.coords.length / 3000)), shape = rt.coords.filter((c, i) => i % stride === 0 || i === rt.coords.length - 1).map(c => ({ lat: c[0], lon: c[1] }));
-    const r = await fetch(ROUTER + '/trace_attributes', { method: 'POST', body: JSON.stringify({ shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.speed_limit', 'edge.begin_shape_index', 'edge.end_shape_index', 'shape'], action: 'include' } }) });
+    const r = await fetch(tracer + '/trace_attributes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.speed_limit', 'edge.begin_shape_index', 'edge.end_shape_index', 'shape'], action: 'include' } }) });
     const d = await r.json();
     if (!d.edges || !d.shape || !nav || nav.rt !== rt) return;
     const pts2 = decodePolyline(d.shape, 6), lim = new Array(pts2.length).fill(0);
