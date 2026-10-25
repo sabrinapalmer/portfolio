@@ -255,6 +255,7 @@
   button.pill svg { width:16px; height:16px; stroke-width:2.8; }
   .stopBtns { display:flex; gap:6px; align-items:center; }
   #why .border { margin-top:6px; font-size:13px; font-weight:600; }
+  #why button.cross { margin:6px 6px 0 0; padding:6px 12px; border-radius:14px; border:1px solid var(--line); background:var(--bg); color:inherit; font-size:13px; }
   #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
   #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
   body.picking #pickBar { display:flex; } body.picking #top, body.picking #nav { visibility:hidden; }
@@ -756,6 +757,8 @@ let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent =
 let places = store('map.places') || { home: null, work: null }, visits = store('map.visits') || {}, settingPlace = null;   // visits: how often you go to each place
 const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
 const tripPts = () => [pts.from, ...pts.stops, pts.to].filter(Boolean);
+// The same points with a border port to pass through (via = { lat, lon, at }: inserted before point number at)
+const viaPts = via => { const q = tripPts(); if (via) q.splice(via.at, 0, { lat: via.lat, lon: via.lon, via: true }); return q; };
 const stopName = i => { const st = pts.stops[i]; return st ? st.name || (st.label || '').split(',')[0] : ''; };
 let tempAvoid = null;   // a point to route around for this trip only
 let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBackup = false;
@@ -2603,7 +2606,7 @@ function tripBox() {
   const q = tripPts();
   return [Math.min(...q.map(x => x.lon)), Math.min(...q.map(x => x.lat)), Math.max(...q.map(x => x.lon)), Math.max(...q.map(x => x.lat))];
 }
-async function valhallaRoutes(quiet, base = ROUTER) {
+async function valhallaRoutes(quiet, base = ROUTER, via = null) {
   const veh = { use_highways: prefs.noHwy ? 0 : 1, use_tolls: prefs.noToll ? 0 : 0.5, use_ferry: prefs.noFerry ? 0 : 0.5, exclude_unpaved: !!prefs.noUnpaved, maneuver_penalty: prefs.simple ? 40 : 5,
     service_penalty: prefs.noAlleys ? 120 : 15, country_crossing_penalty: prefs.noBorders ? 3600 : 0, shortest: !!prefs.shortest };
   if (prefs.relaxed) veh.top_speed = 89;   // km/h
@@ -2613,7 +2616,8 @@ async function valhallaRoutes(quiet, base = ROUTER) {
     : costing === 'bicycle' ? { use_ferry: veh.use_ferry, avoid_bad_surfaces: prefs.noUnpaved ? 1 : 0.25, use_hills: prefs.bikeFlat ? 0.05 : 0.5, use_roads: prefs.bikePaths ? 0.1 : 0.5, shortest: !!prefs.shortest }
     : { use_ferry: veh.use_ferry, shortest: !!prefs.shortest };
   const body = {
-    locations: tripPts().map(q => ({ lat: q.lat, lon: q.lon })),
+    // A port to cross at is a pass-through point (no stop), only matched to roads heading north into the US
+    locations: viaPts(via).map(q => q.via ? { lat: q.lat, lon: q.lon, type: 'through', heading: 0, heading_tolerance: 89 } : { lat: q.lat, lon: q.lon }),
     costing, costing_options: { [costing]: opt }, alternates: quiet || pts.stops.length ? 0 : 2, units: 'miles', language: 'en-US'
   };
   // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
@@ -2816,7 +2820,7 @@ function bendAt(c, i) {
   const a = walk(-1), b = walk(1); if (a === i || b === i) return 0;
   return ((bearing(c[i], c[b]) - bearing(c[a], c[i]) + 540) % 360) - 180;
 }
-function geoParse(d) {
+function geoParse(d, via) {
   return (d.features || []).filter(f => f.geometry && f.properties && f.properties.legs).map(f => {
     const pr = f.properties, lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
     let coords = []; const steps = [], segs = [], cc = i => ((pr.admin_areas || [])[i] || {}).country_code || '';
@@ -2835,7 +2839,9 @@ function geoParse(d) {
           toll: parts.some(x => x.toll), ferry: parts.some(x => x.ferry), road_class: share(x => /motorway|trunk/.test(x.road_class || '')) > 0.5 ? 'motorway' : head.road_class,
           surface: share(x => /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(x.surface || '')) > 0.5 ? 'unpaved' : 'paved', instruction: head.instruction };
         const ins = st.instruction || {}, ty = geoType(ins.type), arriving = ty >= 4 && ty <= 6, stop = arriving && !last;
-        const text = stop ? 'Arrive at stop ' + (li + 1) + (stopName(li) ? ', ' + stopName(li) : '') + '.' : ins.text || 'Continue.';
+        if (stop && via && li === via.at - 1) return;   // reaching the border port is not a stop: no "arrive" step there
+        const si = via && li >= via.at ? li - 1 : li;
+        const text = stop ? 'Arrive at stop ' + (si + 1) + (stopName(si) ? ', ' + stopName(si) : '') + '.' : ins.text || 'Continue.';
         steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
           sign: [ins.exitNumber && 'Exit ' + ins.exitNumber, ins.exitTowards && 'toward ' + [].concat(ins.exitTowards).join(' / ')].filter(Boolean).join(', '),
           begin: st.from_index + off, end: st.to_index + off, length: (st.distance || 0) / 1609.34, time: st.time || 0, road: (ins.streets || [])[0] || st.name || '',
@@ -2885,8 +2891,8 @@ function geoBreaks(t) {   // [{ why, p: [lat, lon] }] for the stretches of a rou
   return out;
 }
 const geoRouting = () => (useGeo() || !FREE_OK) && !(FREE_OK && geoMissing().length);
-async function geoapifyRoutes(quiet) {
-  const where = tripPts().map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
+async function geoapifyRoutes(quiet, via = null) {
+  const where = viaPts(via).map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
   const motor = prefs.mode === 'auto' || prefs.mode === 'rig';
   const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details' + (prefs.noBorders && motor ? ',admin_areas' : ''), units: 'metric', lang: 'en', format: 'geojson' };
   if (motor && prefs.shortest) base.type = 'short'; else if (motor && prefs.simple) base.type = 'less_maneuvers';
@@ -2897,7 +2903,7 @@ async function geoapifyRoutes(quiet) {
   const ask = async (extra, more) => {
     const p = Object.assign({}, base, extra), all = rules.concat(more || []);
     if (all.length) p.avoid = all.join('|');
-    try { return geoParse(await geoFetch('routing', p)); }
+    try { return geoParse(await geoFetch('routing', p), via); }
     catch (e) { if (e.status === 400) return []; throw e; }   // 400: no route with these rules
   };
   // The alternatives are asked at the same time as the main route, not one after another, so the wait is the slowest
@@ -3004,6 +3010,7 @@ async function route(quiet, afterFires) {
   loadTraffic();
   status(zoneNote(routes[selected]) || found.note || '');
   writeHash();
+  if (!quiet && !fromSaved) quickerCrossing(id).catch(() => {});
   if (fireCheck) fireCheck.then(() => {   // fresh fire data came in after the route was drawn: if the route now runs into a fire, find another way
     if (id !== reqId || nav || !routes.length || !zoneHits(routes[selected].coords).length) return;
     const hit = zoneHits(routes[selected].coords)[0].z;
@@ -3101,6 +3108,7 @@ function titles() {   // a short name for each option, taken from what makes it 
   const used = new Set(), min = k => Math.min.apply(null, routes.map(r => r[k]));
   if (routes.length === 1) return ['Your route'];   // nothing to compare with
   return routes.map(rt => {
+    if (rt.via) { if (rt.time === min('time')) used.add('Fastest'); return 'Via ' + rt.via; }
     const pick = [[rt.time === min('time'), 'Fastest'], [!rt.toll && routes.some(r => r.toll), 'No tolls'], [rt.lefts === min('lefts') && routes.some(r => r.lefts > rt.lefts), 'Fewest left turns'], [rt.turns === min('turns') && routes.some(r => r.turns > rt.turns), 'Fewest turns'], [rt.dist === min('dist'), 'Shortest'],
       [!rt.basic && rt.hwy < 0.3 && routes.some(r => r.hwy >= 1), 'No highway']].find(([ok, name]) => ok && !used.has(name));
     const name = pick ? pick[1] : 'Another way'; used.add(name); return name;
@@ -3261,6 +3269,54 @@ function borderLine(rt) {
   return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.') + also;
 }
 
+// The same trip through another border port: the route passes through the port (heading north, no stop there).
+// Kept only if the router really crossed there and did not turn around at it.
+async function viaPortRoute(rt, portName) {
+  const p = PORTS.find(([n]) => n === portName), b = rt && rt.border; if (!p || !b) return null;
+  const q = tripPts(), near = pt => { let best = Infinity, bi = 0; rt.coords.forEach((c, i) => { const d = meters(c, [pt.lat, pt.lon]); if (d < best) { best = d; bi = i; } }); return bi; };
+  let at = q.findIndex((pt, i) => i > 0 && near(pt) > b.idx); if (at < 1) at = q.length - 1;   // the first trip point after the crossing
+  const via = { lat: p[2], lon: p[3], at };
+  let list = null;
+  if (Date.now() > ownDownUntil) list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
+  if (!list && geoRouting()) list = await geoapifyRoutes(true, via).catch(() => null);
+  const alt = list && list[0]; if (!alt) return null;
+  checkTurns(alt); describe(alt);
+  await Promise.all([checkTolls([alt]).catch(() => {}), checkBorder([alt]).catch(() => {})]);
+  if (!alt.border || alt.border.port !== portName || !alt.border.north) return null;
+  const turnsBack = alt.steps.some(st => Math.abs(st.angle) >= 170 && alt.coords[st.begin] && meters(alt.coords[st.begin], [p[2], p[3]]) < 2000);
+  if (turnsBack || (zoneHits(alt.coords).length && !zoneHits(rt.coords).length)) return null;
+  alt.via = portName;
+  return alt;
+}
+// After the routes are up: if a nearby port's line is at least 10 minutes shorter for your lane, work out the way
+// through it, and put it first when it gets you there sooner with the line counted.
+async function quickerCrossing(id) {
+  const top = routes[0], b = top && top.border;
+  if (!b || !b.north || b.wait == null || !(b.others || []).length) return;
+  const cand = b.others.filter(o => o.minutes <= b.wait - 10 && !routes.some(r => r.border && r.border.port === o.port)).sort((x, y) => x.minutes - y.minutes).slice(0, 2);
+  for (const o of cand) {
+    const alt = await viaPortRoute(top, o.port);
+    if (id !== reqId || nav) return;
+    if (!alt || alt.time >= top.time - 120) continue;   // must save at least 2 minutes door to door
+    const keep = selected === 0;
+    routes = [alt].concat(routes); selected = keep ? 0 : selected + 1;
+    draw(false);
+    status('Quicker through ' + o.port + ' right now: ' + fmtTime(top.time - alt.time) + ' sooner with the border line counted.');
+    return;
+  }
+}
+// "Cross at X instead": the way through a port you pick, shown even if it is slower overall
+async function crossAt(rt, portName) {
+  const id = reqId; status('Finding a way through ' + portName + '...');
+  const alt = await viaPortRoute(rt, portName).catch(() => null);
+  if (id !== reqId) return;
+  if (!alt) { status('Could not find a good way through ' + portName + '.'); return; }
+  routes = routes.filter(r => r.via !== portName).concat([alt]); selected = routes.length - 1;
+  draw(true);
+  const d = alt.time - rt.time;
+  status('Through ' + portName + ': ' + (Math.abs(d) < 60 ? 'about the same time' : fmtTime(Math.abs(d)) + (d < 0 ? ' sooner' : ' longer')) + ' overall, border line counted.');
+}
+
 function draw(fit) {
   if (!routes.length) return;
   map.getSource('routes').setData({ type: 'FeatureCollection', features: routes.map((rt, i) => ({ type: 'Feature', properties: { i, sel: i === selected }, geometry: { type: 'LineString', coordinates: rt.coords.map(c => [c[1], c[0]]) } })) });
@@ -3276,6 +3332,10 @@ function draw(fit) {
   const w = $('why'); w.innerHTML = '';
   const text = why(rt); if (text) w.appendChild(el('div', '', text));
   const bl = borderLine(rt); if (bl) w.appendChild(el('div', 'border', bl));
+  const bd0 = rt.border;   // a button for each nearby port with a shorter line that has no route shown yet
+  if (bd0 && bd0.north && bd0.wait != null && !nav) (bd0.others || []).filter(o => o.minutes < bd0.wait && !routes.some(r => r.border && r.border.port === o.port)).slice(0, 2).forEach(o => {
+    const cb = el('button', 'cross', 'Cross at ' + o.port + ' instead'); cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
+  });
   const flags = el('div', 'flags');
   flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? (rt.lefts ? ', ' + rt.lefts + (rt.lefts === 1 ? ' left turn' : ' left turns') : ', no left turns') : '')));
   if (!rt.basic && rt.hwy >= 0.5) flags.appendChild(el('span', '', fmtDist(rt.hwy) + ' highway'));
