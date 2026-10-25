@@ -150,6 +150,7 @@
   #routes::-webkit-scrollbar { display:none; }
   #routes button { flex:0 0 auto; text-align:left; border-radius:18px; padding:9px 14px; background:var(--bg); border:2px solid var(--line); }
   #routes button.on { background:var(--soft); border-color:var(--accent); }
+  #routes button small.port { display:block; font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; }
   #routes b { display:block; font-size:19px; font-weight:700; }
   #routes span { display:block; font-size:12px; color:var(--muted); font-weight:700; }
   #routes span.tag { color:var(--accent); }
@@ -3223,6 +3224,14 @@ async function checkBorder(list) {
     b.mine = lk; b.laneKey = use || lk; b.lane = LANES[b.laneKey]; b.wait = use ? l.minutes : null; b.status = l ? l.status : ''; b.updated = l ? l.updated : '';
     b.closed = !use && (/closed/i.test(hit.status) || /closed|n\/a/i.test(b.status || ''));
     b.yours = use && use !== lk ? { lane: LANES[lk], wait: open(lk) ? open(lk).minutes : null } : null;
+    // Other crossings within about 60 km, with the shortest line your pass lets you use there, so a quicker port shows
+    const here = PORTS.find(([n]) => n.toLowerCase() === b.port.toLowerCase());
+    b.others = here ? PORTS.filter(([n, , la, lo]) => n !== here[0] && meters([here[2], here[3]], [la, lo]) < 60000).map(([n, c]) => {
+      const rows = ports.filter(p => p.port.toLowerCase().includes(n.toLowerCase()) && (!c || p.crossing.toLowerCase().includes(c)));
+      let best = null;
+      rows.forEach(p => may.forEach(k => { const l = p[k]; if (l && l.minutes != null && !/closed|n\/a/i.test(l.status || '') && (!best || l.minutes < best.minutes)) best = { minutes: l.minutes, lane: LANES[k] }; }));
+      return best ? Object.assign({ port: n }, best) : null;
+    }).filter(Boolean).filter((o, i, all) => all.findIndex(x => x.port === o.port) === i) : [];
     // Route time: the router puts its own fixed guess for the line (often 10 minutes) on the step at the port.
     // Swap that for the wait reported now for your lane, and name your lane in that step.
     const st = rt.steps.filter(x => x.begin <= b.idx + 5 && x.end >= b.idx - 60).map(x => ({ x, extra: (x.time || 0) - (x.length * 1609.34) / 8 })).sort((p, q) => q.extra - p.extra)[0];
@@ -3247,7 +3256,9 @@ function borderLine(rt) {
   if (!b.north) return 'Into Mexico at ' + name + ', ' + when + '.';
   if (b.closed) return name + ': ' + (b.lane || 'your lane') + ' is closed now. ' + when.charAt(0).toUpperCase() + when.slice(1) + '.';
   const other = b.yours ? ' (' + b.yours.lane + (b.yours.wait != null ? ' is ' + fmtTime(b.yours.wait * 60) : ' has no time reported') + '; your pass lets you use the ' + b.lane + ')' : '';
-  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.');
+  const alts = (b.others || []).map(o => o.port + ' ' + (o.minutes ? fmtTime(o.minutes * 60) : 'no wait') + (o.lane !== b.lane ? ' (' + o.lane + ')' : ''));
+  const also = alts.length ? ' Nearby crossings now: ' + alts.join(', ') + '.' : '';
+  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.') + also;
 }
 
 function draw(fit) {
@@ -3257,6 +3268,8 @@ function draw(fit) {
   routes.forEach((r, i) => {
     const b = el('button', i === selected ? 'on' : '');
     b.append(el('span', 'tag', names[i]), el('b', '', fmtTime(r.time)), el('span', '', fmtDist(r.dist) + ' - ' + fmtSpeed(r.mph) + ' avg'));
+    const bd = r.border;   // which border crossing this way uses, and the wait there for your lane
+    if (bd && bd.north) b.appendChild(el('small', 'port', bd.port + (bd.closed ? ': lane closed' : bd.wait != null ? ' \u00b7 ' + (bd.lane || 'Regular') + ' ' + (bd.wait ? fmtTime(bd.wait * 60) : 'no wait') : '')));
     b.onclick = () => { selected = i; draw(true); };
     box.appendChild(b);
   });
