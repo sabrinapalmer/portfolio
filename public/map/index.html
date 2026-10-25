@@ -1821,9 +1821,13 @@ async function search(which, q, now) {
   // Business names: TomTom's place list answers in about a third of a second and knows places the open map data lacks,
   // so it is asked alongside the main search and whichever answers first is shown
   let tt = null;
+  // Asked only once typing pauses: each TomTom search is a paid request and the free allowance is small
   if (!isAddress && !cat && q.length >= 3 && words.length) {
     pending++;
-    poiSearch(q, ref, ctl.signal).then(o => { if (id !== searchId) return; tt = o; pending--; paint(); });
+    setTimeout(() => {
+      if (id !== searchId || ctl.signal.aborted) return;
+      poiSearch(q, ref, ctl.signal).then(o => { if (id !== searchId) return; tt = o; pending--; paint(); });
+    }, now ? 0 : 450);
   }
   if (geo) { near = []; close = []; pending -= 2; }   // Geoapify: one search ranked around you does it all (each request costs time and a credit)
   else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
