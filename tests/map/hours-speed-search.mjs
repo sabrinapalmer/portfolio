@@ -13,6 +13,9 @@ const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFacto
 const p = await ctx.newPage();
 p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
 await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
   if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
   if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
@@ -35,7 +38,7 @@ console.log('4', await T('Mo-Su 07:00-14:00','2026-10-11T15:00'));
 console.log('5', await T('08:00-12:00,13:00-18:00','2026-10-11T12:30'));
 console.log('6', await T('Apr-Oct: Mo-Su 10:00-18:00','2026-10-11T12:30'), await T('24/7','2026-10-11T12:30'));
 globalThis.HOURS='Mo-Su 00:00-00:01';
-await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(2600);
+await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head):not(.cats)'); await p.waitForTimeout(2600);
 console.log('dest hours:', await p.textContent('#destHours'), '| warn', await p.$eval('#destHours',e=>e.classList.contains('warn')), '|', reqs.filter(x=>/hours/.test(x)));
 await p.click('#go'); await p.waitForTimeout(1200);
 await p.evaluate(()=>onFix({coords:{latitude:nav.rt.coords[1][0],longitude:nav.rt.coords[1][1],accuracy:5,speed:20,heading:0}})); await p.waitForTimeout(400);

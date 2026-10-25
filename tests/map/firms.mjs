@@ -14,6 +14,9 @@ p.on('pageerror', e => errs.push('PAGE ' + e));
 const asked = [];
 await p.route('**/*', async r => {
   const u = r.request().url(), J = o => r.fulfill({ contentType: 'application/json', body: JSON.stringify(o) });
+  if(/\/api\/fires\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if (u.startsWith('http://localhost/map')) return r.fulfill({ contentType: 'text/html', body: html });
   if (u.includes('maplibre-gl.min.js')) return r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.js') });
   if (u.includes('maplibre-gl.min.css')) return r.fulfill({ contentType: 'text/css', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.css') });
@@ -31,7 +34,7 @@ const res = await p.evaluate(async () => {
 });
 console.log(JSON.stringify(res, null, 1));
 check(JSON.stringify(res.us) === JSON.stringify([true, false, true, false, false, true]), 'US / Mexico split along the border (San Diego, Tijuana, El Paso, Juarez, Matamoros, Minnesota)');
-check(asked.length === 1 && asked[0] === '-118,31,-116,34', 'one request, box snapped to whole degrees');
+check(JSON.stringify(asked.slice().sort()) === JSON.stringify(['-118,30,-116,32', '-118,32,-116,34']), 'one request per 2-degree square the trip touches (shared at the edge)');
 check(res.fires.length === 1 && res.fires[0].sat && res.fires[0].active && Math.abs(res.fires[0].c[0] - 32.094) < 0.01, 'the Mexican group is one active fire; the lone spot and the US spots are left out');
 check(/4 heat spots/.test(res.fires[0].info) && /farm burn/.test(res.fires[0].info), 'the info says how many spots and that it is not confirmed');
 check(/1 active fire/.test(res.msg), 'settings line counts it');

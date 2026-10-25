@@ -11,6 +11,9 @@ const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFacto
 const p = await ctx.newPage();
 p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
 await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
   if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
   if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
@@ -21,7 +24,7 @@ await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({conte
   if(u.includes('photon')&&u.includes('/reverse')) return J({features: u.includes('osm_tag=amenity')?Array.from({length:35},(_,i)=>F(100+i,'X'+i,41.95,-87.65)):[]});
   if(u.includes('photon')) { const q=new URL(u).searchParams.get('q'); return J({features: u.includes('bbox=')?[q.startsWith('cof')?F(2,'Coffee Place',41.95,-87.65):q.startsWith('piz')?F(3,'Pizza Place',41.93,-87.66):F(4,'Old House',41.80,-87.60)]:[]}); }
   return r.abort();});
-const pick=async(sel,text)=>{await p.fill(sel,text);await p.waitForTimeout(450);await p.click('#suggest li:not(.head)');await p.waitForTimeout(900)};
+const pick=async(sel,text)=>{await p.fill(sel,text);await p.waitForSelector('#suggest li:not(.head):not(.cats)',{timeout:10000}).catch(()=>{});await p.waitForTimeout(450);await p.click('#suggest li:not(.head):not(.cats)');await p.waitForTimeout(900)};
 await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
 console.log('idle: from row visible?', await p.isVisible('#fromRow'), '| plan button on:', await p.getAttribute('#plan','title'));
 await pick('#to','coffee');

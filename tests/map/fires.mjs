@@ -13,11 +13,19 @@ const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFacto
 const p = await ctx.newPage();
 p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
 await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
   if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
   if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
   if(u.includes('openfreemap')) return J({version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#eee'}}]});
   if(u.includes('trace_attributes')) return r.abort();
+  if(/\/api\/fires/.test(u)) { reqs.push('fires perimeters'); reqs.push('fires points'); if(globalThis.FIRE_DOWN) return r.fulfill({status:502,body:'{}'});
+    return J({at:Date.now(),per:{type:'FeatureCollection',features:[{type:'Feature',properties:{poly_IncidentName:'Test',attr_IncidentSize:4200,attr_PercentContained:15,poly_DateCurrent:Date.now()-3*3600e3},geometry:{type:'Polygon',coordinates:[[[-87.685,41.915],[-87.675,41.915],[-87.675,41.925],[-87.685,41.925],[-87.685,41.915]]]}},
+      {type:'Feature',properties:{poly_IncidentName:'Old',attr_IncidentSize:900,attr_PercentContained:100,poly_DateCurrent:Date.now()-9*86400e3},geometry:{type:'Polygon',coordinates:[[[-87.70,41.95],[-87.69,41.95],[-87.69,41.96],[-87.70,41.96],[-87.70,41.95]]]}}]},loc:{type:'FeatureCollection',features:[{type:'Feature',properties:{IncidentName:'Test',IncidentSize:4200,PercentContained:15,FireDiscoveryDateTime:Date.now()-86400e3},geometry:{type:'Point',coordinates:[-87.68,41.92]}},
+      {type:'Feature',properties:{IncidentName:'New Start',IncidentSize:2,PercentContained:0,FireDiscoveryDateTime:Date.now()-3600e3},geometry:{type:'Point',coordinates:[-88.2,42.3]}},
+      {type:'Feature',properties:{IncidentName:'WILDFIRE TRAINING',IncidentSize:0.01,FireDiscoveryDateTime:Date.now()-3600e3},geometry:{type:'Point',coordinates:[-87.66,41.90]}}]}}); }
   if(u.includes('arcgis.com')) { reqs.push('fires '+(u.includes('Perimeters')?'perimeters':'points')); const d=globalThis.FIRE_DOWN; if(d) return r.fulfill({status:500,body:'x'});
     if(u.includes('Perimeters')) return J({type:'FeatureCollection',features:[{type:'Feature',properties:{poly_IncidentName:'Test',attr_IncidentSize:4200,attr_PercentContained:15,poly_DateCurrent:Date.now()-3*3600e3},geometry:{type:'Polygon',coordinates:[[[-87.685,41.915],[-87.675,41.915],[-87.675,41.925],[-87.685,41.925],[-87.685,41.915]]]}},
       {type:'Feature',properties:{poly_IncidentName:'Old',attr_IncidentSize:900,attr_PercentContained:100,poly_DateCurrent:Date.now()-9*86400e3},geometry:{type:'Polygon',coordinates:[[[-87.70,41.95],[-87.69,41.95],[-87.69,41.96],[-87.70,41.96],[-87.70,41.95]]]}}]});
@@ -34,7 +42,7 @@ await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({conte
   return r.abort();});
 const inFire=()=>p.evaluate(()=>zoneHits(routes[selected].coords).length);
 await p.goto('http://localhost/map'); await p.waitForTimeout(1800);
-await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(2000);
+await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head):not(.cats)'); await p.waitForTimeout(2000);
 console.log('requests:', reqs.join(' | '));
 console.log('fires loaded:', await p.evaluate(()=>fires.map(f=>f.name+(f.active?' active':' inactive')+(f.rings?' outline':' circle')).join(', ')));
 console.log('route avoids fire:', (await inFire())===0, '| status:', JSON.stringify(await p.textContent('#status')), '| drawn zones', await p.evaluate(()=>map.querySourceFeatures? map.getSource('zones')._data.features.length : -1));
