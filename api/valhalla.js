@@ -8,7 +8,7 @@ export const config = { runtime: 'edge' };
 
 const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
-const EPS = { route: 3600, sources_to_targets: 3600, trace_attributes: 0, locate: 3600 };
+const EPS = { route: 3600, sources_to_targets: 3600, trace_attributes: 0, locate: 3600, status: 60 };
 const json = (status, obj, headers) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, headers) });
 
 export default async function handler(req) {
@@ -17,8 +17,12 @@ export default async function handler(req) {
   else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' }, cors) });
   const base = process.env.VALHALLA_URL, key = process.env.VALHALLA_KEY;
-  if (!base || !key) return json(503, { error: 'route server not set up' }, Object.assign({ 'Cache-Control': 'public, s-maxage=300' }, cors));
   const u = new URL(req.url), ep = u.searchParams.get('ep');
+  if (!base || !key) return json(ep === 'status' ? 200 : 503, { ok: false, error: 'route server not set up' }, Object.assign({ 'Cache-Control': 'public, s-maxage=300' }, cors));
+  if (ep === 'status') {   // the app asks this once at start, so routes never wait on a server that is down
+    let ok = false; try { const r = await fetch(base.replace(/\/$/, '') + '/status', { headers: { 'X-Router-Key': key }, signal: AbortSignal.timeout(4000) }); ok = r.ok; } catch (e) {}
+    return json(200, { ok }, Object.assign({ 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' }, cors));
+  }
   if (!(ep in EPS)) return json(404, { error: 'unknown endpoint' }, cors);
   let target = base.replace(/\/$/, '') + '/' + ep, opt = { headers: { 'X-Router-Key': key }, signal: AbortSignal.timeout(15000) };
   if (req.method === 'POST') {
