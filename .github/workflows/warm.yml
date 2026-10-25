@@ -1,0 +1,27 @@
+name: Warm hazard data
+# Every hour, asks the app's server for wildfire, satellite heat and border-wait data across the covered area, so the
+# edge always holds a fresh copy and no one planning a route waits on the fire or border services.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 * * * *'
+permissions:
+  contents: read
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fire squares (2 degrees) over California and the Baja peninsula
+        run: |
+          ok=0; bad=0
+          for x in $(seq -126 2 -110); do for y in $(seq 22 2 40); do
+            for ep in fires firms; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -H 'Referer: https://www.sabrinapalmer.com/map' \
+                "https://www.sabrinapalmer.com/api/$ep?bbox=$x,$y,$((x+2)),$((y+2))")
+              if [ "$code" = 200 ]; then ok=$((ok+1)); else bad=$((bad+1)); fi
+            done
+          done; done
+          echo "::notice::warmed $ok squares, $bad failed"
+      - name: Border waits
+        run: curl -s -o /dev/null -w 'border %{http_code}\n' --max-time 30 -H 'Referer: https://www.sabrinapalmer.com/map' https://www.sabrinapalmer.com/api/border
