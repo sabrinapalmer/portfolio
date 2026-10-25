@@ -342,7 +342,14 @@ def main():
     if DRY:
         notice('dry run, nothing loaded:', summary)
         return
-    notice('finished: loaded', loaded, rpc('import_finish', {'token': TOKEN, 'run_id': run_id}))
+    for attempt in range(5):   # starts the index build in the background; retried so a slow moment does not leave search unindexed
+        try:
+            notice('finished: loaded', loaded, rpc('import_finish', {'token': TOKEN, 'run_id': run_id}))
+            return
+        except Exception as e:
+            log('finish failed:', e, '- retrying')
+            time.sleep(15 * (attempt + 1))
+    sys.exit('loaded, but the index build could not be started')
 
 
 if __name__ == '__main__':
