@@ -15,6 +15,9 @@ on:
     paths: ['scripts/places/**', '.github/workflows/places.yml']
 permissions:
   contents: read
+concurrency:
+  group: places
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
