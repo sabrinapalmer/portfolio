@@ -21,7 +21,7 @@
 <body>
 <main>
 <h1>Privacy policy</h1>
-<p class="muted">BrinaMaps by Sabrina Palmer &middot; Effective October 23, 2026</p>
+<p class="muted">BrinaMaps by Sabrina Palmer &middot; Effective October 24, 2026</p>
 
 <p>BrinaMaps has no accounts, no ads and no tracking. It does not sell or share information about you. Your saved places, recent searches and settings stay on your device.</p>
 
@@ -29,22 +29,28 @@
 <p>Some things need a server to answer. When you use them, only what that feature needs is sent:</p>
 <table>
   <tr><th>When you</th><th>What is sent</th><th>To</th></tr>
-  <tr><td>Search for a place or address</td><td>What you type and your approximate location, so nearby results come first</td><td>Geoapify, through the app's server at sabrinapalmer.com. When Geoapify has no matching business, the same search text and a rough location (about 1 km) go to TomTom, also through the app's server</td></tr>
+  <tr><td>Search for a place or address</td><td>What you type and your approximate location, so nearby results come first</td><td>Geoapify, through the app's server at sabrinapalmer.com. When Geoapify has no matching business, the same search text and a rough location (about 1 km) go to TomTom, also through the app's server. When what you type looks like a US street address, it is also sent to the US Census Bureau's address lookup, without your location</td></tr>
   <tr><td>Cross the US&ndash;Mexico border on a route</td><td>Nothing about you: the app downloads the public wait-time list</td><td>US Customs and Border Protection, through the app's server</td></tr>
-  <tr><td>Get directions, or use "meet in the middle"</td><td>The start, stops and destination of the trip, and your route settings</td><td>Geoapify, through the app's server</td></tr>
+  <tr><td>Get directions, or use "meet in the middle"</td><td>The start, stops and destination of the trip, and your route settings</td><td>Geoapify, through the app's server. Speed limits and road details come back with the route</td></tr>
+  <tr><td>Have a route with toll roads</td><td>Nothing about you: the app asks for toll booth locations in the rough area of the route (squares about 25 km across)</td><td>The app's server, which reads them from public OpenStreetMap data (Overpass)</td></tr>
   <tr><td>Use Premium traffic</td><td>The start, stops and destination of the trip, and the map area on screen for traffic colours</td><td>TomTom, through the app's server</td></tr>
-  <tr><td>Have wildfire avoidance on</td><td>The rough area of your trip</td><td>The US National Interagency Fire Center's public data service, and NASA's fire satellite service (FIRMS) through the app's server</td></tr>
+  <tr><td>Have wildfire avoidance on</td><td>The rough area of your trip</td><td>The US National Interagency Fire Center's public fire data service (hosted by Esri ArcGIS), and NASA's fire satellite service (FIRMS) through the app's server</td></tr>
   <tr><td>Hit a problem in the app (a script error, or a search or route that fails)</td><td>A short description of the error, the app version and the iPhone or browser version. No location, search text or anything about you</td><td>The app's server log</td></tr>
   <tr><td>Look at the map</td><td>Which map tiles to load (the area on screen)</td><td>OpenFreeMap</td></tr>
+  <tr><td>Pick a font other than System in settings</td><td>A request for that font file</td><td>Google Fonts</td></tr>
 </table>
-<p>The app's server passes these requests on and returns the answers. It does not store them, and it does not keep a record of who asked. Like any web server, the hosting provider (Vercel) may keep short-lived technical logs, such as IP addresses, for security and reliability.</p>
-<p>The services above have their own privacy policies: <a href="https://www.geoapify.com/privacy-policy/">Geoapify</a>, <a href="https://www.tomtom.com/privacy/">TomTom</a>, <a href="https://vercel.com/legal/privacy-policy">Vercel</a>, <a href="https://openfreemap.org/">OpenFreeMap</a>.</p>
+<p>The app's server passes these requests on and returns the answers. It does not store them, and it does not keep a record of who asked. Like any web server, the hosting provider (Vercel) may keep short-lived technical logs, such as IP addresses, for security and reliability. Any service the app talks to directly (OpenFreeMap, Google Fonts, the US Census Bureau and the fire data service) can see your device's IP address, as with any website.</p>
+<p>On the website version at sabrinapalmer.com/map only, search and directions can also fall back to free community OpenStreetMap services (Photon, Nominatim and the FOSSGIS routing servers) when the main service is busy. The iPhone app does not use them.</p>
+<p>The services above have their own privacy policies: <a href="https://www.geoapify.com/privacy-policy/">Geoapify</a>, <a href="https://www.tomtom.com/privacy/">TomTom</a>, <a href="https://vercel.com/legal/privacy-policy">Vercel</a>, <a href="https://openfreemap.org/">OpenFreeMap</a>, <a href="https://policies.google.com/privacy">Google</a>, <a href="https://www.census.gov/about/policies/privacy.html">US Census Bureau</a>, <a href="https://www.esri.com/en-us/privacy/overview">Esri</a>.</p>
 
 <h2>Location</h2>
 <p>The app uses your location to show where you are, rank search results and give directions. While directions are running, it keeps using your location with the screen locked so it can keep guiding you; iOS shows a location indicator while this happens. Your location history is not stored or uploaded. You can turn location off in your iPhone's Settings at any time.</p>
 
 <h2>Purchases</h2>
 <p>Premium is bought through the App Store, and Apple handles payment. To switch traffic on, the app sends Apple's signed record of the subscription (which product, when it renews, and an anonymous purchase number Apple assigns) to the app's server, which checks it and replies with a pass kept on your device. The server does not store the record, and it never sees your name, Apple ID or payment details. Manage or cancel Premium in your iPhone's Settings under your name, then Subscriptions.</p>
+
+<h2>Your data and deleting it</h2>
+<p>There is no account, so there is nothing to delete on a server. Saved places, recent searches, settings and offline maps are stored only in the app on your iPhone. Deleting the app removes all of it. Recent searches can also be cleared in the app.</p>
 
 <h2>Children</h2>
 <p>The app is not directed at children under 13 and does not knowingly collect information from them.</p>
