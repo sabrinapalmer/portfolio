@@ -1612,7 +1612,7 @@ $('searchScrim').addEventListener('pointerdown', e => { e.preventDefault(); exit
 
 // A small picture for what a place is (street, city, cafe, park...), from its kind word
 const KIND_ICON = [[/^street$|road|highway/i, 'road'], [/^(city|town|village|county|state|country|place)$/i, 'city'], [/neighbourhood|postcode/i, 'area'], [/^(address|building|house)$/i, 'home'],
-  [/cafe|coffee/i, 'cup'], [/restaurant|fast food|food|bar$|pub|ice cream|bakery|brewery|winery|club/i, 'food'], [/gas|fuel|charging/i, 'fuel'],
+  [/caf[eé]|coffee|tea house/i, 'cup'], [/restaurant|fast food|food|bar$|pub|ice cream|bakery|brewery|winery|club/i, 'food'], [/gas|fuel|charging/i, 'fuel'],
   [/park|playground|garden|campground|viewpoint|beach|peak|nature|golf/i, 'tree'], [/hotel|motel|guest|hostel|lodging/i, 'bed'], [/hospital|clinic|pharmacy|dentist|doctor|vet/i, 'health'],
   [/parking/i, 'parking'], [/bank|atm/i, 'money'], [/school|college|university|library|kindergarten/i, 'school'], [/airport/i, 'plane'], [/station|bus/i, 'bus'],
   [/museum|attraction|stadium|theatre|cinema|worship|town hall/i, 'landmark'], [/water|bay|ocean|sea|lake|river|marina/i, 'water'],
@@ -1876,7 +1876,12 @@ async function search(which, q, now) {
     const items = [], byDist = (x, y) => dist(x) - dist(y);
     const low = x => String(x || '').toLowerCase();
     const same = (o, p) => { const d = meters([o.lat, o.lon], [p.lat, p.lon]); return d < 60 || (d < 300 && (low(p.main).startsWith(low(o.main)) || low(o.main).startsWith(low(p.main)))); };   // "Walmart Pharmacy" inside the Walmart
-    const add = arr => (arr || []).forEach(p => { if (!items.some(o => same(o, p))) items.push(p); });
+    // The same place found twice keeps the first copy, filled in with what only the other copy knows (hours, type, phone)
+    const add = arr => (arr || []).forEach(p => {
+      const o = items.find(o2 => same(o2, p));
+      if (!o) { items.push(p); return; }
+      ['kind', 'hours', 'ranges', 'phone', 'url', 'pid'].forEach(k => { if ((o[k] == null || o[k] === '' || (Array.isArray(o[k]) && !o[k].length)) && p[k] != null && p[k] !== '') o[k] = p[k]; });
+    });
     const exactNear = exact.filter(p => dist(p) <= NEARBY).sort(byDist);
     // Street addresses: the exact match leads. Names (a store, a chain): everything near you in one list, closest first,
     // so a Walmart 5 km away comes before one 30 km away across a border, whichever server found it.
