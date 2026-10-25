@@ -89,6 +89,14 @@
   #suggest li.more { justify-content:flex-end; padding:2px 6px; cursor:default; } #suggest li.more:active { background:none; } #suggest li.more button { font-size:12px; color:var(--muted); padding:4px 6px; }
   #suggest li.cats button { flex:none; padding:7px 12px; border-radius:999px; background:var(--soft); color:var(--ink, inherit); font-size:13px; font-weight:600; border:0; }
   #suggest small { display:block; color:var(--muted); font-weight:500; }
+  #suggest li .tx, #meetSuggest li .tx { flex:1; min-width:0; }
+  #suggest small b { font-weight:600; } #suggest small b.ok, #destHours.ok { color:#178a4a; } #suggest small b.no { color:#c0392b; }
+  .ic { flex:0 0 34px; width:34px; height:34px; border-radius:50%; background:var(--soft); color:var(--accent); display:inline-flex; align-items:center; justify-content:center; }
+  .ic svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #destMeta { display:flex; align-items:center; gap:8px; padding:4px 16px 6px; font-size:13px; color:var(--muted); } #destMeta:empty { display:none; } #destMeta .ic { flex-basis:26px; width:26px; height:26px; } #destMeta .ic svg { width:14px; height:14px; }
+  #destDesc { margin:0 0 8px; padding:0 16px; font-size:13px; line-height:1.45; } #destDesc:empty { display:none; }
+  #destLinks { display:flex; gap:8px; padding:0 16px 8px; flex-wrap:wrap; } #destLinks:empty { display:none; }
+  #destLinks a { padding:7px 14px; border-radius:999px; background:var(--soft); color:var(--ink, inherit); font-size:13px; font-weight:600; text-decoration:none; }
   #suggest em { flex:0 0 auto; font-style:normal; font-size:12px; color:var(--muted); }
   #suggest .head { font-size:12px; color:var(--muted); padding:6px 12px 2px; cursor:default; text-transform:uppercase; letter-spacing:.05em; }
   #status { font-size:13px; color:var(--muted); padding:0 8px; margin-top:6px; }
@@ -376,7 +384,10 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
     <button id="save" class="round ghost" title="Save this place" aria-label="Save this place"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.600-7 10-7 10z"/></svg></button>
     <button id="clear" class="round ghost" title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
+  <div id="destMeta"></div>
   <div id="destHours"></div>
+  <p id="destDesc"></p>
+  <div id="destLinks"></div>
   <div id="routeRow"><div id="routes"></div><button id="go" class="go">Start</button></div>
   <div id="why"></div>
   <div id="timing">
@@ -762,7 +773,7 @@ function labelOf(p) {
   const main = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || p.city || 'Unnamed place';
   const street = p.name && p.street ? [p.housenumber, p.street].filter(Boolean).join(' ') : null;
   const sub = [street, p.city !== main ? p.city : null, p.state, p.country !== 'United States' ? p.country : null].filter(Boolean).join(', ');
-  return { main, sub, osm: p.osm_type && p.osm_id ? String(p.osm_type)[0].toUpperCase() + p.osm_id : '', hours: p.hours };
+  return { main, sub, osm: p.osm_type && p.osm_id ? String(p.osm_type)[0].toUpperCase() + p.osm_id : '', hours: p.hours, pid: p.pid };
 }
 function decodePolyline(str, precision) {
   let i = 0, lat = 0, lng = 0; const out = [], f = Math.pow(10, precision || 6);
@@ -1316,12 +1327,29 @@ function openState(spec, when) {   // { open, until (Date) } or { open: false, n
   }
   return { open: false, next: next < Infinity ? at(next) : null };
 }
-function hoursText(spec, arrive) {   // one line for the place card; arrive is when you would get there
-  const now = new Date(), st = openState(spec, now), clock = t => t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
-  if (!st) return { text: 'Hours: ' + spec, warn: false };
+// TomTom gives opening times as dated ranges for the next seven days ("2026-10-25T09:00"), in the place's local time
+function rangeState(rs, when) {
+  const t = when.getTime(), R = rs.map(([a, b]) => [new Date(a).getTime(), new Date(b).getTime()]).filter(([a, b]) => a && b);
+  if (!R.length) return null;
+  for (const [a, b] of R) if (t >= a && t < b) return b - a >= 86400000 * 6.9 ? { open: true, always: true } : { open: true, until: new Date(b) };
+  const nx = R.filter(([a]) => a > t).sort((x, y) => x[0] - y[0])[0];
+  return { open: false, next: nx ? new Date(nx[0]) : null };
+}
+const stateOf = (p, when) => p && p.hours ? openState(p.hours, when) : p && p.ranges && p.ranges.length ? rangeState(p.ranges, when) : null;
+const clockOf = t => t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+function dayOf(t) { const now = new Date(); return t.toDateString() === now.toDateString() ? '' : new Date(now.getTime() + 86400000).toDateString() === t.toDateString() ? ' tomorrow' : ' ' + t.toLocaleDateString([], { weekday: 'short' }); }
+function hoursShort(st) {   // for a search result: "Open until 9 PM", "Closed, opens 7 AM"
+  if (!st) return null;
+  if (st.always) return { text: 'Open 24 hours', ok: true };
+  if (st.open) return { text: st.until ? 'Open until ' + clockOf(st.until) : 'Open', ok: true };
+  return { text: st.next ? 'Closed, opens ' + clockOf(st.next) + dayOf(st.next) : 'Closed', ok: false };
+}
+function hoursText(p, arrive) {   // one line for the place card; arrive is when you would get there
+  const now = new Date(), st = stateOf(p, now), spec = p.hours, clock = clockOf;
+  if (!st) return spec ? { text: 'Hours: ' + spec, warn: false } : null;
   if (st.always) return { text: 'Open 24 hours', warn: false };
   const day = t => t.toDateString() === now.toDateString() ? '' : new Date(now.getTime() + 86400000).toDateString() === t.toDateString() ? ' tomorrow' : ' ' + t.toLocaleDateString([], { weekday: 'short' });
-  const later = arrive ? openState(spec, arrive) : null;
+  const later = arrive ? stateOf(p, arrive) : null;
   if (st.open) {
     if (later && !later.open) return { text: 'Closes at ' + clock(st.until) + ', before you would arrive', warn: true };
     return { text: 'Open until ' + clock(st.until), warn: false };
@@ -1339,11 +1367,64 @@ async function fetchHours(places) {   // fills in .hours for places that have a 
     return need.some(p => p.hours);
   } catch (e) { return false; }
 }
+// The place card: what the place is, a line about it, and call / website buttons. Details come from Geoapify's place
+// details (one lookup when a place is opened) and, for places with a Wikipedia article, the article's opening lines.
+const YES = v => v === true || /^(yes|wlan|free|designated)$/i.test(String(v || ''));
+function factsOf(raw, pr) {
+  const f = [], fac = pr.facilities || {};
+  const cuisine = String(raw.cuisine || ((pr.catering || {}).cuisine) || '').split(/[;,]/).map(c => c.trim().replace(/_/g, ' ')).filter(Boolean).slice(0, 2).map(c => c[0].toUpperCase() + c.slice(1));
+  f.push(...cuisine);
+  if (YES(raw.takeaway) || fac.takeaway) f.push('Takeout');
+  if (YES(raw.delivery) || fac.delivery) f.push('Delivery');
+  if (YES(raw.outdoor_seating) || fac.outdoor_seating) f.push('Outdoor seating');
+  if (YES(raw.internet_access) || fac.internet_access) f.push('Wi-Fi');
+  if (YES(raw.wheelchair) || fac.wheelchair) f.push('Wheelchair accessible');
+  return f.slice(0, 4).join(' · ');
+}
+async function wikiSummary(tag) {   // "en:Rosarito Beach" -> its first two sentences
+  const m = String(tag || '').match(/^([a-z-]{2,12}):(.+)$/); if (!m) return '';
+  const r = await fetch('https://' + m[1] + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(m[2].trim().replace(/ /g, '_')), { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
+  if (!r.ok) return '';
+  const j = await r.json(); if (j.type === 'disambiguation') return '';
+  const text = String(j.extract || ''), two = (text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text]).slice(0, 2).join('').trim();
+  return two.length > 280 ? two.slice(0, 277).replace(/\s\S*$/, '') + '...' : two;
+}
+async function loadDetails(p) {
+  if (!p || p.det || p.auto) return; p.det = true;
+  try {
+    if (p.pid && (useGeo() || !FREE_OK)) {
+      const d = await geoFetch('details', { id: p.pid, lang: 'en' });
+      const f = (d.features || []).find(x => (x.properties || {}).feature_type === 'details') || (d.features || [])[0];
+      if (f) {
+        const pr = f.properties || {}, raw = (pr.datasource || {}).raw || {}, cat = (pr.categories || []).slice().sort((a, b) => b.length - a.length)[0] || '';
+        if (!p.hours && (pr.opening_hours || raw.opening_hours)) p.hours = pr.opening_hours || raw.opening_hours;
+        p.phone = p.phone || (pr.contact || {}).phone || raw.phone || raw['contact:phone'] || '';
+        p.url = p.url || pr.website || raw.website || raw['contact:website'] || '';
+        if (!p.kind && cat) p.kind = kindOf({ osm_value: String(cat).split('.').pop() });
+        p.extra = factsOf(raw, pr);
+        p.desc = String(raw['description:en'] || raw.description || '').slice(0, 280);
+        p.wiki = raw['wikipedia:en'] ? 'en:' + raw['wikipedia:en'] : raw.wikipedia || (pr.wiki_and_media || {}).wikipedia || '';
+      }
+    }
+    if (!p.desc && p.wiki) p.desc = await wikiSummary(p.wiki);
+  } catch (e) {}
+  if (pts.to === p) { drawHours(); drawInfo(); }
+}
+function drawInfo() {
+  const p = pts.to, meta = $('destMeta'), desc = $('destDesc'), links = $('destLinks');
+  meta.innerHTML = ''; desc.textContent = ''; links.innerHTML = '';
+  if (!p || p.auto) return;
+  if (p.kind || p.extra) meta.append(kindIcon(p.kind), el('span', '', [p.kind, p.extra].filter(Boolean).join(' · ')));
+  desc.textContent = p.desc || '';
+  if (p.phone) { const a = el('a', '', 'Call'); a.href = 'tel:' + String(p.phone).split(/[;,]/)[0].replace(/[^\d+]/g, ''); links.appendChild(a); }
+  if (p.url) { const u = String(p.url).split(/[;\s]/)[0], a = el('a', '', 'Website'); a.href = /^https?:\/\//i.test(u) ? u : 'https://' + u; a.target = '_blank'; a.rel = 'noopener'; links.appendChild(a); }
+  if (typeof layout === 'function' && document.body.classList.contains('dest')) layout();
+}
 function drawHours() {
   const box = $('destHours'), p = pts.to;
-  if (!p || !p.hours) { box.textContent = ''; return; }
-  const rt = routes[selected], h = hoursText(p.hours, rt ? new Date(Date.now() + rt.time * 1000) : null);
-  box.textContent = h.text; box.classList.toggle('warn', h.warn);
+  const rt = routes[selected], h = p ? hoursText(p, rt ? new Date(Date.now() + rt.time * 1000) : null) : null;
+  if (!h) { box.textContent = ''; return; }
+  box.textContent = h.text; box.classList.toggle('warn', h.warn); box.classList.toggle('ok', !h.warn && /^Open/.test(h.text));
 }
 
 // ---------- Geoapify (search, places, routing) ----------
@@ -1355,7 +1436,7 @@ const GEO_CAT = { 'amenity:cafe': 'catering.cafe', 'amenity:restaurant': 'cateri
   'tourism:hotel': 'accommodation.hotel', 'tourism:motel': 'accommodation.motel', 'amenity:parking': 'parking', 'shop:bakery': 'commercial.food_and_drink.bakery', 'amenity:post_office': 'service.post.office', 'amenity:library': 'education.library',
   'amenity:charging_station': 'service.vehicle.charging_station', 'amenity:toilets': 'amenity.toilet', 'shop:doityourself': 'commercial.houseware_and_hardware.doityourself', 'shop:hardware': 'commercial.houseware_and_hardware.hardware_and_tools',
   'shop:greengrocer': 'commercial.food_and_drink.fruit_and_vegetable', 'tourism:camp_site': 'camping.camp_site', 'tourism:caravan_site': 'camping.caravan_site', 'amenity': 'catering,commercial,service' };
-const GEO_EP = { autocomplete: '/v1/geocode/autocomplete', search: '/v1/geocode/search', reverse: '/v1/geocode/reverse', places: '/v2/places', routing: '/v1/routing', matrix: '/v1/routematrix' };
+const GEO_EP = { details: '/v2/place-details', autocomplete: '/v1/geocode/autocomplete', search: '/v1/geocode/search', reverse: '/v1/geocode/reverse', places: '/v2/places', routing: '/v1/routing', matrix: '/v1/routematrix' };
 let geoDownUntil = 0, geoOff = false;   // geoOff: the site's server has no key set up (website only: the free servers are used)
 const useGeo = () => Date.now() > geoDownUntil && (!!prefs.geoKey || !geoOff);
 const geoCache = new Map();
@@ -1382,7 +1463,7 @@ async function geoFetchNet(ep, qs, signal, body) {
 function geoProps(x) {   // a Geoapify feature's properties in the free search server's shape
   const p = x.properties || x, raw = (p.datasource || {}).raw || {}, cat = (p.categories || []).slice().sort((a, b) => b.length - a.length)[0] || p.result_type || '';
   return { name: p.name, housenumber: p.housenumber, street: p.street, city: p.city || p.town || p.village || p.county, state: p.state, country: p.country, countrycode: p.country_code,
-    osm_type: raw.osm_type, osm_id: raw.osm_id, rtype: p.result_type, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours };
+    osm_type: raw.osm_type, osm_id: raw.osm_id, rtype: p.result_type, osm_value: String(cat).split('.').pop(), hours: raw.opening_hours || p.opening_hours, pid: p.place_id };
 }
 const geoPhoton = d => ({ features: (d.features || []).filter(x => x.geometry && x.geometry.type === 'Point').map(x => ({ geometry: x.geometry, properties: geoProps(x) })) });
 const rectOf = (s, w, n, e) => 'rect:' + [Math.min(w, e), Math.min(s, n), Math.max(w, e), Math.max(s, n)].map(v => (+v).toFixed(5)).join(',');
@@ -1411,7 +1492,7 @@ async function geoNomi(path, signal) {   // a Nominatim style path answered by G
     const p = geoProps(x);
     return { lat: String(x.geometry.coordinates[1]), lon: String(x.geometry.coordinates[0]), name: p.name || '', display_name: [p.name, p.street, p.city].filter(Boolean).join(', '),
       address: { house_number: p.housenumber, road: p.street, city: p.city, state: p.state, country: p.country }, osm_type: p.osm_type, osm_id: p.osm_id, type: p.osm_value,
-      extratags: p.hours ? { opening_hours: p.hours } : undefined };
+      extratags: p.hours ? { opening_hours: p.hours } : undefined, geo_pid: p.pid };
   });
   if (path.startsWith('/search')) {
     const p = { text: q.get('q'), lang: 'en', format: 'geojson', limit: q.get('limit') || 5 };
@@ -1452,7 +1533,7 @@ function nominatimFree(path, signal) {   // queued: one request at a time, at le
 function nomiPlace(x) {
   const a = x.address || {}, road = [a.house_number, a.road].filter(Boolean).join(' '), main = x.name || road || (x.display_name || '').split(',')[0];
   return { lat: +x.lat, lon: +x.lon, main, sub: [x.name && road, a.city || a.town || a.village || a.municipality, a.state].filter(Boolean).join(', '), kind: (x.type || '').replace(/_/g, ' '), street: a.road || main,
-    osm: x.osm_type && x.osm_id ? x.osm_type[0].toUpperCase() + x.osm_id : '', hours: x.extratags ? x.extratags.opening_hours || '' : undefined };
+    osm: x.osm_type && x.osm_id ? x.osm_type[0].toUpperCase() + x.osm_id : '', hours: x.extratags ? x.extratags.opening_hours || '' : undefined, pid: x.geo_pid };
 }
 const boxAround = (c, dLat) => { const dLon = dLat / Math.cos(c[0] * Math.PI / 180); return [c[1] - dLon, c[0] + dLat, c[1] + dLon, c[0] - dLat].map(n => n.toFixed(4)).join(','); };
 async function reverseName(lat, lon) {
@@ -1529,9 +1610,35 @@ $('searchScrim').addEventListener('pointerdown', e => { e.preventDefault(); exit
   });
 });
 
-function suggestion(which, main, sub, right, p) {
-  const li = el('li'), text = el('span', '', main);
-  if (sub) text.appendChild(el('small', '', sub));
+// A small picture for what a place is (street, city, cafe, park...), from its kind word
+const KIND_ICON = [[/^street$|road|highway/i, 'road'], [/^(city|town|village|county|state|country|place)$/i, 'city'], [/neighbourhood|postcode/i, 'area'], [/^(address|building|house)$/i, 'home'],
+  [/cafe|coffee/i, 'cup'], [/restaurant|fast food|food|bar$|pub|ice cream|bakery|brewery|winery|club/i, 'food'], [/gas|fuel|charging/i, 'fuel'],
+  [/park|playground|garden|campground|viewpoint|beach|peak|nature|golf/i, 'tree'], [/hotel|motel|guest|hostel|lodging/i, 'bed'], [/hospital|clinic|pharmacy|dentist|doctor|vet/i, 'health'],
+  [/parking/i, 'parking'], [/bank|atm/i, 'money'], [/school|college|university|library|kindergarten/i, 'school'], [/airport/i, 'plane'], [/station|bus/i, 'bus'],
+  [/museum|attraction|stadium|theatre|cinema|worship|town hall/i, 'landmark'], [/water|bay|ocean|sea|lake|river|marina/i, 'water'],
+  [/supermarket|grocery|store|shop|mall|market|business|convenience|salon|gym|spa|car |service/i, 'bag']];
+const KIND_SVG = { road: '<path d="M8 3 5 21M16 3l3 18M12 4v3M12 11v3M12 18v2"/>', city: '<path d="M3 21V9l6-3v15M9 21V4l8 3v14M17 21v-9l4 2v7M2 21h20"/>',
+  area: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/>', home: '<path d="M3 11l9-7 9 7M5 10v10h14V10"/>',
+  cup: '<path d="M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6zM17 10h2a2 2 0 0 1 0 4h-2M8 2v3M12 2v3"/>', food: '<path d="M7 2v20M4 2v6a3 3 0 0 0 6 0V2M17 22V2c-2 2-3 5-3 8h3"/>',
+  fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 8h5M15 10h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3"/>', tree: '<path d="M12 22v-6M12 2l6 9h-3l4 5H5l4-5H6z"/>',
+  bed: '<path d="M3 18V6M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-8v5"/><circle cx="6.5" cy="11" r="1.5"/>', health: '<path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z"/>',
+  parking: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M10 17V7h3a3 3 0 0 1 0 6h-3"/>', money: '<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  school: '<path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5"/>', plane: '<path d="M2 16l20-6-2-2-7 2-5-6-2 1 3 6-5 2-2-1-1 1z"/>', bus: '<rect x="5" y="3" width="14" height="14" rx="2"/><path d="M5 11h14M8 21v-4M16 21v-4"/>',
+  landmark: '<path d="M3 21h18M5 21V10M19 21V10M9 21V10M15 21V10M2 10l10-6 10 6z"/>', water: '<path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+  bag: '<path d="M5 8h14l-1 13H6zM9 8V6a3 3 0 0 1 6 0v2"/>', pin: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>' };
+function iconFor(kind, mine) { const k = mine ? 'heart' : (KIND_ICON.find(([r]) => r.test(kind || '')) || [0, 'pin'])[1]; return '<svg viewBox="0 0 24 24" aria-hidden="true">' + KIND_SVG[k] + '</svg>'; }
+function kindIcon(kind, mine) {
+  const ic = el('span', 'ic'); ic.innerHTML = iconFor(kind, mine);
+  const word = mine ? 'Your place' : kind; if (word) { ic.title = word; ic.setAttribute('role', 'img'); ic.setAttribute('aria-label', word); }
+  return ic;
+}
+// info: { kind, mine, hours: { text, ok } }: an icon for what the place is, and its hours before the address
+function suggestion(which, main, sub, right, p, info) {
+  const li = el('li'), text = el('span', 'tx', main);
+  if (info) li.appendChild(kindIcon(info.kind, info.mine));
+  if (info && info.hours) { const sm = el('small'); sm.appendChild(el('b', info.hours.ok ? 'ok' : 'no', info.hours.text)); if (sub) sm.appendChild(document.createTextNode(' · ' + sub)); text.appendChild(sm); }
+  else if (sub) text.appendChild(el('small', '', sub));
   li.append(text, el('em', '', right || ''));
   li.onclick = () => { listFor(which).style.display = 'none'; if (which !== 'friend') exitSearch(); $(which).blur(); if (which === 'friend') meetPick(p); else setPoint(which, p); };
   return li;
@@ -1694,7 +1801,7 @@ async function poiSearch(q, ref, signal) {   // [{main, sub, lat, lon}] from Tom
   try {
     const r = await fetch(API + '/poi?q=' + encodeURIComponent(q) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
     if (!r.ok) { if (r.status >= 500) poiDownUntil = Date.now() + 600000; return []; }
-    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/^important /i, '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '' }));
+    return ((await r.json()).places || []).map(p => ({ kind: kindOf({ osm_value: (p.kind || '').replace(/^important /i, '').replace(/ /g, '_') }) || 'Place', main: p.name, sub: [p.street, p.city, p.state, p.cc !== 'us' ? p.country : null].filter(Boolean).join(', '), lat: p.lat, lon: p.lon, cc: p.cc, named: true, osm: '', ranges: p.open, phone: p.phone, url: p.url }));
   } catch (e) { return []; }
 }
 async function nominatimLookup(q, ref, signal) {   // addresses, streets and places, biased to the area around you
@@ -1750,7 +1857,7 @@ async function search(which, q, now) {
   const onMap = mapNames(q, ref);   // names printed on the map tiles already loaded: found at once, even ones search servers lack
   if ((own.length || onMap.length) && which !== 'friend') {   // drawn right away; the full list replaces it when it arrives
     list.innerHTML = '';
-    const head = t => list.appendChild(el('li', 'head', t)), row = p2 => list.appendChild(suggestion(which, p2.main, p2.sub, fmtDist(meters(ref, [p2.lat, p2.lon]) / 1609.34), { lat: p2.lat, lon: p2.lon, label: p2.sub ? p2.main + ', ' + p2.sub : p2.main, name: p2.main }));
+    const head = t => list.appendChild(el('li', 'head', t)), row = p2 => list.appendChild(suggestion(which, p2.main, p2.sub, fmtDist(meters(ref, [p2.lat, p2.lon]) / 1609.34), { lat: p2.lat, lon: p2.lon, label: p2.sub ? p2.main + ', ' + p2.sub : p2.main, name: p2.main, kind: p2.kind }, { kind: p2.kind, mine: p2.mine }));
     if (own.length) { head('Your places'); own.forEach(row); }
     if (onMap.length) { head('On the map'); onMap.slice(0, 5).forEach(row); }
     list.style.display = 'block';
@@ -1796,10 +1903,9 @@ async function search(which, q, now) {
     shown.forEach((p, i) => {
       if (cat && exactNear.length && i === exactNear.length) list.appendChild(el('li', 'head', 'Other matches'));
       if (!cat && !split && p.d > NEARBY) { split = true; list.appendChild(el('li', 'head', 'Further away')); }
-      const st = p.hours ? openState(p.hours, new Date()) : null;
+      const st = stateOf(p, new Date());
       const eta = etaOf(p);
-      const li = suggestion(which, p.main, p.kind && p.kind !== p.sub ? p.kind + (p.sub ? ' \u00b7 ' + p.sub : '') : p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34) + (st ? (st.open ? ' \u00b7 Open' : ' \u00b7 Closed') : ''), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours, kind: p.kind });
-      if (st && !st.open) li.classList.add('shut');
+      const li = suggestion(which, p.main, p.sub, (eta != null ? fmtTime(eta) + ' \u00b7 ' : '') + fmtDist(p.d / 1609.34), { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main, osm: p.osm, hours: p.hours, ranges: p.ranges, kind: p.kind, pid: p.pid, phone: p.phone, url: p.url }, { kind: p.kind, mine: p.mine, hours: hoursShort(st) });
       list.appendChild(li);
     });
     list.style.display = shown.length ? 'block' : 'none';
@@ -1893,8 +1999,9 @@ function setPoint(which, p) {
   if (markers[which]) { markers[which].remove(); markers[which] = null; }
   if (!p.auto) mapReady.then(() => { if (pts[which] !== p) return; if (markers[which]) markers[which].remove(); markers[which] = marker('pin ' + which, [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); });
   if (which === 'to') {
-    document.body.classList.add('dest'); remember(p); clearPois(); dropVia(); drawHours();
+    document.body.classList.add('dest'); remember(p); clearPois(); dropVia(); drawHours(); drawInfo();
     if (p.hours === undefined && p.osm) fetchHours([p]).then(() => { if (pts.to === p) drawHours(); });
+    loadDetails(p);
   }
   if (pts.from && pts.to) { route(); return; }
   mapReady.then(() => map.easeTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 14) }));
