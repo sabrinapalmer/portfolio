@@ -34,15 +34,19 @@ jobs:
       - name: Package
         run: |
           cd /mnt/vh
-          sudo tar -cf - valhalla_tiles.tar admins.sqlite timezones.sqlite valhalla.json | zstd -T0 -9 -o /mnt/router.tar.zst
-          cd /mnt && split -b 1900m -d router.tar.zst router.part. && ls -la router.part.*
-          echo "::notice::router data $(du -h router.tar.zst | cut -f1)"
+          echo "::notice::built files: $(ls -1 | tr '\n' ' ')"
+          files=$(ls -1d valhalla_tiles.tar admins.sqlite timezones.sqlite valhalla.json 2>/dev/null | tr '\n' ' ')
+          [ -n "$files" ] && echo "$files" | grep -q valhalla_tiles.tar || { echo "::error::no tile archive was built"; exit 1; }
+          out="$RUNNER_TEMP/out"; mkdir -p "$out"
+          sudo tar -cf - $files | zstd -T0 -9 -o "$out/router.tar.zst"
+          cd "$out" && split -b 1900m -d router.tar.zst router.part. && rm router.tar.zst && ls -la
+          echo "::notice::router data $(du -ch router.part.* | tail -1 | cut -f1) in $(ls router.part.* | wc -l) part(s): $files"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag=router-$(date -u +%Y%m%d-%H%M)
-          gh release create "$tag" /mnt/router.part.* --repo "$GITHUB_REPOSITORY" --title "Router data $(date -u +%Y-%m-%d)" \
+          gh release create "$tag" "$RUNNER_TEMP"/out/router.part.* --repo "$GITHUB_REPOSITORY" --title "Router data $(date -u +%Y-%m-%d)" \
             --notes "Valhalla routing tiles for California and Mexico, built from OpenStreetMap (© OpenStreetMap contributors, ODbL). Downloaded by the BrinaMaps route server." --latest=false
           # keep the two newest builds
           gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' | grep '^router-' | sort -r | tail -n +3 | while read t; do gh release delete "$t" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; done
