@@ -261,8 +261,14 @@ def merge(ov, osm):
     return out
 
 
+CONTROL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')   # invisible control characters (a NUL makes the database refuse the whole batch)
+
+
 def trim(v, n):
-    return v[:n] if isinstance(v, str) else v
+    if isinstance(v, str):
+        v = CONTROL.sub('', v).strip()
+        return v[:n] or None
+    return v
 
 
 EVERYDAY = {'amenity:restaurant', 'amenity:fast_food', 'amenity:cafe', 'amenity:bar', 'amenity:fuel', 'amenity:charging_station', 'shop:supermarket', 'shop:convenience',
