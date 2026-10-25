@@ -12,7 +12,9 @@ const json = (status, obj, headers) => new Response(JSON.stringify(obj), { statu
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
-  else if (origin) return json(403, { error: 'origin not allowed' });
+  // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
+  // scripts that find the URL cannot spend the paid service quota
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   const key = process.env.TOMTOM_KEY;
   if (!key) return json(503, { error: 'not configured' }, cors);
   const u = new URL(req.url), q = (u.searchParams.get('q') || '').trim(), lat = +u.searchParams.get('lat'), lon = +u.searchParams.get('lon');

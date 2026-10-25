@@ -24,7 +24,9 @@ export default async function handler(req) {
   const origin = req.headers.get('origin') || '';
   const cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = origin; cors['Vary'] = 'Origin'; }
-  else if (origin) return json(403, { error: 'origin not allowed' });
+  // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
+  // scripts that find the URL cannot spend the paid service quota
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' }, cors) });
 
   const key = process.env.GEOAPIFY_KEY;
