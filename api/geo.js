@@ -9,7 +9,7 @@ const ENDPOINTS = {
   search: { path: '/v1/geocode/search', cache: 86400 },
   reverse: { path: '/v1/geocode/reverse', cache: 86400 },
   places: { path: '/v2/places', cache: 3600 },
-  details: { path: '/v2/place-details', cache: 86400 },
+  details: { path: '/v2/place-details', cache: 2592000 },   // 30 days: hours and phone numbers rarely change
   routing: { path: '/v1/routing', cache: 0 },
   matrix: { path: '/v1/routematrix', cache: 0, post: true },   // travel times: search results, stops, meet in the middle
 };
