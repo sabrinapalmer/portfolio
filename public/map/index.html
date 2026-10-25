@@ -614,7 +614,7 @@ const STYLE    = 'https://tiles.openfreemap.org/styles/bright';   // OpenFreeMap
 const GEOCODER = 'https://photon.komoot.io';             // Photon search
 const ROUTER   = 'https://valhalla1.openstreetmap.de';   // Valhalla routing (FOSSGIS)
 const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing (FOSSGIS)
-let ownDownUntil = 0;   // BrinaMaps' own route server (Valhalla, California and Mexico) through the app's server; set aside for a while when it fails
+let ownDownUntil = Date.now() + 60000;   // BrinaMaps' own route server (Valhalla, California and Mexico); not used until the start-up check below says it is up
 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
@@ -634,7 +634,8 @@ if (KEYS && KEYS.addListener) {
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
 document.body.classList.toggle('native', NATIVE);
-const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api', OWN_ROUTER = API + '/valhalla';   // www: the bare domain redirects, and the app's requests cannot follow a redirect
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api', OWN_ROUTER = API + '/valhalla';
+fetch(OWN_ROUTER + '/status').then(r => r.json()).then(d => { ownDownUntil = d.ok ? 0 : Date.now() + 1800000; }).catch(() => { ownDownUntil = Date.now() + 600000; });   // www: the bare domain redirects, and the app's requests cannot follow a redirect
 const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
