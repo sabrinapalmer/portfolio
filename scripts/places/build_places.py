@@ -29,6 +29,11 @@ def log(*a):
     print(time.strftime('%H:%M:%S'), *a, flush=True)
 
 
+def notice(*a):   # shown on the run's summary page (and readable through GitHub's API), unlike plain log lines
+    log(*a)
+    print('::notice::' + ' '.join(str(x) for x in a).replace('\n', ' ')[:900], flush=True)
+
+
 def inside(lon, lat):
     return any(w <= lon <= e and s <= lat <= n for w, s, e, n in REGIONS)
 
@@ -144,7 +149,7 @@ def load_overture(release):
         out.append({'id': 'ov:' + d['id'], 'name': d['name'], 'cat': cat, 'kind': kind, 'lat': round(d['lat'], 6), 'lon': round(d['lon'], 6),
                     'addr': d['addr'], 'city': d['city'], 'region': d['region'], 'cc': (d['cc'] or '').lower() or None,
                     'phone': d['phone'], 'website': d['website'], 'brand': d['brand'], 'src': 'overture', 'conf': round(d['conf'] or 0, 3)})
-    log('Overture places kept:', len(out))
+    notice('Overture places kept:', len(out))
     return out
 
 
@@ -202,7 +207,7 @@ def load_osm():
                              'wikidata': t.get('wikidata'), 'wikipedia': ('en:' + t['wikipedia:en']) if t.get('wikipedia:en') else t.get('wikipedia'),
                              'brand': t.get('brand'), 'src': 'osm', 'conf': 0.99 if key == 'place' else 0.8})
                 n += 1
-        log(name, 'points of interest:', n)
+        notice(name, 'points of interest:', n)
     return pois
 
 
@@ -237,7 +242,7 @@ def merge(ov, osm):
         else:
             out.append(o)
             added += 1
-    log('OpenStreetMap: matched', matched, 'added', added)
+    notice('OpenStreetMap: matched', matched, 'added', added)
     return out
 
 
@@ -248,16 +253,16 @@ def trim(v, n):
 def upload(rows, run_id):
     rows.sort(key=lambda p: -(p.get('conf') or 0))
     if len(rows) > MAX_ROWS:
-        log('keeping the', MAX_ROWS, 'most confident of', len(rows))
+        notice('keeping the', MAX_ROWS, 'most confident of', len(rows))
         rows = rows[:MAX_ROWS]
     lens = {'name': 160, 'addr': 200, 'city': 80, 'region': 80, 'phone': 40, 'website': 200, 'hours': 300, 'facts': 160, 'wikidata': 20, 'wikipedia': 160, 'brand': 80, 'kind': 60, 'cat': 80}
     rows = [{k: trim(v, lens.get(k, 400)) for k, v in r.items() if v not in (None, '')} for r in rows]
     if DRY:
         from collections import Counter
-        log('dry run: would load', len(rows), '| with hours:', sum(1 for r in rows if r.get('hours')), '| with phone:', sum(1 for r in rows if r.get('phone')),
+        notice('dry run: would load', len(rows), '| with hours:', sum(1 for r in rows if r.get('hours')), '| with phone:', sum(1 for r in rows if r.get('phone')),
             '| with website:', sum(1 for r in rows if r.get('website')), '| from OSM only:', sum(1 for r in rows if r.get('src') == 'osm'))
-        log('top categories:', Counter(r.get('cat') for r in rows).most_common(25))
-        log('approx size MB:', round(sum(len(json.dumps(r)) for r in rows) / 1e6))
+        notice('top categories:', Counter(r.get('cat') for r in rows).most_common(25))
+        notice('approx size MB:', round(sum(len(json.dumps(r)) for r in rows) / 1e6))
         return
     total, size = 0, 500   # small batches stay under the database's per-request time limit
     for i in range(0, len(rows), size):
@@ -279,7 +284,7 @@ def upload(rows, run_id):
     req = urllib.request.Request(SB_URL + '/rest/v1/rpc/import_finish', data=json.dumps({'token': TOKEN, 'run_id': run_id, 'min_rows': max(1000, len(rows) // 2)}).encode(),
                                  method='POST', headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=300) as r:
-        log('finished:', r.read().decode())
+        notice('finished:', r.read().decode())
 
 
 if __name__ == '__main__':
