@@ -27,7 +27,7 @@ report_lock = threading.Lock()
 
 
 def fold(t):   # the same folding the place file was built with: no accents, lower case, words split on anything else
-    t = unicodedata.normalize('NFD', t or '').encode('ascii', 'ignore').decode().lower()
+    t = unicodedata.normalize('NFD', (t or '').replace("'", '')).encode('ascii', 'ignore').decode().lower()   # Portillo's -> portillos
     return re.sub(r'[^a-z0-9]+', ' ', t).strip()
 
 
