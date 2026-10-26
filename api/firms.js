@@ -3,7 +3,7 @@
 //   /api/firms?bbox=west,south,east,north   (snapped to whole degrees by the app so answers are shared)
 export const config = { runtime: 'edge' };
 
-const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
+const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
 const json = (status, obj, headers) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, headers) });
 
@@ -26,7 +26,7 @@ export default async function handler(req) {
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
   // Only the app (cross-origin, sends Origin) and the website (same-origin, the browser marks it) may call this, so
   // scripts that find the URL cannot spend the paid service quota
-  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   const key = process.env.NASA_KEY || process.env.FIRMS_KEY;
   if (!key) return json(503, { error: 'not configured' }, cors);
   const b = (new URL(req.url).searchParams.get('bbox') || '').split(',').map(Number);

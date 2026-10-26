@@ -19,6 +19,7 @@ await p.route('**/*', r => { const u = r.request().url(), J = o => r.fulfill({ c
   if (u.startsWith('http://localhost/map')) return r.fulfill({ contentType: 'text/html', body: html });
   if (u.includes('maplibre-gl.min.js')) return r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.js') });
   if (u.includes('openfreemap')) return J({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] });
+  if (u.includes('/api/places?health')) return J({ ok: true });
   if (u.includes('/api/places')) return J({ places: [{ id: 'x1', name: 'Park Bakery', kind: 'bakery', cat: 'shop:bakery', lat: 32.06, lon: -116.87, city: 'La Misión', cc: 'mx' }] });
   if (u.includes('photon') || u.includes('nominatim') || u.includes('/api/')) return J({ features: [], places: [] });
   return r.abort(); });

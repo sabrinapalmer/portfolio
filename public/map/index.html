@@ -547,6 +547,7 @@ if (/[?&]car=1\b/.test(location.search)) {
   <h3>BrinaMaps Premium: live traffic</h3>
   <p>Routes around jams, arrival times that include traffic, and traffic colours on the map. Everything else is free.</p>
   <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
+  <div class="rig" style="margin-top:8px"><div class="field" style="flex:1"><input id="giftCode" type="text" placeholder="Have a code?" autocomplete="off" autocapitalize="characters" spellcheck="false"></div><button id="giftUse">Use code</button></div>
   <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
   <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://sabrinapalmer.com/map/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
   </div>
@@ -878,7 +879,7 @@ const ES = {
   'Premium could not be confirmed (': 'No se pudo confirmar Premium (', '). Try Restore purchases.': '). Pruebe Restaurar compras.', 'something went wrong': 'algo salió mal',
   'unknown error': 'error desconocido', 'timed out': 'se agotó el tiempo',
   // ---- Misc
-  'Distance': 'Distancia', 'Back to now': 'Volver a ahora', 'Preview · turn ': 'Vista previa · vuelta ', ' of ': ' de ', 'From here, follow the signs for ': 'Desde aquí, siga los letreros de ', 'the regular lanes': 'los carriles regulares',
+  'Distance': 'Distancia', 'Have a code?': '¿Tiene un código?', 'Use code': 'Usar código', 'Checking the code...': 'Revisando el código...', 'That code is not valid.': 'Ese código no es válido.', 'Premium is on until ': 'Premium activo hasta el ', 'Back to now': 'Volver a ahora', 'Preview · turn ': 'Vista previa · vuelta ', ' of ': ' de ', 'From here, follow the signs for ': 'Desde aquí, siga los letreros de ', 'the regular lanes': 'los carriles regulares',
   'Regular line': 'Fila regular', 'SENTRI line': 'Fila SENTRI', 'Ready Lane line': 'Fila Ready Lane', ' wait': ' de espera', 'Turns': 'Vueltas', ' ahead': ' adelante', ' away': ' de distancia', 'Near ': 'Cerca de ', 'On ': 'En ', 
   'Checked for ': 'Revisado: ', 'Checking the ': 'Revisando ', 'Looking for places': 'Buscando lugares', 'about ': 'aprox. ',
   // ---- Composed lines (route card, banner, results)
@@ -1092,6 +1093,7 @@ const PREMIUM = ['com.sabrinapalmer.map.premium.monthly', 'com.sabrinapalmer.map
 const premium = { active: false, ready: false, msg: '', pass: null };
 // The site's server only serves traffic with a pass, which it issues after checking Apple's signed record of the
 // subscription. The pass is kept on the device and renewed from the latest record when it runs out.
+const gifted = () => !!store('map.premiumGift');   // Premium from a gift code (no App Store subscription behind it)
 const passOk = () => { const p = premium.pass || (premium.pass = store('map.premiumPass')); return !!(p && p.pass && p.exp > Date.now()); };
 const hasTraffic = () => !!prefs.ttKey || (premium.active && passOk());
 const tParam = () => passOk() ? '&t=' + encodeURIComponent(premium.pass.pass) : '';
@@ -2337,6 +2339,8 @@ function dbPlace(r) {
     wikidata: r.wikidata, wiki: r.wikipedia, dbid: r.id };
 }
 let dbDownUntil = 0;
+// At start, one quick health check (shared by everyone for a minute): a slow or down place list is skipped for 10 minutes
+fetch(API + '/places?health', { signal: AbortSignal.timeout ? AbortSignal.timeout(2500) : undefined }).then(r => r.json()).then(h => { if (!h.ok) dbDownUntil = Date.now() + 600000; }).catch(() => { dbDownUntil = Date.now() + 600000; });
 // The place list gets 2.5 s. Slower than that (the database busy or down) and search goes on without it, and skips
 // it for the next 2 minutes, so a slow database never makes search slow.
 function dbFetch(url, signal) {
@@ -3733,18 +3737,35 @@ function borderLine(rt) {
 // approach, in the direction you drive; the route passes through them (only that way), so it ends up in the right
 // line instead of at the booths from the wrong side. San Ysidro, from Baja Bound's lane maps (bajabound.com).
 const LANE_APPROACH = {
+  // path: the lane's approach in driving order (from Baja Bound's lane maps, bajabound.com), via: the path points the
+  // route must pass. The route uses normal roads to the first path point, then follows the approach into the lane
+  // (approach lanes are closed to general traffic in the map data, so that part is allowed onto them).
+  // Each one was checked against the route server: it ends in that lane at that port with no U-turn or loop.
   'San Ysidro': {
-    // SENTRI: round the Zaragoza monument, then Blvd. Padre Kino to the SENTRI entry
-    // path points in driving order; the route passes the marked ones (index), and the last is where the lane begins
-    sentri: { pts: [[32.52627, -117.00908], [32.52681, -117.00993], [32.53475, -117.01641], [32.53744, -117.02055]], start: 'Blvd. Padre Kino', closed: true },
-    // Ready Lane and regular lanes: the normal route already ends in them. (A Ready Lane approach via the Via Rapida
-    // Oriente ramp was tried: the road data does not join that ramp to the Ready lanes, and the route looped.)
+    // SENTRI: round the Zaragoza monument, then Blvd. Padre Kino to the SENTRI lanes
+    sentri: { path: [[32.52627, -117.00908], [32.52681, -117.00993], [32.53475, -117.01641], [32.53744, -117.02055]], via: [2, 3], start: 'Blvd. Padre Kino' },
+    // Ready Lane: Via Rapida Oriente westbound onto Carril Listo (MEX 2)
+    ready: { path: [[32.51739, -116.98898], [32.51762, -116.99349], [32.51828, -116.99928], [32.52005, -117.00239], [32.52339, -117.00764], [32.52553, -117.01091], [32.52771, -117.0143], [32.52874, -117.01594], [32.53161, -117.02039], [32.53346, -117.02323], [32.53474, -117.0253]], via: [6, 10], start: 'Vía Rápida Oriente' }
+  },
+  'Otay Mesa': {
+    sentri: { path: [[32.54778, -116.9638], [32.54818, -116.95925], [32.54857, -116.95459], [32.54886, -116.95125], [32.54824, -116.94939], [32.54691, -116.94844], [32.54509, -116.94794], [32.54378, -116.94776], [32.54343, -116.94691], [32.54312, -116.94399], [32.54318, -116.94169], [32.54332, -116.9399], [32.54356, -116.93746], [32.54394, -116.93718]], via: [13], start: 'Vía de la Juventud Oriente' }
+  },
+  'Calexico west': {
+    sentri: { path: [[32.63926, -115.48189], [32.64181, -115.48136], [32.64419, -115.48089], [32.64597, -115.48055], [32.64718, -115.4807], [32.64821, -115.48125], [32.64912, -115.48221], [32.65057, -115.48527], [32.6521, -115.48731], [32.65391, -115.4886], [32.65525, -115.48982], [32.65682, -115.49143], [32.65764, -115.4922], [32.66044, -115.49469], [32.6612, -115.49531]], via: [7, 14], start: 'Calzada de los Presidentes' }
+    // Ready Lane / all traffic (Cristobal Colon westbound) left out: the route passed the line and U-turned at the port
+  },
+  'Calexico east': {
+    sentri: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' },
+    ready: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' }
+    // all traffic (past the port to the turnaround and back) left out: the route looped at Calle Bernardo Reyes
   }
 };
-function laneVia(b) {   // through-points for your lane at this port, each pair giving a point and the way to drive past it
-  const a = b && b.north && (LANE_APPROACH[b.port] || {})[b.laneKey || prefs.lane || 'standard'];
+function laneVia(b) {   // where to pass for your lane at this port: the start of the approach, then its key points
+  const ports = b && b.north ? LANE_APPROACH[b.port + (b.crossing && b.crossing !== 'passenger' ? ' ' + b.crossing : '')] || LANE_APPROACH[b.port] : null;
+  const a = ports && ports[b.laneKey || prefs.lane || 'standard'];
   if (!a) return null;
-  const list = a.pts.slice(1).map((q, i) => ({ lat: q[0], lon: q[1], heading: bearing(a.pts[i], q), tol: 50 }));   // each passed in the direction of the line
+  const P = a.path, head = i => bearing(P[Math.max(0, i - 1)], P[i === 0 ? 1 : i]);
+  const list = [0].concat(a.via).map(i => ({ lat: P[i][0], lon: P[i][1], heading: head(i), tol: 60 }));
   return { list, a };
 }
 const passesAll = (rt, list) => list.every(v => { for (let i = 0; i < rt.coords.length; i += 1) if (meters(rt.coords[i], [v.lat, v.lon]) < 35) return true; return false; });
@@ -3754,7 +3775,7 @@ async function laneRoute(rt) {
   if (passesAll(rt, lv.list)) { markApproach(rt, lv); return rt; }   // already goes the right way
   const q = tripPts(), near = pt => { let best = Infinity, bi = 0; rt.coords.forEach((c, i) => { const d = meters(c, [pt.lat, pt.lon]); if (d < best) { best = d; bi = i; } }); return bi; };
   let at = q.findIndex((pt, i) => i > 0 && near(pt) > b.idx); if (at < 1) at = q.length - 1;
-  const last = lv.list[lv.list.length - 1], via = { at, list: lv.list, split: { lat: last.lat, lon: last.lon, lane: !!lv.a.closed } };
+  const first = lv.list[0], last = lv.list[lv.list.length - 1], via = { at, list: lv.list, split: { lat: first.lat, lon: first.lon, lane: true } };   // normal roads to the approach, then into the lane
   if (Date.now() < ownDownUntil) return null;   // needs the app's own route server (it can follow the lane itself)
   const list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
   const alt = list && list[0]; if (!alt) return null;
@@ -3765,11 +3786,12 @@ async function laneRoute(rt) {
   const entryIdx = alt.coords.findIndex(c => meters(c, [last.lat, last.lon]) < 40);
   if (entryIdx >= 0 && alt.steps.some(st => st.begin > entryIdx && st.begin <= alt.border.idx + 5 && Math.abs(st.angle) >= 170)) return null;
   if (zoneHits(alt.coords).length && !zoneHits(rt.coords).length) return null;
+  if (alt.dist > rt.dist + 10) return null;   // a lane approach is a short detour at most
   alt.via = rt.via; markApproach(alt, lv);
   return alt;
 }
 function markApproach(rt, lv) {   // where your line starts on this route: the first approach point
-  const p = lv.a.pts[0]; let best = Infinity, bi = -1;
+  const p = lv.a.path[0]; let best = Infinity, bi = -1;
   rt.coords.forEach((c, i) => { const d = meters(c, p); if (d < best) { best = d; bi = i; } });
   rt.approach = best < 80 ? { idx: bi, start: lv.a.start, lane: rt.border.laneKey || prefs.lane || 'standard' } : null;
   if (!rt.approach) return;
@@ -4807,10 +4829,10 @@ function setupStoreNow(C) {
     return asking;
   };
   const check = () => {
-    const own = PREMIUM.some(id => S.owned(id));
+    const own = PREMIUM.some(id => S.owned(id)) || (gifted() && passOk());
     if (premium.ready || own) {
       const was = premium.active && passOk(); premium.active = own; store('map.premium', own ? 1 : 0);
-      if (!own) { premium.pass = null; store('map.premiumPass', null); }
+      if (!own) { premium.pass = null; store('map.premiumPass', null); store('map.premiumGift', null); }
       const turnOn = () => { if ((premium.active && passOk()) !== was) { addTraffic(); if (pts.from && pts.to) route(true); } syncPremium(); };
       if (own && !passOk()) getPass().then(turnOn); else turnOn();
       return;
@@ -4831,6 +4853,21 @@ function setupStoreNow(C) {
   $('premRestore').onclick = () => { premium.msg = 'Checking your purchases...'; syncPremium(); S.restorePurchases().then(() => { premium.msg = ''; check(); if (!premium.active) { premium.msg = 'No active subscription found on this Apple ID.'; syncPremium(); } }); };
   syncPremium();
 }
+// Gift code: Premium straight from the server (for the owner, testers and friends)
+$('giftUse').onclick = async () => {
+  const code = $('giftCode').value.trim(); if (!code) return;
+  premium.msg = 'Checking the code...'; syncPremium();
+  try {
+    const r = await fetch(API + '/premium', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gift: code }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'status ' + r.status);
+    premium.pass = { pass: d.pass, exp: Math.min(Date.now() + 400 * 864e5, d.expires) }; store('map.premiumPass', premium.pass); store('map.premiumGift', 1);
+    premium.active = true; store('map.premium', 1); $('giftCode').value = '';
+    premium.msg = 'Premium is on until ' + new Date(premium.pass.exp).toLocaleDateString() + '.';
+    addTraffic(); if (pts.from && pts.to) route(true);
+  } catch (e) { premium.msg = e.message; }
+  syncPremium();
+};
 if (NATIVE) setTimeout(() => { if (window.CdvPurchase) setupStore(); else document.addEventListener('deviceready', setupStore, { once: true }); }, 0);   // after the rest of start-up, and never able to stop it
 document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { prefs[b.dataset.traffic] = !prefs[b.dataset.traffic]; savePrefs(); syncPrefs(); addTraffic(); if (b.dataset.traffic === 'trafficRoute' && routes.length && !nav) route(); });
 $('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();

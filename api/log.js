@@ -2,7 +2,7 @@
 // No location, search text or anything about the person is sent; the report is written to the server log only.
 export const config = { runtime: 'edge' };
 
-const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
+const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/];
 
 export default async function handler(req) {

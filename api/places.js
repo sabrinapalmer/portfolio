@@ -7,7 +7,7 @@ export const config = { runtime: 'edge' };
 
 const SB = 'https://vtjkzkvimsywjjmuhrlg.supabase.co/rest/v1/rpc/';
 const KEY = 'sb_publishable_mzTbHkZeezy73OgqtraEXA_MQ4tcm2P';   // publishable: the database only lets it read places
-const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
+const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
 const COLS = ['id', 'name', 'kind', 'cat', 'lat', 'lon', 'addr', 'city', 'region', 'cc', 'phone', 'website', 'hours', 'facts', 'wikidata', 'wikipedia'];
 
@@ -25,10 +25,19 @@ async function rpc(fn, args) {
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }   // '*': one cached copy for the website and the app alike
-  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' }, cors) });
   const u = new URL(req.url), q = u.searchParams;
   const noStore = Object.assign({ 'Cache-Control': 'no-store' }, cors);
+  if (q.get('health') !== null) {   // is the place list answering quickly? kept for a minute at the edge, so the app asks once
+    const t0 = Date.now();
+    try {
+      const r = await fetch(SB + 'places_near', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cats: ['amenity:cafe'], at_lat: 32.72, at_lon: -117.16, radius_km: 1, lim: 1 }), signal: AbortSignal.timeout(1500) });
+      const ok = r.ok;
+      return json(200, { ok, ms: Date.now() - t0 }, Object.assign({ 'Cache-Control': 'public, s-maxage=60, max-age=30' }, cors));
+    } catch (e) { return json(200, { ok: false, ms: Date.now() - t0 }, Object.assign({ 'Cache-Control': 'public, s-maxage=60, max-age=30' }, cors)); }
+  }
   try {
     const tile = q.get('tile');
     if (tile) {
