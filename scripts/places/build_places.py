@@ -173,14 +173,18 @@ PLACE_KINDS = {'city': 'City', 'town': 'Town', 'village': 'Village', 'hamlet': '
 
 def load_osm(urls, boxes):
     pois = []
+    w, s_, e, n_ = min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
     for url in urls:
         name = url.rsplit('/', 1)[-1]
-        log('downloading', name)
-        subprocess.run(['curl', '-sSfL', '-o', name, url], check=True)
-        subprocess.run(['osmium', 'tags-filter', name, *[f'nwr/{k}' for k in POI_KEYS], '-o', 'pois.pbf', '--overwrite'], check=True)
+        kept = 'pois-' + name   # one extract can serve several regions (the whole US file for every US box): filtered once, kept
+        if not os.path.exists(kept):
+            log('downloading', name)
+            subprocess.run(['curl', '-sSfL', '-o', name, url], check=True)
+            subprocess.run(['osmium', 'tags-filter', name, *[f'nwr/{k}' for k in POI_KEYS], '-o', kept, '--overwrite'], check=True)
+            os.remove(name)
+        subprocess.run(['osmium', 'extract', '-b', f'{w},{s_},{e},{n_}', kept, '-o', 'pois.pbf', '--overwrite'], check=True)
         subprocess.run(['osmium', 'export', 'pois.pbf', '-f', 'geojsonseq', '-o', 'pois.geojsonseq', '--overwrite', '--add-unique-id=type_id',
                         '--geometry-types=point,polygon'], check=True)
-        os.remove(name)
         n = 0
         with open('pois.geojsonseq') as fh:
             for line in fh:
