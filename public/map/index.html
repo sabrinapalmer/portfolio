@@ -941,7 +941,7 @@ const $ = id => document.getElementById(id);
 // plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
-const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), LIVE = plugin('LiveNav'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
 // In the app the keyboard slides over the page instead of shrinking it (resizing the page redraws the whole map, which
 // made the search box slow to respond). The search list is kept above the keyboard instead.
 if (KEYS && KEYS.addListener) {
@@ -1157,6 +1157,29 @@ function arrow(step) {
   const a = step.angle || 0;
   if (Math.abs(a) >= 170) return s + '<g' + (a > 0 ? ' transform="translate(48,0) scale(-1,1)"' : '') + '><path d="M32 44V20a9 9 0 0 0-18 0v12M7 25l7 7 7-7"/></g></svg>';
   return s + '<path d="M24 44V26"/><g transform="rotate(' + a + ' 24 26)"><path d="M24 26V8M15 17l9-9 9 9"/></g></svg>';
+}
+// The same turn as an SF Symbol name, for the lock screen and Dynamic Island (drawn by the iPhone, not this page)
+function turnSymbol(step) {
+  if (!step) return 'arrow.up';
+  if (step.kind === 'arrive' || step.kind === 'stop') return 'mappin.circle.fill';
+  if (step.kind === 'roundabout') return 'arrow.triangle.turn.up.right.circle';
+  const a = step.angle || 0;
+  if (Math.abs(a) >= 170) return a > 0 ? 'arrow.uturn.right' : 'arrow.uturn.left';
+  if (Math.abs(a) < 15) return 'arrow.up';
+  if (Math.abs(a) < 60) return a > 0 ? 'arrow.up.right' : 'arrow.up.left';
+  return a > 0 ? 'arrow.turn.up.right' : 'arrow.turn.up.left';
+}
+// Lock screen / Dynamic Island: sent when the turn or the shown distance changes, at most every 2 seconds otherwise
+let liveLast = '', liveAt = 0, liveOn = false;
+function liveSend(force) {
+  if (!LIVE || !nav) return;
+  const st = { dist: tr($('navDist').textContent), text: tr($('navText').textContent), sym: nav.sym || 'arrow.up', arrive: $('navArrive').textContent,
+    left: tr($('navLeft').textContent.split(' \u00b7 ')[0]), progress: parseFloat($('navProg').style.width) / 100 || 0 };
+  const key = st.dist + '|' + st.text + '|' + st.arrive;
+  if (!force && (key === liveLast || Date.now() - liveAt < 2000)) return;
+  liveLast = key; liveAt = Date.now();
+  if (!liveOn) { liveOn = true; LIVE.start(Object.assign({ dest: pts.to ? pts.to.name || pts.to.label.split(',')[0] : '' }, st)).then(r => { if (!r || !r.on) liveOn = false; }).catch(() => { liveOn = false; }); }
+  else LIVE.update(st).catch(() => {});
 }
 const ICON_SOUND = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/></svg>';
 const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9l5 6M22 9l-5 6"/></svg>';
@@ -3898,6 +3921,11 @@ function startNav() {
 }
 function endNav(arrivedAt) {
   if (!nav) return;
+  if (LIVE && liveOn) {   // arrived: the lock screen says so for a few minutes; stopped early: it goes away
+    if (arrivedAt) LIVE.update({ dist: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
+    LIVE.end({ arrived: !!arrivedAt }).catch(() => {});
+  }
+  liveOn = false; liveLast = '';
   if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
   if (nav.city) clearTimeout(nav.city.t);
   nav = null; tempAvoid = null;
@@ -4066,10 +4094,12 @@ function onFix(p) {
   $('navThen').textContent = level !== 'brief' && after ? 'Then: ' + (level === 'detailed' ? after.instruction : after.short) : '';
   }
   $('navArrive').textContent = arrive;
+  nav.sym = turnSymbol(next);
   const bd = rt.border && rt.border.idx > s.i ? rt.border : null;
   let toBorder = 0; if (bd) { for (let i = cur; i < steps.length && steps[i].begin < bd.idx; i++) toBorder += i === cur ? (steps[i].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0) : steps[i].time || 0; }
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
+  liveSend();
   // Further out the faster you go, closer in for a turn in town. One smooth curve on the smoothed speed (steps made the
   // map zoom in and out whenever the speed hovered around a step).
   nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));
