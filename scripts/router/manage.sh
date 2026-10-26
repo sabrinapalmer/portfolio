@@ -5,6 +5,7 @@
 #   west      California + Mexico   port 8002   releases router-west-*  (older router-2026... builds count as west)
 #   texas     Texas                 port 8003   releases router-texas-*
 #   illinois  Illinois              port 8004   releases router-illinois-*
+#   us        whole US + Mexico     port 8005   releases router-us-*
 # It also runs the place server (search, nearby, along-the-route, hours reports) on port 8010, served at /places/,
 # and swaps in a new place file (releases places-*) when one is published.
 set -euo pipefail
@@ -12,7 +13,7 @@ source /etc/brinamaps-router.env          # ROUTER_KEY, REPO, HOST
 exec >>/var/log/router-update.log 2>&1
 echo "== $(date -u) router manager"
 
-REGIONS="west:8002 texas:8003 illinois:8004"
+REGIONS="us:8005 west:8002 texas:8003 illinois:8004"
 
 # HTTPS front: key required; /<region>/... goes to that region's router (anything else to west)
 caddy_conf() {
