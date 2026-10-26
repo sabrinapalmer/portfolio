@@ -256,7 +256,11 @@
   button.pill { border:1.5px solid var(--accent); color:var(--accent); background:transparent; border-radius:999px; padding:7px 12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
   button.pill svg { width:16px; height:16px; stroke-width:2.8; }
   .stopBtns { display:flex; gap:6px; align-items:center; }
-  #why .border { margin-top:6px; font-size:13px; font-weight:600; }
+  #why .kv { display:grid; grid-template-columns:max-content 1fr; gap:3px 10px; margin:6px 0 0; font-size:14px; }
+  #why .kv dt { color:var(--muted); font-weight:600; }
+  #why .kv dd { margin:0; font-weight:700; }
+  #why .vs { font-size:13px; color:var(--muted); font-weight:600; }
+  #why .fine { margin-top:4px; font-size:11px; color:var(--muted); }
   #why button.cross { margin:6px 6px 0 0; padding:6px 12px; border-radius:14px; border:1px solid var(--line); background:var(--bg); color:inherit; font-size:13px; }
   #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
   #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
@@ -502,6 +506,8 @@ if (/[?&]car=1\b/.test(location.search)) {
   <ul class="list" id="savedList"></ul>
   <h3>Voice directions</h3>
   <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <div id="voicePickBox" hidden><p>Voice</p><div class="row"><select id="voicePick" data-raw style="flex:1;min-width:0;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit"></select><button id="voiceTry" class="small">Hear it</button></div>
+    <p class="fine">For a more natural voice, download one on your iPhone: Settings &gt; Accessibility &gt; Spoken Content &gt; Voices, then pick a voice marked Enhanced or Premium. It shows up here. (iOS does not let apps use Siri's voice.)</p></div>
   <h3>On-screen directions</h3>
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>While driving, show</h3>
@@ -549,7 +555,7 @@ if (/[?&]car=1\b/.test(location.search)) {
   <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
   <div class="rig" style="margin-top:8px"><div class="field" style="flex:1"><input id="giftCode" type="text" placeholder="Have a code?" autocomplete="off" autocapitalize="characters" spellcheck="false"></div><button id="giftUse">Use code</button></div>
   <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
-  <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://sabrinapalmer.com/map/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
+  <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://brinamaps.com/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
   </div>
   <div class="webonly">
   <h3>Live traffic (optional)</h3>
@@ -760,6 +766,9 @@ const ES = {
   'Avoid road ahead': 'Evitar el camino adelante', 'Finding another way.': 'Buscando otra ruta.', 'Looking for another way...': 'Buscando otra ruta...',
   'Tip: press and hold the map to go there, save it or avoid it.': 'Consejo: mantenga presionado el mapa para ir ahí, guardarlo o evitarlo.',
   // ---- Border
+  'Crossing': 'Cruce', 'Into Mexico': 'Entrada a México', 'Time to border': 'Tiempo a la frontera', 'Other crossings': 'Otras garitas', 'Closed now': 'Cerrado ahora',
+  'No time reported': 'Sin tiempo reportado', 'No wait': 'Sin espera', 'Waits from the US border agency, included in the trip time.': 'Esperas de la agencia fronteriza de EE. UU., incluidas en el tiempo del viaje.',
+  'Vs quickest: ': 'Contra la más rápida: ', 'Same time': 'Mismo tiempo', 'different roads': 'otras calles',
   'Crossing at ': 'Cruce por ', ', border in ': ', frontera en ', 'border in ': 'frontera en ', ' · border in ': ' · frontera en ', ' (about ': ' (aprox. ', 'Into Mexico at ': 'Entrada a México por ',
   ' wait now: ': ' espera ahora: ', ', included in the trip time (US border agency).': ', incluida en el tiempo del viaje (agencia fronteriza de EE. UU.).', ': no wait time reported.': ': sin tiempo de espera reportado.',
   ' Nearby crossings now: ': ' Otros cruces cercanos ahora: ', 'Regular lane': 'Carril regular', 'Ready Lane': 'Ready Lane', 'SENTRI': 'SENTRI', 'no wait': 'sin espera', 'none': 'ninguna',
@@ -799,6 +808,8 @@ const ES = {
   ' lanes': ' carriles', 'Which lane to be in': 'En qué carril ir', 'Landmarks at turns': 'Referencias en las vueltas', 'Speed and speed limit': 'Velocidad y límite',
   'Recenter': 'Centrar', 'Whole route': 'Ruta completa', 'Repeat direction': 'Repetir indicación', 'Mute voice': 'Silenciar voz', 'Voice muted': 'Voz silenciada', 'End': 'Terminar',
   'Directions are running': 'Indicaciones en curso', 'On-screen directions': 'Indicaciones en pantalla', 'Voice directions': 'Indicaciones de voz', 'Voice': 'Voz',
+  'Best available': 'La mejor disponible', 'In 500 feet, turn right.': 'En 150 metros, gire a la derecha.', 'Premium': 'Premium', 'Enhanced': 'Mejorada', 'Hear it': 'Escuchar',
+  'For a more natural voice, download one on your iPhone: Settings > Accessibility > Spoken Content > Voices, then pick a voice marked Enhanced or Premium. It shows up here. (iOS does not let apps use Siri\'s voice.)': 'Para una voz más natural, descárguela en su iPhone: Configuración > Accesibilidad > Contenido leído > Voces, y elija una voz Mejorada o Premium. Aparecerá aquí. (iOS no permite que las apps usen la voz de Siri).',
   'Brief': 'Breve', 'Standard': 'Normal', 'Detailed': 'Detallada', 'All turns': 'Todas las vueltas', 'Off': 'Apagado', 'While driving, show': 'Al manejar, mostrar',
   'Map faces my direction': 'El mapa gira con mi dirección', 'North up': 'Norte arriba', 'You’re in ': 'Está en ', 'Welcome to ': 'Bienvenido a ',
   'Share arrival': 'Compartir llegada', 'On my way to ': 'Voy en camino a ', ', arrive ': ', llego ', 'Copied. Paste it in a message.': 'Copiado. Péguelo en un mensaje.',
@@ -982,9 +993,9 @@ if (KEYS && KEYS.addListener) {
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
 document.body.classList.toggle('native', NATIVE);
-const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api', OWN_ROUTER = API + '/valhalla';
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://brinamaps.com/api' : '/api', OWN_ROUTER = API + '/valhalla';
 fetch(OWN_ROUTER + '/status').then(r => r.json()).then(d => { ownDownUntil = d.ok ? 0 : Date.now() + 1800000; }).catch(() => { ownDownUntil = Date.now() + 600000; });   // www: the bare domain redirects, and the app's requests cannot follow a redirect
-const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
+const SHARE_BASE = NATIVE ? 'https://brinamaps.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
 // ---------- Offline map storage ----------
@@ -3638,7 +3649,7 @@ function titles() {   // a short name for each option, taken from what makes it 
 }
 function why(rt) {   // one sentence comparing this option with the fastest
   const best = routes.reduce((a, b) => b.time < a.time ? b : a), bits = [];
-  if (rt === best) return routes.length > 1 ? 'The quickest way there.' : '';
+  if (rt === best) return '';
   const dLeft = best.lefts - rt.lefts;
   if (dLeft >= 1) bits.push(dLeft + (dLeft === 1 ? ' fewer left turn' : ' fewer left turns') + ' across traffic');
   if (dLeft <= -1) bits.push(-dLeft + (dLeft === -1 ? ' more left turn' : ' more left turns'));
@@ -3649,8 +3660,8 @@ function why(rt) {   // one sentence comparing this option with the fastest
   if (!rt.basic && dHwy <= -1) bits.push(Math.round(-dHwy) + ' more highway miles');
   if (best.toll && !rt.toll) bits.push('no tolls');
   if (dDist >= 0.3) bits.push(fmtDist(dDist) + ' shorter');
-  const slow = dt < 45 ? 'About the same time' : fmtTime(dt) + ' slower';
-  return bits.length ? slow + ', with ' + bits.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.' : slow + ' by a different set of roads.';
+  const slow = dt < 45 ? 'Same time' : '+' + fmtTime(dt);
+  return 'Vs quickest: ' + [slow].concat(bits.length ? bits : ['different roads']).join(' \u00b7 ');
 }
 
 // ---------- Tolls: a road can be tagged as a toll road all along, while you only pay at booths ----------
@@ -3658,7 +3669,7 @@ const boothCache = new Map();   // grid cell -> booths [[lat, lon]] (or null whi
 // The list of every toll booth in North America (refreshed weekly from OpenStreetMap, about 100 KB), fetched once;
 // cells it does not cover fall back to asking the server
 let boothList = null;
-const loadBooths = () => boothList || (boothList = fetch((NATIVE ? 'https://www.sabrinapalmer.com' : '') + '/map/data/tolls.json')
+const loadBooths = () => boothList || (boothList = fetch((NATIVE ? 'https://brinamaps.com' : '') + '/map/data/tolls.json')
   .then(r => r.ok ? r.json() : null).then(d => d && Array.isArray(d.booths) && d.booths.length > 100 ? d.booths : null).catch(() => null)
   .then(v => { if (!v) boothList = null; return v; }));
 async function tollsLikely() {   // any toll booth near the straight line of the trip (padded about 15 km)
@@ -3778,17 +3789,20 @@ async function checkBorder(list) {
     }
   });
 }
-function borderLine(rt) {
-  const b = rt && rt.border; if (!b) return '';
+function borderRows(rt) {   // [label, value] rows for the border on this route: short, one fact per line
+  const b = rt && rt.border; if (!b) return [];
   const clock = sec => new Date(Date.now() + sec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const name = b.port + (b.crossing && !/^passenger$/.test(b.crossing) ? ' (' + b.crossing.replace(/\b\w/g, m => m.toUpperCase()) + ')' : '');
-  const when = 'border in ' + fmtTime(b.eta) + ' (about ' + clock(b.eta) + ')';
-  if (!b.north) return 'Into Mexico at ' + name + ', ' + when + '.';
-  if (b.closed) return name + ': ' + (b.lane || 'your lane') + ' is closed now. ' + when.charAt(0).toUpperCase() + when.slice(1) + '.';
-  const other = b.yours ? ' (' + b.yours.lane + (b.yours.wait != null ? ' is ' + fmtTime(b.yours.wait * 60) : ' has no time reported') + '; your pass lets you use the ' + b.lane + ')' : '';
-  const alts = (b.others || []).map(o => o.port + ' ' + (o.minutes ? fmtTime(o.minutes * 60) : 'no wait') + (o.lane !== b.lane ? ' (' + o.lane + ')' : ''));
-  const also = alts.length ? ' Nearby crossings now: ' + alts.join(', ') + '.' : '';
-  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.') + also;
+  const waitOf = m => m == null ? tr('No time reported') : m ? fmtTime(m * 60) : tr('No wait');
+  const laneWait = lane => LANG === 'es' ? 'Espera ' + tr(lane) : lane + ' wait';
+  const rows = [[b.north ? 'Crossing' : 'Into Mexico', name], ['Time to border', fmtTime(b.eta) + ' \u00b7 ' + clock(b.eta)]];
+  if (!b.north) return rows;
+  const lane = b.lane || 'Regular';
+  rows.push([laneWait(lane), b.closed ? tr('Closed now') : waitOf(b.wait)]);
+  if (b.yours) rows.push([laneWait(b.yours.lane), waitOf(b.yours.wait)]);
+  const alts = (b.others || []).map(o => o.port + ' ' + (o.minutes ? fmtTime(o.minutes * 60) : tr('No wait')) + (o.lane !== b.lane ? ' (' + tr(o.lane) + ')' : ''));
+  if (alts.length) rows.push(['Other crossings', alts.join(' \u00b7 ')]);
+  return rows;
 }
 
 // Where each line starts, for ports where the way into a lane is not the obvious one. Points along each lane's
@@ -3936,8 +3950,14 @@ function draw(fit) {
     box.appendChild(b);
   });
   const w = $('why'); w.innerHTML = '';
-  const text = why(rt); if (text) w.appendChild(el('div', '', text));
-  const bl = borderLine(rt); if (bl) w.appendChild(el('div', 'border', bl));
+  const text = why(rt); if (text) w.appendChild(el('div', 'vs', text));
+  const br = borderRows(rt);
+  if (br.length) {   // "Time to border: 45 min" rows, easy to scan while deciding
+    const dl = el('dl', 'kv');
+    br.forEach(([k, v]) => { const dd = el('dd', '', v); dd.dataset.raw = ''; dl.append(el('dt', '', k + ':'), dd); });
+    w.appendChild(dl);
+    if (rt.border.north && rt.border.wait != null) w.appendChild(el('div', 'fine', 'Waits from the US border agency, included in the trip time.'));
+  }
   const bd0 = rt.border;   // a button for each nearby port with a shorter line that has no route shown yet
   if (bd0 && bd0.north && bd0.wait != null && !nav) (bd0.others || []).filter(o => o.minutes < bd0.wait && !routes.some(r => r.border && r.border.port === o.port)).slice(0, 2).forEach(o => {
     const cb = el('button', 'cross', 'Cross at ' + o.port + ' instead'); cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
@@ -4063,9 +4083,22 @@ const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
 function say(text, level) {
   if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text) return;
   text = tr(text);   // the app's own sentences in the chosen language; the routers' directions already are
-  if (TTS) { TTS.speak({ text, lang: VOICE_LANG }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
+  if (TTS) { TTS.speak({ text, lang: VOICE_LANG, voice: prefs['voiceId_' + LANG] || '' }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
   if (!window.speechSynthesis) return;
   try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = VOICE_LANG; speechSynthesis.speak(u); } catch (e) {}
+}
+// The voice picker (iPhone app): the voices installed for the app's language, best first
+async function fillVoices() {
+  if (!TTS || !TTS.voices) return;
+  let list = [];
+  try { list = ((await TTS.voices({ lang: VOICE_LANG })) || {}).voices || []; } catch (e) { return; }
+  const sel = $('voicePick'), key = 'voiceId_' + LANG; sel.innerHTML = '';
+  sel.appendChild(new Option(tr('Best available') + (list[0] ? ' (' + list[0].name + ')' : ''), ''));
+  list.forEach(v => sel.appendChild(new Option(v.name + ' \u00b7 ' + tr(v.quality) + ' \u00b7 ' + v.lang, v.id)));
+  sel.value = list.some(v => v.id === prefs[key]) ? prefs[key] : '';
+  sel.onchange = () => { prefs[key] = sel.value; savePrefs(); TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {}); };
+  $('voiceTry').onclick = () => TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {});
+  $('voicePickBox').hidden = false;
 }
 function spokenDist(m) {
   if (prefs.units === 'km') return m < 950 ? Math.max(50, Math.round(m / 50) * 50) + ' metres' : (m < 10000 ? Math.round(m / 500) / 2 : Math.round(m / 1000)) + ' kilometres';
@@ -4202,13 +4235,21 @@ function startNav() {
   keepAwake();
   if (BG) startWatch(true);   // switch to a watch that keeps going with the screen locked
   if (here) refix();
+  // One smooth move from the route overview to the driving view, once the directions panels have their size;
+  // the follow camera takes over from where it lands, so the map does not swing back and forth while it settles
+  if (here) requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (!nav || !nav.cam || !here) return;
+    refix();
+    const t = nav.cam; glide.cam = null; camHold = performance.now() + 1000;
+    map.easeTo({ center: [here[1], here[0]], zoom: t.z, pitch: t.p, bearing: prefs.northUp ? 0 : nav.head || 0, padding: t.pad, duration: 950, easing: x => 1 - Math.pow(1 - x, 3) });
+  }));
   drawStrip();
   saveTrip(routes[selected]);
 }
 function endNav(arrivedAt) {
   if (!nav) return;
-  if (LIVE && liveOn) {   // arrived: the lock screen says so for a few minutes; stopped early: it goes away
-    if (arrivedAt) LIVE.update({ dist: '', road: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
+  if (LIVE) {   // arrived: the lock screen says so for a minute; stopped early: it goes away (always asked, even mid-start)
+    if (arrivedAt && liveOn) LIVE.update({ dist: '', road: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
     LIVE.end({ arrived: !!arrivedAt }).catch(() => {});
   }
   liveOn = false; liveLast = '';
@@ -4324,7 +4365,10 @@ function onFix(p) {
   const head = onRoute && c[s.i + 1] ? bearing(c[s.i], c[s.i + 1]) : (p.coords.heading >= 0 && speed > 1 ? p.coords.heading : nav.head || 0);
   nav.head = head;
   // Where the map should sit: the follow camera eases toward this every frame (and pauses while a finger is on the map)
-  const pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
+  let pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
+  // The banner growing or shrinking by a line should not nudge the map: only a real layout change moves it
+  const was = nav.cam && nav.cam.pad;
+  if (was && ['top', 'bottom', 'left', 'right'].every(k => Math.abs(was[k] - pad[k]) < 40)) pad = was;
   nav.cam = { z: nav.zoom, p: prefs.northUp ? 0 : 50, pad };
   showMe(ll, head, gap);
   drawSpeed(ll, speed);
@@ -4958,7 +5002,7 @@ $('mineHow').querySelectorAll('button').forEach(b => b.onclick = () => {
   $(kind + 'Del').onclick = () => savePlace(kind, null);
 });
 $('openPrefs').onclick = () => {
-  drawLists(); drawPlaces(); drawThemes(); syncPrefs();
+  drawLists(); drawPlaces(); drawThemes(); syncPrefs(); fillVoices();
   if (map) { const c = map.getCenter(); $('report').href = `https://www.openstreetmap.org/note/new#map=${Math.max(15, Math.round(map.getZoom()))}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`; }
   document.body.classList.add('prefs');
 };

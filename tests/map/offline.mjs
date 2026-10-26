@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 import fs from 'fs';
 const ROOT=new URL('../../',import.meta.url).pathname, CHROME=process.env.CHROME_PATH||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const html = fs.readFileSync(ROOT+'public/map/index.html','utf8');
+const html = fs.readFileSync(ROOT+'brinamaps/public/map/index.html','utf8');
 function enc(coords){let o='',pl=0,pn=0;const e=v=>{v=v<0?~(v<<1):v<<1;let s='';while(v>=0x20){s+=String.fromCharCode((0x20|(v&0x1f))+63);v>>=5}return s+String.fromCharCode(v+63)};
  for(const [a,b] of coords){const A=Math.round(a*1e6),B=Math.round(b*1e6);o+=e(A-pl)+e(B-pn);pl=A;pn=B}return o}
 const F=(id,name,lat,lon)=>({geometry:{coordinates:[lon,lat]},properties:{osm_type:'N',osm_id:id,name,street:'Main St',city:'Chicago',state:'Illinois',country:'United States'}});

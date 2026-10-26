@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 const ROOT = new URL('../../', import.meta.url).pathname;
 process.env.TOMTOM_KEY = 'TTSECRET';
-const P = await import(ROOT + 'api/_premium.js'), traffic = (await import(ROOT + 'api/traffic.js')).default, premiumApi = (await import(ROOT + 'api/premium.js')).default;
+const P = await import(ROOT + 'brinamaps/api/_premium.js'), traffic = (await import(ROOT + 'brinamaps/api/traffic.js')).default, premiumApi = (await import(ROOT + 'brinamaps/api/premium.js')).default;
 const errs = []; const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 
 // root -> intermediate -> leaf, all P-256, like the App Store's chain

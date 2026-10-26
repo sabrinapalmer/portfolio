@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 import fs from 'fs';
 const ROOT = new URL('../../', import.meta.url).pathname, CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const html = fs.readFileSync(ROOT + 'public/map/index.html', 'utf8');
+const html = fs.readFileSync(ROOT + 'brinamaps/public/map/index.html', 'utf8');
 const errs = [], check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 const b = await chromium.launch({ executablePath: CHROME, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const p = await (await b.newContext({ viewport: { width: 390, height: 844 }, permissions: ['geolocation'], geolocation: { latitude: 32.05, longitude: -116.88 } })).newPage();

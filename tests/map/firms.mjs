@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 import fs from 'fs';
 const ROOT = new URL('../../', import.meta.url).pathname, CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const html = fs.readFileSync(ROOT + 'public/map/index.html', 'utf8');
+const html = fs.readFileSync(ROOT + 'brinamaps/public/map/index.html', 'utf8');
 const errs = [], check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 const now = Date.now(), h = 3600e3;
 // a group of 4 spots near Valle de Guadalupe (Mexico), a lone spot near Ensenada, 3 spots in San Diego County (US)

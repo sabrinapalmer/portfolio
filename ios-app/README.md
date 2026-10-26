@@ -13,7 +13,7 @@ git pull
 npm install            # in the repo root (provides the map library)
 cd ios-app
 npm install
-npm run sync           # copies public/map into www/ and updates the Xcode project
+npm run sync           # copies brinamaps/public/map into www/ and updates the Xcode project
 npm run open           # opens Xcode
 ```
 

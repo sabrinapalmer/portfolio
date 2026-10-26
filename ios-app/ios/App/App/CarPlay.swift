@@ -171,7 +171,7 @@ class CarMapViewController: UIViewController, WKNavigationDelegate {
             note.heightAnchor.constraint(equalToConstant: 40),
             note.widthAnchor.constraint(greaterThanOrEqualToConstant: 280)
         ])
-        if let u = URL(string: "https://www.sabrinapalmer.com/map/?car=1") { web.load(URLRequest(url: u)) }
+        if let u = URL(string: "https://brinamaps.com/map/?car=1") { web.load(URLRequest(url: u)) }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

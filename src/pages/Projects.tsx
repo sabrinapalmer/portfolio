@@ -33,7 +33,7 @@ const projects: Project[] = [
     tags: ["JavaScript", "MapLibre", "OpenStreetMap", "PWA"],
     type: "apps",
     date: "2026-10-16",
-    links: { demo: "/map" },
+    links: { demo: "https://brinamaps.com" },
   },
   {
     title: "Net Worth Ledger",

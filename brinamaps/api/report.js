@@ -39,9 +39,9 @@ export default async function handler(req) {
   let osmId = '';
   try {
     const text = `Opening hours for "${name}", reported by a BrinaMaps user: ${hours}` + (note ? `\nNote: ${note}` : '') +
-      '\n\nPlease check before adding to the map (opening_hours). Sent from BrinaMaps (https://www.sabrinapalmer.com/map).';
+      '\n\nPlease check before adding to the map (opening_hours). Sent from BrinaMaps (https://brinamaps.com).';
     const n = await fetch('https://api.openstreetmap.org/api/0.6/notes.json?' + new URLSearchParams({ lat: lat.toFixed(6), lon: lon.toFixed(6), text }),
-      { method: 'POST', headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)' }, signal: AbortSignal.timeout(10000) });
+      { method: 'POST', headers: { 'User-Agent': 'BrinaMaps/1.0 (https://brinamaps.com)' }, signal: AbortSignal.timeout(10000) });
     if (n.ok) osmId = String(((await n.json()).properties || {}).id || '');
   } catch (e) {}
   try {

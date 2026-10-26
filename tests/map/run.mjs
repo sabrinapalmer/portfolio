@@ -1,4 +1,4 @@
-// Smoke tests for public/map/index.html. Each script drives the page in headless Chromium with every
+// Smoke tests for brinamaps/public/map/index.html. Each script drives the page in headless Chromium with every
 // network service mocked, prints what it saw, and ends with "errors [...]". A run passes when every
 // script exits cleanly with an empty error list. They do not check the printed values themselves.
 // Run: npm run test:map   (set CHROME_PATH to a Chromium binary if the default path does not exist)
