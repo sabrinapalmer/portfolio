@@ -138,7 +138,7 @@
   #destHead { display:flex; align-items:center; gap:6px; padding:12px 8px 0 16px; }
   #destHours { font-size:13px; color:var(--muted); margin:-2px 0 8px; padding:0 16px; } #destHours:empty { display:none; } #destHours.warn { color:#c0392b; font-weight:600; }
   li.shut em { color:#c0392b; }
-  #speedo { display:none; position:fixed; z-index:9; left:10px; bottom:calc(100px + env(safe-area-inset-bottom)); background:var(--card); box-shadow:var(--shadow); border-radius:14px; padding:6px 10px; text-align:center; min-width:52px; }
+  #speedo { display:none; position:fixed; z-index:9; left:calc(10px + env(safe-area-inset-left)); bottom:calc(100px + env(safe-area-inset-bottom)); background:var(--card); box-shadow:var(--shadow); border-radius:14px; padding:6px 10px; text-align:center; min-width:52px; }
   body.nav #speedo.on { display:block; }
   #speedo b { display:block; font-size:22px; line-height:1.1; } #speedo small { font-size:10px; color:var(--muted); } #speedo.over b { color:#c0392b; }
   #speedo i { display:block; font-style:normal; margin-top:5px; padding:2px 4px; border:2px solid var(--ink); border-radius:6px; font-size:9px; line-height:1.15; font-weight:700; background:#fff; color:#111; } #speedo i:empty { display:none; } #speedo i span { display:block; font-size:17px; }
@@ -283,12 +283,26 @@
   .pin.via { color:#fff; font:800 12px/1 system-ui; display:grid; place-items:center; }
   body.nav #fabs { bottom:calc(150px + env(safe-area-inset-bottom)); }
   #stopQ, #meetName { width:100%; box-sizing:border-box; }
-  #nav.peek { filter:saturate(.75) brightness(.95); }
+  /* Looking at a later turn: a white card with a label and a big way back, so it never passes for the current turn */
+  body.nav #nav.peek { background:var(--card); color:var(--fg); box-shadow:0 0 0 3px var(--accent), var(--shadow); flex-wrap:wrap; }
+  #nav.peek #navArrow svg { color:var(--accent); }
+  #peekTag { display:none; font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:2px; }
+  #nav.peek #peekTag { display:block; }
+  #navBack { display:none; flex:1 0 100%; padding:12px; font-size:17px; font-weight:700; background:var(--accent); color:var(--accent-ink); border-radius:16px; }
+  #nav.peek #navBack { display:block; }
+  #nav.peek #navProg { display:none; }
+  .queueTag { background:#f08c00; color:#fff; font:700 12px/1.2 system-ui; padding:5px 9px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.3); white-space:nowrap; }
+  .peekMark { width:44px; height:44px; border-radius:50%; background:var(--accent); border:3px solid #fff; box-shadow:0 2px 10px rgba(0,0,0,.35); display:grid; place-items:center; animation:peekPulse 1.4s ease-in-out infinite; }
+  .peekMark svg { width:24px; height:24px; fill:#fff; }
+  @keyframes peekPulse { 50% { box-shadow:0 0 0 10px rgba(124,92,255,.25), 0 2px 10px rgba(0,0,0,.35); } }
   #nav { touch-action:pan-y; user-select:none; -webkit-user-select:none; }
   body.nav #nav { display:flex; gap:14px; align-items:center; overflow:hidden; top:calc(36px + env(safe-area-inset-top)); padding:14px 18px; background:var(--accent); color:var(--accent-ink); }
   #navArrow svg { width:54px; height:54px; stroke-width:3.4; }
-  #navDist { font-size:30px; font-weight:700; line-height:1.05; }
+  #navDist { font-size:30px; font-weight:700; line-height:1.08; }
+  #navDist .road { font-size:27px; overflow-wrap:anywhere; }   /* "0.3 miles · Pine Avenue": what to look for, big */
+  #navDist .sep { opacity:.6; margin:0 .18em; }
   #navText { font-size:18px; font-weight:600; }
+  #navDist.withRoad + #navText { font-size:16px; font-weight:600; opacity:.92; margin-top:2px; }
   #navThen, #navMore { font-size:13px; opacity:.88; margin-top:4px; }
   #navMore:empty, #navThen:empty, #navLanes:empty { display:none; }
   #navLanes { display:flex; gap:4px; margin-top:6px; }
@@ -317,6 +331,10 @@
   body.nav.free #recenter { display:block; position:fixed; z-index:10; left:50%; transform:translateX(-50%); bottom:calc(100px + env(safe-area-inset-bottom)); box-shadow:var(--shadow); }
   @media (min-width:700px) and (max-height:560px) {   /* phone on its side: Recenter sits in the open map on the right, not over the route */
     body.nav.free #recenter { left:auto; right:calc(12px + env(safe-area-inset-right)); bottom:calc(16px + env(safe-area-inset-bottom)); transform:none; }
+    /* speed and limit in the open lower right: on the left they sat under the notch or behind the card */
+    #speedo { left:auto; right:calc(12px + env(safe-area-inset-right)); bottom:calc(14px + env(safe-area-inset-bottom)); }
+    body.nav.free #recenter { right:calc(84px + env(safe-area-inset-right)); }
+    body.nav #fabs { bottom:calc(110px + env(safe-area-inset-bottom)); }
   }
   #arrived { z-index:20; top:50%; transform:translateY(-50%); padding:26px 20px; text-align:center; overflow:hidden; }
   @media (min-width:700px) { #arrived { left:50%; transform:translate(-50%,-50%); } }
@@ -565,8 +583,9 @@ if (/[?&]car=1\b/.test(location.search)) {
 
 <div id="nav" class="panel">
   <div id="navArrow"></div>
-  <div style="min-width:0"><div id="navDist"></div><div id="navText">Finding your location...</div><div id="navLanes"></div><div id="navMore"></div><div id="navThen"></div></div>
+  <div style="min-width:0"><div id="peekTag"></div><div id="navDist"></div><div id="navText">Finding your location...</div><div id="navLanes"></div><div id="navMore"></div><div id="navThen"></div></div>
   <i id="navProg"></i>
+  <button id="navBack" type="button">Back to now</button>
 </div>
 <button id="recenter" class="go">Recenter</button>
 <div id="cityHere" class="panel"><b id="cityName"></b><p>Keep going to the center, or pick somewhere in town.</p><div class="row"><button id="cityOn">Continue to center</button><button id="cityPick" class="go">Choose a place</button></div></div>
@@ -859,7 +878,8 @@ const ES = {
   'Premium could not be confirmed (': 'No se pudo confirmar Premium (', '). Try Restore purchases.': '). Pruebe Restaurar compras.', 'something went wrong': 'algo salió mal',
   'unknown error': 'error desconocido', 'timed out': 'se agotó el tiempo',
   // ---- Misc
-  'Distance': 'Distancia', 'Turns': 'Vueltas', ' ahead': ' adelante', ' away': ' de distancia', 'Near ': 'Cerca de ', 'On ': 'En ', 
+  'Distance': 'Distancia', 'Back to now': 'Volver a ahora', 'Preview · turn ': 'Vista previa · vuelta ', ' of ': ' de ', 'From here, follow the signs for ': 'Desde aquí, siga los letreros de ', 'the regular lanes': 'los carriles regulares',
+  'Regular line': 'Fila regular', 'SENTRI line': 'Fila SENTRI', 'Ready Lane line': 'Fila Ready Lane', ' wait': ' de espera', 'Turns': 'Vueltas', ' ahead': ' adelante', ' away': ' de distancia', 'Near ': 'Cerca de ', 'On ': 'En ', 
   'Checked for ': 'Revisado: ', 'Checking the ': 'Revisando ', 'Looking for places': 'Buscando lugares', 'about ': 'aprox. ',
   // ---- Composed lines (route card, banner, results)
   ' miles left': ' millas restantes', ' mile left': ' milla restante', ' km left': ' km restantes', ' m left': ' m restantes', ' ft left': ' pies restantes',
@@ -1083,7 +1103,10 @@ let places = store('map.places') || { home: null, work: null }, visits = store('
 const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
 const tripPts = () => [pts.from, ...pts.stops, pts.to].filter(Boolean);
 // The same points with a border port to pass through (via = { lat, lon, at }: inserted before point number at)
-const viaPts = via => { const q = tripPts(); if (via) q.splice(via.at, 0, { lat: via.lat, lon: via.lon, via: true }); return q; };
+// Points to pass through without stopping, inserted before trip point number at: one border port
+// (via = { lat, lon, at }) or a lane's approach (via = { at, list: [{ lat, lon, heading }] })
+const viaList = via => !via ? [] : via.list || [{ lat: via.lat, lon: via.lon, heading: 0, tol: 89 }];
+const viaPts = via => { const q = tripPts(); if (via) q.splice(via.at, 0, ...viaList(via).map(v => Object.assign({ via: true }, v))); return q; };
 const stopName = i => { const st = pts.stops[i]; return st ? st.name || (st.label || '').split(',')[0] : ''; };
 let tempAvoid = null;   // a point to route around for this trip only
 let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBackup = false;
@@ -1135,6 +1158,23 @@ function labelOf(p) {
   const sub = [street, p.city !== main ? p.city : null, p.state, p.country !== 'United States' ? p.country : null].filter(Boolean).join(', ');
   return { main, sub, osm: p.osm_type && p.osm_id ? String(p.osm_type)[0].toUpperCase() + p.osm_id : '', hours: p.hours, pid: p.pid };
 }
+function encodePolyline(coords, precision) {   // [[lat, lon]...] -> Valhalla/Google polyline (the reverse of decodePolyline)
+  const f = Math.pow(10, precision || 6); let out = '', pl = 0, pn = 0;
+  const enc = v => { v = v < 0 ? ~(v << 1) : v << 1; let s = ''; while (v >= 0x20) { s += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); };
+  for (const [a, b] of coords) { const A = Math.round(a * f), B = Math.round(b * f); out += enc(A - pl) + enc(B - pn); pl = A; pn = B; }
+  return out;
+}
+// Two Valhalla trips joined at the point where the first ends and the second starts (a lane's entry at the border):
+// the first trip's arrival there and the second's "drive on ..." start are dropped, so it reads as one drive.
+function joinTrips(A, B) {
+  const la = A.legs[A.legs.length - 1], lb = B.legs[0];
+  const ca = decodePolyline(la.shape, 6), cb = decodePolyline(lb.shape, 6), off = ca.length - 1;
+  const ma = la.maneuvers.filter(m => !(m.type >= 4 && m.type <= 6)), mb = lb.maneuvers.map(m => Object.assign({}, m, { begin_shape_index: m.begin_shape_index + off, end_shape_index: m.end_shape_index + off }));
+  const first = mb.shift(), last = ma[ma.length - 1];
+  if (first && last) Object.assign(last, { end_shape_index: mb.length ? mb[0].begin_shape_index : first.end_shape_index, length: (last.length || 0) + (first.length || 0), time: (last.time || 0) + (first.time || 0) });
+  const leg = { shape: encodePolyline(ca.concat(cb.slice(1)), 6), maneuvers: ma.concat(mb), summary: { time: (la.summary || {}).time + (lb.summary || {}).time, length: (la.summary || {}).length + (lb.summary || {}).length } };
+  return { summary: { time: A.summary.time + B.summary.time, length: A.summary.length + B.summary.length }, legs: A.legs.slice(0, -1).concat([leg], B.legs.slice(1)) };
+}
 function decodePolyline(str, precision) {
   let i = 0, lat = 0, lng = 0; const out = [], f = Math.pow(10, precision || 6);
   while (i < str.length) {
@@ -1182,9 +1222,10 @@ function turnSymbol(step) {
 let liveLast = '', liveAt = 0, liveOn = false;
 function liveSend(force) {
   if (!LIVE || !nav) return;
-  const st = { dist: tr($('navDist').textContent), text: tr($('navText').textContent), sym: nav.sym || 'arrow.up', arrive: $('navArrive').textContent,
+  const dEl = $('navDist'), road = dEl.querySelector('.road');
+  const st = { dist: tr((dEl.firstChild || dEl).textContent), road: road ? road.textContent : '', text: tr($('navText').textContent), sym: nav.sym || 'arrow.up', arrive: $('navArrive').textContent,
     left: tr($('navLeft').textContent.split(' \u00b7 ')[0]), progress: parseFloat($('navProg').style.width) / 100 || 0 };
-  const key = st.dist + '|' + st.text + '|' + st.arrive;
+  const key = st.dist + '|' + st.road + '|' + st.text + '|' + st.arrive;
   if (!force && (key === liveLast || Date.now() - liveAt < 2000)) return;
   liveLast = key; liveAt = Date.now();
   if (!liveOn) { liveOn = true; LIVE.start(Object.assign({ dest: pts.to ? pts.to.name || pts.to.label.split(',')[0] : '' }, st)).then(r => { if (!r || !r.on) liveOn = false; }).catch(() => { liveOn = false; }); }
@@ -1374,7 +1415,7 @@ function addFav() {
 function addRouteLayers() {
   if (map.getSource('routes')) { addTraffic(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
-  map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('routes', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } });   // lineMetrics: the driven part is greyed along the line
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
   // The chosen route: a clean blue line with a slightly darker edge, a little wider than the roads it follows.
   // On dark maps a soft glow sits under it so it reads at night.
@@ -1385,6 +1426,9 @@ function addRouteLayers() {
   if (dark) line('glow', true, { 'line-color': rc, 'line-width': z(12, 30), 'line-blur': z(6, 14), 'line-opacity': .45 });
   line('casing', true, { 'line-color': shade(rc, dark ? .55 : .7), 'line-width': z(6, 14.5) });
   line('sel', true, { 'line-color': rc, 'line-width': z(4, 10.5) });
+  map.addSource('queue', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });   // your border line (drawQueue)
+  map.addLayer({ id: 'queue', type: 'line', source: 'queue', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#f08c00', 'line-width': z(3, 7), 'line-dasharray': [1.4, 1] } }, first);
+  if (nav) nav.trShown = -1;   // a new style: draw the driven part again on the next frame
   addMyPlaces();
   map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zones', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'kind'], 'fire'], '#e4572e', '#8a8a8a'], 'fill-opacity': ['case', ['get', 'active'], 0.28, 0.12] } }, 'alt');
@@ -1474,10 +1518,11 @@ mapReady = (async () => {
     const c = map.getCenter(), ctr = [c.lat, c.lng], co = nav.rt.coords;
     let best = Infinity, bi = -1;
     for (let i = 0; i < co.length; i += 2) { const d = meters(co[i], ctr); if (d < best) { best = d; bi = i; } }
-    if (best > 1500) return;
+    if (best > 250) return;
     const steps = nav.rt.steps; let si = steps.length - 1;
     for (let i = 0; i < steps.length; i++) if (steps[i].begin >= bi) { si = i; break; }
     if (si < nav.live.next) return;
+    if (si === nav.live.next && nav.peek == null) return;   // still the current turn: nothing to preview
     clearTimeout(peekTimer); nav.peek = si; nav.peekPan = true; $('nav').classList.add('peek'); drawPeek();
   });   // a pinch is kept, not snapped back
   const touching = on => () => { touchDown = on; if (nav) nav.touching = on; };
@@ -1526,6 +1571,7 @@ function glideFrame() {
   const now = performance.now(), g = glidePos(now);
   meMarker.setLngLat([g.ll[1], g.ll[0]]);
   if (meMarker._kind === 'puck') meMarker.setRotation(g.h);
+  trackFrame(now);
   const easing = followCam(g, now);
   if (!g.done || easing) glide.raf = requestAnimationFrame(glideFrame);
 }
@@ -1553,6 +1599,36 @@ function followCam(g, now) {   // true while the view is still easing toward its
   if (now - glide.saved > 5000) { glide.saved = now; store('map.view', { c: [g.ll[0], g.ll[1]], z: map.getZoom() }); }
   return easing;
 }
+// The part of the route already driven turns grey, moving with your arrow frame by frame. It is a colour change
+// along the one route line (MapLibre line-progress), so nothing is redrawn. Progress is measured the way the map
+// measures the line (Web Mercator), so the grey ends right under the arrow.
+function trackReset(rt) {
+  const merc = q => [q[1] / 360, Math.log(Math.tan(Math.PI / 4 + q[0] * Math.PI / 360)) / (2 * Math.PI)];
+  const m = rt.coords.map(merc), mcum = [0];
+  for (let i = 1; i < m.length; i++) mcum.push(mcum[i - 1] + Math.hypot(m[i][0] - m[i - 1][0], m[i][1] - m[i - 1][1]));
+  Object.assign(nav, { mcum, mtotal: mcum[mcum.length - 1] || 1, trA: 0, trB: 0, trShown: -1, trT0: 0, trDur: 1 });
+}
+function trackTo(i, t) {   // a new fix at segment i, fraction t: glide the grey there over the same time as the arrow
+  if (!nav || !nav.mcum) return;
+  const mc = nav.mcum, f = Math.min(1, (mc[i] + t * ((mc[i + 1] || mc[i]) - mc[i])) / nav.mtotal);
+  nav.trA = nav.trShown >= 0 ? nav.trShown : f; nav.trB = f;
+  nav.trT0 = glide.t0; nav.trDur = glide.dur;
+}
+function trackFrame(now) {
+  if (!nav || !nav.mcum || !map.getLayer('sel')) return;
+  const k = Math.min(1, (now - nav.trT0) / (nav.trDur || 1)), f = nav.trA + (nav.trB - nav.trA) * k;
+  if (Math.abs(f - nav.trShown) < 2e-5) return;
+  nav.trShown = f;
+  const t = theme(), dark = t.ui === 'dark', rc = routeColor(t), p = Math.max(1e-6, Math.min(0.999999, f));
+  const grey = dark ? '#5f6372' : '#a3a8b4', greyEdge = dark ? '#3e4150' : '#7f8591';
+  const grad = (a, b) => ['step', ['line-progress'], a, p, b];
+  try {
+    map.setPaintProperty('sel', 'line-gradient', grad(grey, rc));
+    map.setPaintProperty('casing', 'line-gradient', grad(greyEdge, map.getPaintProperty('casing', 'line-color')));
+    if (map.getLayer('glow')) map.setPaintProperty('glow', 'line-gradient', grad('rgba(0,0,0,0)', rc));
+  } catch (e) {}
+}
+function trackClear() { if (!map) return; ['sel', 'casing', 'glow'].forEach(id => { try { if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', undefined); } catch (e) {} }); }
 function drawAvoid() {
   avoidMarkers.forEach(m => m.remove());
   drawZones();
@@ -2982,7 +3058,7 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
     : { use_ferry: veh.use_ferry, shortest: !!prefs.shortest };
   const body = {
     // A port to cross at is a pass-through point (no stop), only matched to roads heading north into the US
-    locations: viaPts(via).map(q => q.via ? { lat: q.lat, lon: q.lon, type: 'through', heading: 0, heading_tolerance: 89 } : { lat: q.lat, lon: q.lon }),
+    locations: viaPts(via).map(q => q.via ? { lat: q.lat, lon: q.lon, type: 'through', heading: Math.round(q.heading || 0), heading_tolerance: q.tol || 50 } : { lat: q.lat, lon: q.lon }),
     costing, costing_options: { [costing]: opt }, alternates: quiet || pts.stops.length ? 0 : 2, units: 'miles', language: ROUTE_LANG
   };
   // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
@@ -2996,7 +3072,19 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
   const tollKinds = !quiet && (costing === 'auto' || costing === 'truck') && !prefs.noToll;
   const freeBody = Object.assign({}, body, { alternates: 0, costing_options: { [costing]: Object.assign({}, opt, { use_tolls: 0 }) } });
   const freeP = tollKinds && await tollsLikely() ? fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`).then(r => r.json()).catch(() => ({})) : null;
-  const ask = async () => { const r = await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()]; };
+  const ask = async () => {
+    if (via && via.split) {   // into a border lane: normal roads up to the line's entry, then the lane itself (closed to general traffic in the map data)
+      const L = body.locations, k = L.findIndex(q => q.type === 'through' && q.lat === via.split.lat && q.lon === via.split.lon);
+      const entry = Object.assign({}, L[k], { type: 'break' });
+      const bodyA = Object.assign({}, body, { alternates: 0, locations: L.slice(0, k).concat([entry]) });
+      const bodyB = Object.assign({}, body, { alternates: 0, locations: [entry].concat(L.slice(k + 1)), costing_options: { [costing]: Object.assign({}, opt, { ignore_access: !!via.split.lane }) } });   // only the SENTRI lane itself is closed to general traffic in the map data
+      const [ra, rb] = await Promise.all([bodyA, bodyB].map(b2 => fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(b2))}`)));
+      const [da, db] = await Promise.all([ra.json(), rb.json()]);
+      if (!da.trip || !db.trip) return [da.trip ? rb : ra, da.trip ? db : da];
+      return [ra, { trip: joinTrips(da.trip, db.trip) }];
+    }
+    const r = await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()];
+  };
   let [r, data] = await ask(), stuck = false;
   if (!data.trip && skip.length) { delete body.exclude_polygons; [r, data] = await ask(); stuck = !!data.trip; }   // no way around: route through and say so
   if (!data.trip) { const e = new Error(data.error || data.message || 'No route found.'); e.noRoute = r.status === 400; throw e; }
@@ -3204,8 +3292,9 @@ function geoParse(d, via) {
           toll: parts.some(x => x.toll), ferry: parts.some(x => x.ferry), road_class: share(x => /motorway|trunk/.test(x.road_class || '')) > 0.5 ? 'motorway' : head.road_class,
           surface: share(x => /dirt|gravel|path|compacted|impassable|unpaved|ground/.test(x.surface || '')) > 0.5 ? 'unpaved' : 'paved', instruction: head.instruction };
         const ins = st.instruction || {}, ty = geoType(ins.type), arriving = ty >= 4 && ty <= 6, stop = arriving && !last;
-        if (stop && via && li === via.at - 1) return;   // reaching the border port is not a stop: no "arrive" step there
-        const si = via && li >= via.at ? li - 1 : li;
+        const nv = viaList(via).length;
+        if (stop && via && li >= via.at - 1 && li < via.at - 1 + nv) return;   // passing a port or lane point is not a stop: no "arrive" step there
+        const si = via && li >= via.at - 1 + nv ? li - nv : li;
         const text = stop ? 'Arrive at stop ' + (si + 1) + (stopName(si) ? ', ' + stopName(si) : '') + '.' : ins.text || 'Continue.';
         steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
           sign: [ins.exitNumber && 'Exit ' + ins.exitNumber, ins.exitTowards && 'toward ' + [].concat(ins.exitTowards).join(' / ')].filter(Boolean).join(', '),
@@ -3366,6 +3455,12 @@ async function route(quiet, afterFires) {
   found.forEach(describe);
   await Promise.all([checkTolls(found).catch(() => {}), checkBorder(found).catch(() => {})]);
   if (id !== reqId) return false;
+  // Crossing at a port where the lines start somewhere particular: route into your lane's line (at most 4 s)
+  if (found.some(r => laneVia(r.border))) {
+    const done = await Promise.race([Promise.all(found.map(r => laneVia(r.border) ? laneRoute(r).catch(() => null) : Promise.resolve(null))), pause(4000).then(() => null)]);
+    if (id !== reqId) return false;
+    if (done) { const note = found.note; found = found.map((r, i) => done[i] || r); found.note = note; }
+  }
   { const note = found.note; found = found.slice().sort((a, b) => a.time - b.time); found.note = note; }   // fastest first, after border waits are counted
   if (!prefs.showAll) { const note = found.note; found = sensible(found); found.note = note; }
   routes = found; selected = 0;
@@ -3634,6 +3729,71 @@ function borderLine(rt) {
   return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.') + also;
 }
 
+// Where each line starts, for ports where the way into a lane is not the obvious one. Points along each lane's
+// approach, in the direction you drive; the route passes through them (only that way), so it ends up in the right
+// line instead of at the booths from the wrong side. San Ysidro, from Baja Bound's lane maps (bajabound.com).
+const LANE_APPROACH = {
+  'San Ysidro': {
+    // SENTRI: round the Zaragoza monument, then Blvd. Padre Kino to the SENTRI entry
+    // path points in driving order; the route passes the marked ones (index), and the last is where the lane begins
+    sentri: { pts: [[32.52627, -117.00908], [32.52681, -117.00993], [32.53475, -117.01641], [32.53744, -117.02055]], start: 'Blvd. Padre Kino', closed: true },
+    // Ready Lane and regular lanes: the normal route already ends in them. (A Ready Lane approach via the Via Rapida
+    // Oriente ramp was tried: the road data does not join that ramp to the Ready lanes, and the route looped.)
+  }
+};
+function laneVia(b) {   // through-points for your lane at this port, each pair giving a point and the way to drive past it
+  const a = b && b.north && (LANE_APPROACH[b.port] || {})[b.laneKey || prefs.lane || 'standard'];
+  if (!a) return null;
+  const list = a.pts.slice(1).map((q, i) => ({ lat: q[0], lon: q[1], heading: bearing(a.pts[i], q), tol: 50 }));   // each passed in the direction of the line
+  return { list, a };
+}
+const passesAll = (rt, list) => list.every(v => { for (let i = 0; i < rt.coords.length; i += 1) if (meters(rt.coords[i], [v.lat, v.lon]) < 35) return true; return false; });
+// The same trip, but into your lane's line at the port (see LANE_APPROACH). Kept only if it still crosses there.
+async function laneRoute(rt) {
+  const b = rt && rt.border, lv = laneVia(b); if (!lv) return null;
+  if (passesAll(rt, lv.list)) { markApproach(rt, lv); return rt; }   // already goes the right way
+  const q = tripPts(), near = pt => { let best = Infinity, bi = 0; rt.coords.forEach((c, i) => { const d = meters(c, [pt.lat, pt.lon]); if (d < best) { best = d; bi = i; } }); return bi; };
+  let at = q.findIndex((pt, i) => i > 0 && near(pt) > b.idx); if (at < 1) at = q.length - 1;
+  const last = lv.list[lv.list.length - 1], via = { at, list: lv.list, split: { lat: last.lat, lon: last.lon, lane: !!lv.a.closed } };
+  if (Date.now() < ownDownUntil) return null;   // needs the app's own route server (it can follow the lane itself)
+  const list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
+  const alt = list && list[0]; if (!alt) return null;
+  checkTurns(alt); describe(alt);
+  await Promise.all([checkTolls([alt]).catch(() => {}), checkBorder([alt]).catch(() => {})]);
+  if (!alt.border || alt.border.port !== b.port || !alt.border.north) return null;
+  // no turning back once in the line
+  const entryIdx = alt.coords.findIndex(c => meters(c, [last.lat, last.lon]) < 40);
+  if (entryIdx >= 0 && alt.steps.some(st => st.begin > entryIdx && st.begin <= alt.border.idx + 5 && Math.abs(st.angle) >= 170)) return null;
+  if (zoneHits(alt.coords).length && !zoneHits(rt.coords).length) return null;
+  alt.via = rt.via; markApproach(alt, lv);
+  return alt;
+}
+function markApproach(rt, lv) {   // where your line starts on this route: the first approach point
+  const p = lv.a.pts[0]; let best = Infinity, bi = -1;
+  rt.coords.forEach((c, i) => { const d = meters(c, p); if (d < best) { best = d; bi = i; } });
+  rt.approach = best < 80 ? { idx: bi, start: lv.a.start, lane: rt.border.laneKey || prefs.lane || 'standard' } : null;
+  if (!rt.approach) return;
+  // The turn where your line starts says so (once): "Get in the SENTRI line: turn left onto ..."
+  const st = rt.steps.filter(x => x.begin <= bi + 2).pop();
+  if (st && !st.lineStart) {
+    const lane = LANES[rt.approach.lane] || 'Regular lane', pre = 'From here, follow the signs for ' + (rt.approach.lane === 'standard' ? 'the regular lanes' : lane) + '. ';
+    Object.assign(st, { lineStart: true, instruction: pre + st.instruction, say: pre + (st.say || st.instruction) });
+  }
+}
+// The stretch from where your line starts to the booths, drawn over the route in orange, with a label where it starts
+let queueMark = null;
+function drawQueue() {
+  if (!map || !map.getSource('queue')) return;
+  const rt = routes[selected], a = rt && rt.approach, b = rt && rt.border;
+  if (queueMark) { queueMark.remove(); queueMark = null; }
+  if (!a || !b || !b.north || b.idx <= a.idx) { map.getSource('queue').setData({ type: 'FeatureCollection', features: [] }); return; }
+  const line = rt.coords.slice(a.idx, b.idx + 1).map(c => [c[1], c[0]]);
+  map.getSource('queue').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line } }] });
+  const lane = a.lane === 'standard' ? 'Regular line' : (LANES[a.lane] || 'Lane') + ' line';
+  const e = el('div', 'queueTag', lane + (b.wait != null ? ' \u00b7 ' + (b.wait ? fmtTime(b.wait * 60) + ' wait' : 'no wait') : ''));
+  queueMark = new maplibregl.Marker({ element: e, anchor: 'bottom', offset: [0, -8] }).setLngLat(line[0]).addTo(map);
+}
+
 // The same trip through another border port: the route passes through the port (heading north, no stop there).
 // Kept only if the router really crossed there and did not turn around at it.
 async function viaPortRoute(rt, portName) {
@@ -3684,7 +3844,8 @@ async function crossAt(rt, portName) {
 
 function draw(fit) {
   if (!routes.length) return;
-  map.getSource('routes').setData({ type: 'FeatureCollection', features: routes.map((rt, i) => ({ type: 'Feature', properties: { i, sel: i === selected }, geometry: { type: 'LineString', coordinates: rt.coords.map(c => [c[1], c[0]]) } })) });
+  map.getSource('routes').setData({ type: 'FeatureCollection', features: routes.map((rt, i) => ({ type: 'Feature', properties: { i, sel: i === selected }, nav: !!nav && i !== selected, geometry: { type: 'LineString', coordinates: rt.coords.map(c => [c[1], c[0]]) } })).filter(f => !f.nav) });   // during directions: only the route you drive
+  drawQueue();
   const rt = routes[selected], names = titles(), box = $('routes'); box.innerHTML = '';
   routes.forEach((r, i) => {
     const b = el('button', i === selected ? 'on' : '');
@@ -3879,31 +4040,45 @@ function drawSpeed(ll, speed) {
   box.classList.toggle('over', lim > 0 && mph >= lim + (kmhSpeeds() ? 8 : 5));
 }
 // Swipe the direction card: left shows the turns after this one, right goes back; it returns to now after a few seconds
+// Top line of the direction card: distance and the street to turn onto, together and big
+function navTop(distText, st) {
+  const d = $('navDist'), road = st && st.kind !== 'arrive' && st.kind !== 'stop' && st.road ? st.road : '';
+  d.textContent = ''; d.classList.toggle('withRoad', !!road);
+  d.appendChild(el('span', '', distText));
+  if (road) { d.appendChild(el('span', 'sep', '\u00b7')); d.appendChild(el('span', 'road', road)).dataset.raw = ''; }
+}
 let peekTimer = 0;
+let peekMark = null;
 function drawPeek() {
   const rt = nav.rt, st = rt.steps[nav.peek]; if (!st) return;
-  const dist = Math.max(0, nav.cum[st.begin] - (nav.along || 0));
+  const dist = Math.max(0, nav.cum[st.begin] - (nav.along || 0)), ahead = nav.peek - nav.live.next + 1, left = rt.steps.length - nav.live.next;
   $('navArrow').innerHTML = arrow(st);
-  $('navDist').textContent = 'In ' + fmtDist(dist / 1609.34);
+  $('peekTag').textContent = 'Preview \u00b7 turn ' + ahead + ' of ' + left;
+  navTop('In ' + fmtDist(dist / 1609.34), st);
   $('navText').textContent = st.instruction;
   $('navLanes').innerHTML = '';
-  $('navMore').textContent = (nav.peek === nav.live.next ? 'Your next turn' : 'Turn ' + (nav.peek - nav.live.next + 1) + ' from now') + ' \u00b7 tap here to go back to now';
+  $('navMore').textContent = '';
   $('navThen').textContent = '';
+  // An arrow on the map at that turn, pointing the way you go after it
+  const c = rt.coords, at = c[st.begin], to = c[Math.min(c.length - 1, st.begin + 3)] || at;
+  if (!peekMark) { const e = el('div', 'peekMark'); e.innerHTML = '<svg viewBox="0 0 40 40"><path d="M20 4l13 30-13-7-13 7z"/></svg>'; peekMark = new maplibregl.Marker({ element: e, rotationAlignment: 'map', pitchAlignment: 'map' }); }
+  peekMark.setLngLat([at[1], at[0]]).setRotation(at === to ? 0 : bearing(at, to)).addTo(map);
 }
+function endPeekMark() { if (peekMark) peekMark.remove(); }
 function peekTo(i) {
   if (!nav || !nav.live) return;
   const steps = nav.rt.steps, first = nav.live.next, last = steps.length - 1;
   i = Math.max(first, Math.min(last, i));
   clearTimeout(peekTimer);
   if (i === first) {   // back to now
-    nav.peek = null; nav.peekPan = false; $('nav').classList.remove('peek'); nav.follow = true; document.body.classList.remove('free');
+    nav.peek = null; nav.peekPan = false; $('nav').classList.remove('peek'); endPeekMark(); nav.follow = true; document.body.classList.remove('free');
     if (here) refix();
     return;
   }
   nav.peek = i; $('nav').classList.add('peek'); drawPeek();
   const c = nav.rt.coords[steps[i].begin];
   map.stop(); map.easeTo({ center: [c[1], c[0]], zoom: 16.5, bearing: 0, pitch: 0, padding: viewPad(), duration: 500 });
-  peekTimer = setTimeout(() => peekTo(-1), 8000);
+  peekTimer = setTimeout(() => peekTo(-1), 12000);
 }
 (() => {
   let x0 = null, y0 = 0;
@@ -3912,20 +4087,22 @@ function peekTo(i) {
   card.addEventListener('touchend', e => {
     if (x0 == null) return;
     const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
-    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3 || !nav || !nav.live) return;
+    if (Math.abs(dx) < 90 || Math.abs(dx) < Math.abs(dy) * 2.5 || !nav || !nav.live) return;   // a long, clearly sideways swipe
     const at = nav.peek == null ? nav.live.next : nav.peek;
     peekTo(dx < 0 ? at + 1 : at - 1);
   });
   card.addEventListener('click', () => { if (nav && nav.peek != null) peekTo(-1); });   // a tap on a peeked card returns to now
+  $('navBack').addEventListener('click', e => { e.stopPropagation(); peekTo(-1); });
   let mx = null;   // mouse drag, for the website
   card.addEventListener('mousedown', e => { mx = e.clientX; });
-  addEventListener('mouseup', e => { if (mx == null) return; const dx = e.clientX - mx; mx = null; if (Math.abs(dx) > 40 && nav && nav.live) { const at = nav.peek == null ? nav.live.next : nav.peek; peekTo(dx < 0 ? at + 1 : at - 1); } });
+  addEventListener('mouseup', e => { if (mx == null) return; const dx = e.clientX - mx; mx = null; if (Math.abs(dx) > 90 && nav && nav.live) { const at = nav.peek == null ? nav.live.next : nav.peek; peekTo(dx < 0 ? at + 1 : at - 1); } });
 })();
 function loadNavRoute() {   // (re)build the progress tables for the current route
   const rt = routes[selected], cum = [0];
   for (let i = 1; i < rt.coords.length; i++) cum.push(cum[i - 1] + meters(rt.coords[i - 1], rt.coords[i]));
   Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null, peek: null, live: null });
-  $('nav').classList.remove('peek');
+  $('nav').classList.remove('peek'); endPeekMark();
+  trackReset(rt);
   loadLimits(rt);
   if (CAR && nav.carOn) CAR.route({ route: carRoutePts(rt) }).catch(() => {});   // rerouted: the new line on the car screen
 }
@@ -3950,10 +4127,11 @@ function startNav() {
 function endNav(arrivedAt) {
   if (!nav) return;
   if (LIVE && liveOn) {   // arrived: the lock screen says so for a few minutes; stopped early: it goes away
-    if (arrivedAt) LIVE.update({ dist: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
+    if (arrivedAt) LIVE.update({ dist: '', road: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
     LIVE.end({ arrived: !!arrivedAt }).catch(() => {});
   }
   liveOn = false; liveLast = '';
+  trackClear(); endPeekMark();
   if (CAR) CAR.end({ arrived: !!arrivedAt }).catch(() => {});
   if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
   if (nav.city) clearTimeout(nav.city.t);
@@ -4077,6 +4255,7 @@ function onFix(p) {
     return;
   }
   nav.off = 0; nav.seg = s.i;
+  trackTo(s.i, s.t);
   const rt = nav.rt, cum = nav.cum, steps = rt.steps, total = cum[cum.length - 1];
   const along = cum[s.i] + s.t * (cum[s.i + 1] - cum[s.i]), left = total - along;
   let cur = 0;
@@ -4115,8 +4294,10 @@ function onFix(p) {
   if (nav.peek != null) { drawPeek(); }
   else {
   $('navArrow').innerHTML = next ? arrow(next) : '';
-  $('navDist').textContent = fmtDist(toNext / 1609.34);
-  $('navText').textContent = !next ? 'Continue' : level === 'brief' ? next.short : withMark(next.instruction, extras.mark);
+  navTop(fmtDist(toNext / 1609.34), next);
+  // The street is already big on top: under it, the turn itself without repeating the street ("Turn right")
+  const plain = next && next.road && level !== 'detailed' ? next.instruction.replace(new RegExp('\\s+(onto|on|to|hacia|por)\\s+' + next.road.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.?$', 'i'), '.') : null;
+  $('navText').textContent = !next ? 'Continue' : level === 'brief' ? next.short : withMark(plain && plain !== next.instruction ? plain : next.instruction, extras.mark);
   const lanesEl = $('navLanes'); lanesEl.innerHTML = '';
   if (level !== 'brief' && extras.lanes && toNext < 1600) extras.lanes.forEach(l => lanesEl.appendChild(el('span', l.valid ? 'ok' : '', l.glyph)));
   $('navMore').textContent = level === 'detailed' && next ? [next.sign, next.road && next.kind !== 'arrive' && !next.instruction.includes(next.road) ? 'onto ' + next.road : '', next.length ? 'then ' + fmtDist(next.length) + ' on it' : ''].filter(Boolean).join('  \u00b7  ') : '';
@@ -4129,7 +4310,7 @@ function onFix(p) {
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
   liveSend();
-  carSend({ text: tr($('navText').textContent), sym: nav.sym, dist: toNext, left: secs, leftDist: left, lat: ll[0], lon: ll[1], heading: head });
+  carSend({ text: next ? tr(withMark(next.instruction, extras.mark)) : tr('Continue'), sym: nav.sym, dist: toNext, left: secs, leftDist: left, lat: ll[0], lon: ll[1], heading: head });
   // Further out the faster you go, closer in for a turn in town. One smooth curve on the smoothed speed (steps made the
   // map zoom in and out whenever the speed hovered around a step).
   nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));
@@ -4555,7 +4736,7 @@ $('cityPick').onclick = () => {   // stop directions and open search, so you can
 $('arrivedOk').onclick = () => { document.body.classList.remove('arrived'); clearAll(); };
 $('recenter').onclick = () => {   // back to you with the same zoom-out-and-in as the locate button, then following resumes
   if (!nav) return;
-  nav.follow = true; nav.zoomHold = 0; nav.peek = null; $('nav').classList.remove('peek'); clearTimeout(peekTimer); document.body.classList.remove('free');
+  nav.follow = true; nav.zoomHold = 0; nav.peek = null; $('nav').classList.remove('peek'); endPeekMark(); clearTimeout(peekTimer); document.body.classList.remove('free');
   if (!here) return;
   refix();
   const t = nav.cam; if (!t) return;
@@ -4702,7 +4883,7 @@ function dropVia() { pts.stops = []; drawStopPins(); tempAvoid = null; }
 function clearPoints() { dropVia(); ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
   clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
-  if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] });
+  if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] }); drawQueue();
   $('bottom').style.display = 'none'; $('suggest').style.display = 'none';
   document.body.classList.remove('dest'); layout();
   status(''); history.replaceState(null, '', location.pathname); syncClear(); drawStrip();
@@ -4716,7 +4897,7 @@ $('to').addEventListener('input', () => {   // a new search replaces the old des
   reqId++; routes = []; dropVia();
   if (markers.to) { markers.to.remove(); markers.to = null; }
   pts.to = null; if (!planning) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }
-  if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] });
+  if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] }); drawQueue();
   $('bottom').style.display = 'none'; document.body.classList.remove('dest'); layout(); status(''); drawStrip();
   history.replaceState(null, '', location.pathname);
 });

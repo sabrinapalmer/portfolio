@@ -52,7 +52,7 @@ const live = await p.evaluate(() => window.__live);
 console.log(JSON.stringify(live.map(([k, o]) => [k, o && (o.dist + ' | ' + o.text + ' | ' + o.sym + ' | ' + o.arrive + ' | ' + o.left + ' | ' + o.dest)]), null, 1));
 const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 check(live[0] && live[0][0] === 'start' && live[0][1].dest === 'Museum', 'directions start a Live Activity named for the destination');
-check(live.some(([k, o]) => k === 'update' && o.sym === 'arrow.turn.up.right' && /Pine Avenue/.test(o.text)), 'updates carry the next turn as a right-turn arrow');
+check(live.some(([k, o]) => k === 'update' && o.sym === 'arrow.turn.up.right' && o.road === 'Pine Avenue' && /Turn right/.test(o.text)), 'updates carry the distance, the street to turn onto (big) and a right-turn arrow');
 check(live.filter(([k]) => k === 'update').length >= 2, 'it updates as you drive');
 await p.click('#endNav'); await p.waitForTimeout(300);
 const last = await p.evaluate(() => window.__live.at(-1));

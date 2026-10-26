@@ -32,11 +32,14 @@ struct NavLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(ctx.state.dist).font(.system(size: 22, weight: .bold)).lineLimit(1)
+                    Text(ctx.state.dist).font(.system(size: 24, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
-                        Text(ctx.state.text).font(.system(size: 15, weight: .semibold)).lineLimit(2).multilineTextAlignment(.center)
+                        if !ctx.state.road.isEmpty {
+                            Text(ctx.state.road).font(.system(size: 22, weight: .bold)).lineLimit(1).minimumScaleFactor(0.6)
+                        }
+                        Text(ctx.state.text).font(.system(size: 14, weight: .medium)).foregroundColor(.secondary).lineLimit(1).multilineTextAlignment(.center)
                         ProgressView(value: ctx.state.progress).tint(accent)
                     }
                 }
@@ -60,10 +63,16 @@ struct LockScreenView: View {
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: state.sym)
                     .font(.system(size: 30, weight: .bold)).foregroundColor(.white)
-                    .frame(width: 52, height: 52).background(accent).clipShape(RoundedRectangle(cornerRadius: 14))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(state.dist).font(.system(size: 24, weight: .bold)).lineLimit(1)
-                    Text(state.text).font(.system(size: 15, weight: .semibold)).lineLimit(2)
+                    .frame(width: 58, height: 58).background(accent).clipShape(RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 1) {
+                    // What to look for, big: "330 ft · Pine Avenue"; the full instruction under it, smaller
+                    if state.road.isEmpty {
+                        Text(state.dist).font(.system(size: 30, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                    } else {
+                        (Text(state.dist).font(.system(size: 30, weight: .heavy)) + Text("  ") + Text(state.road).font(.system(size: 26, weight: .bold)))
+                            .lineLimit(2).minimumScaleFactor(0.6)
+                    }
+                    Text(state.text).font(.system(size: 14, weight: .medium)).foregroundColor(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
