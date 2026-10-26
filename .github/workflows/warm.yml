@@ -17,12 +17,12 @@ jobs:
           ok=0; bad=0
           for x in $(seq -126 2 -110); do for y in $(seq 22 2 40); do
             for ep in fires firms; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -H 'Referer: https://www.sabrinapalmer.com/map' \
-                "https://www.sabrinapalmer.com/api/$ep?bbox=$x,$y,$((x+2)),$((y+2))")
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -H 'Referer: https://brinamaps.com/map' \
+                "https://brinamaps.com/api/$ep?bbox=$x,$y,$((x+2)),$((y+2))")
               if [ "$code" = 200 ]; then ok=$((ok+1)); else bad=$((bad+1)); fi
             done
           done; done
           echo "::notice::warmed $ok squares, $bad failed"
       - name: Border waits
         run: |
-          curl -s -o /dev/null -w 'border %{http_code}\n' --max-time 30 -H 'Referer: https://www.sabrinapalmer.com/map' https://www.sabrinapalmer.com/api/border
+          curl -s -o /dev/null -w 'border %{http_code}\n' --max-time 30 -H 'Referer: https://brinamaps.com/map' https://brinamaps.com/api/border

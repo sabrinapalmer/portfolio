@@ -22,7 +22,7 @@ export async function GET(req) {
   // Several public Overpass servers asked at once; the first good answer wins (each is often busy or slow)
   const HOSTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
   const ctl = new AbortController(), why = [];
-  const ask = host => fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://www.sabrinapalmer.com/map)', Accept: 'application/json' }, signal: AbortSignal.any ? AbortSignal.any([ctl.signal, AbortSignal.timeout(20000)]) : ctl.signal })
+  const ask = host => fetch(host + '?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'BrinaMaps/1.0 (https://brinamaps.com)', Accept: 'application/json' }, signal: AbortSignal.any ? AbortSignal.any([ctl.signal, AbortSignal.timeout(20000)]) : ctl.signal })
     .then(async r => { if (!r.ok) throw new Error(host.split('/')[2] + ' ' + r.status); const j = await r.json(); if (!j || !Array.isArray(j.elements)) throw new Error(host.split('/')[2] + ' bad answer'); return j; })
     .catch(e => { why.push(e.name === 'TimeoutError' ? host.split('/')[2] + ' timeout' : e.message); throw e; });
   let d = null;

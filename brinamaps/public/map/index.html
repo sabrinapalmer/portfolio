@@ -549,7 +549,7 @@ if (/[?&]car=1\b/.test(location.search)) {
   <div class="chips" id="premBuy"><button id="premM">Monthly</button><button id="premY">Yearly</button><button id="premRestore">Restore purchases</button></div>
   <div class="rig" style="margin-top:8px"><div class="field" style="flex:1"><input id="giftCode" type="text" placeholder="Have a code?" autocomplete="off" autocapitalize="characters" spellcheck="false"></div><button id="giftUse">Use code</button></div>
   <div id="premMsg" style="font-size:13px;color:var(--muted);margin-top:6px"></div>
-  <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://sabrinapalmer.com/map/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
+  <p class="fine">Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone's Settings under your name, then Subscriptions. <a href="https://brinamaps.com/privacy" target="_blank" rel="noopener">Privacy policy</a> &middot; <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of use</a></p>
   </div>
   <div class="webonly">
   <h3>Live traffic (optional)</h3>
@@ -982,9 +982,9 @@ if (KEYS && KEYS.addListener) {
 // which holds the key. The free community servers (Photon, Nominatim, Valhalla and OSRM at FOSSGIS) are kept as a
 // backup on the website only.
 document.body.classList.toggle('native', NATIVE);
-const FREE_OK = !NATIVE, API = NATIVE ? 'https://www.sabrinapalmer.com/api' : '/api', OWN_ROUTER = API + '/valhalla';
+const FREE_OK = !NATIVE, API = NATIVE ? 'https://brinamaps.com/api' : '/api', OWN_ROUTER = API + '/valhalla';
 fetch(OWN_ROUTER + '/status').then(r => r.json()).then(d => { ownDownUntil = d.ok ? 0 : Date.now() + 1800000; }).catch(() => { ownDownUntil = Date.now() + 600000; });   // www: the bare domain redirects, and the app's requests cannot follow a redirect
-const SHARE_BASE = NATIVE ? 'https://sabrinapalmer.com/map' : location.origin + location.pathname;
+const SHARE_BASE = NATIVE ? 'https://brinamaps.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
 // ---------- Offline map storage ----------
@@ -3658,7 +3658,7 @@ const boothCache = new Map();   // grid cell -> booths [[lat, lon]] (or null whi
 // The list of every toll booth in North America (refreshed weekly from OpenStreetMap, about 100 KB), fetched once;
 // cells it does not cover fall back to asking the server
 let boothList = null;
-const loadBooths = () => boothList || (boothList = fetch((NATIVE ? 'https://www.sabrinapalmer.com' : '') + '/map/data/tolls.json')
+const loadBooths = () => boothList || (boothList = fetch((NATIVE ? 'https://brinamaps.com' : '') + '/map/data/tolls.json')
   .then(r => r.ok ? r.json() : null).then(d => d && Array.isArray(d.booths) && d.booths.length > 100 ? d.booths : null).catch(() => null)
   .then(v => { if (!v) boothList = null; return v; }));
 async function tollsLikely() {   // any toll booth near the straight line of the trip (padded about 15 km)

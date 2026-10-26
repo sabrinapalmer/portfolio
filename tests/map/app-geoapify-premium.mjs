@@ -3,7 +3,7 @@
 import { chromium } from 'playwright-core';
 import fs from 'fs';
 const ROOT = new URL('../../', import.meta.url).pathname, CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const html = fs.readFileSync(ROOT + 'public/map/index.html', 'utf8');
+const html = fs.readFileSync(ROOT + 'brinamaps/public/map/index.html', 'utf8');
 const HERE = [32.355, -117.05];
 const errs = [], calls = [];
 let dirty = false, tollBooths = [];
@@ -65,7 +65,7 @@ await p.route('**/*', async r => {
   if (u.includes('maplibre-gl.min.css')) return r.fulfill({ contentType: 'text/css', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.css') });
   if (u.includes('openfreemap')) return J({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] });
   if (/photon|nominatim|openstreetmap\.de|census\.gov/.test(u)) { calls.push('COMMUNITY ' + u); return r.abort(); }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/geo')) {
+  if (u.startsWith('https://brinamaps.com/api/geo')) {
     const q = new URL(u).searchParams, ep = q.get('ep'); calls.push('geo ' + ep + (q.get('avoid') ? ' avoid=' + q.get('avoid') : '') + (q.get('type') ? ' type=' + q.get('type') : ''));
     if (ep === 'autocomplete' && /oxxo/i.test(q.get('text'))) return J({ type: 'FeatureCollection', features: q.get('filter') === 'countrycode:us'
       ? [place('Oxxo', 32.56, -117.04, 'San Ysidro', 'United States')]
@@ -78,17 +78,17 @@ await p.route('**/*', async r => {
     if (ep === 'matrix') { const b = JSON.parse(r.request().postData() || '{}'); return J({ sources_to_targets: [b.targets.map((t, i) => ({ time: 600 + 300 * i, distance: 1000 }))] }); }
     return r.fulfill({ status: 404, body: '{}' });
   }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/poi')) { calls.push('poi ' + new URL(u).searchParams.get('q')); return J({ places: /hacienda/i.test(u) ? [{ name: 'Hacienda Km 43', street: 'Carretera Libre Tijuana-Ensenada Km 43', city: 'Puerto Nuevo', state: 'Baja California', country: 'Mexico', cc: 'mx', lat: 32.25, lon: -116.94 }] : [] }); }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/log')) { calls.push('log'); return r.fulfill({ status: 204, body: '' }); }
-  if (u.startsWith('https://www.sabrinapalmer.com/map/data/tolls.json')) { calls.push('toll list'); return r.fulfill({ status: 404, body: '' }); }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/firms')) { calls.push('firms'); return J({ at: Date.now(), spots: [] }); }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/tolls')) { calls.push('tolls'); return J({ booths: tollBooths }); }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/border')) { calls.push('border'); return J({ at: Date.now(), ports: [{ port: 'San Ysidro', crossing: '', status: 'Open', standard: { minutes: 75, status: 'delay' }, ready: { minutes: 45, status: 'delay' }, sentri: { minutes: 15, status: 'no delay' } }] }); }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/premium')) {
+  if (u.startsWith('https://brinamaps.com/api/poi')) { calls.push('poi ' + new URL(u).searchParams.get('q')); return J({ places: /hacienda/i.test(u) ? [{ name: 'Hacienda Km 43', street: 'Carretera Libre Tijuana-Ensenada Km 43', city: 'Puerto Nuevo', state: 'Baja California', country: 'Mexico', cc: 'mx', lat: 32.25, lon: -116.94 }] : [] }); }
+  if (u.startsWith('https://brinamaps.com/api/log')) { calls.push('log'); return r.fulfill({ status: 204, body: '' }); }
+  if (u.startsWith('https://brinamaps.com/map/data/tolls.json')) { calls.push('toll list'); return r.fulfill({ status: 404, body: '' }); }
+  if (u.startsWith('https://brinamaps.com/api/firms')) { calls.push('firms'); return J({ at: Date.now(), spots: [] }); }
+  if (u.startsWith('https://brinamaps.com/api/tolls')) { calls.push('tolls'); return J({ booths: tollBooths }); }
+  if (u.startsWith('https://brinamaps.com/api/border')) { calls.push('border'); return J({ at: Date.now(), ports: [{ port: 'San Ysidro', crossing: '', status: 'Open', standard: { minutes: 75, status: 'delay' }, ready: { minutes: 45, status: 'delay' }, sentri: { minutes: 15, status: 'no delay' } }] }); }
+  if (u.startsWith('https://brinamaps.com/api/premium')) {
     const body = JSON.parse(r.request().postData() || '{}'); calls.push('premium ' + body.transaction);
     return J({ pass: 'test-pass.sig', expires: Date.now() + 30 * 864e5 });
   }
-  if (u.startsWith('https://www.sabrinapalmer.com/api/traffic')) {
+  if (u.startsWith('https://brinamaps.com/api/traffic')) {
     calls.push('traffic ' + new URL(u).searchParams.get('ep') + ' t=' + new URL(u).searchParams.get('t'));
     if (new URL(u).searchParams.get('ep') === 'flow') return r.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') });
     return J({ routes: [{ summary: { travelTimeInSeconds: 3300, noTrafficTravelTimeInSeconds: 3000, lengthInMeters: 60000 }, legs: [{ points: [{ latitude: HERE[0], longitude: HERE[1] }, { latitude: 31.86, longitude: -116.6 }] }], guidance: { instructions: [] }, sections: [] }] });

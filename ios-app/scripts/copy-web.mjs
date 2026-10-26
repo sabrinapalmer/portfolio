@@ -1,7 +1,7 @@
-// Builds www/ for the iPhone app from the same page the website serves (public/map/index.html).
+// Builds www/ for the iPhone app from the same page the website serves (brinamaps/public/map/index.html).
 // The map library is bundled so the app opens with no connection; everything else in the page is unchanged.
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
-const here = new URL('..', import.meta.url).pathname, src = here + '../public/map/', out = here + 'www/';
+const here = new URL('..', import.meta.url).pathname, src = here + '../brinamaps/public/map/', out = here + 'www/';
 rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true });
 let html = readFileSync(src + 'index.html', 'utf8');
 const swap = (from, to) => { if (!html.includes(from)) throw new Error('copy-web: expected to find ' + from); html = html.replace(from, to); };
@@ -19,4 +19,4 @@ const iap = here + 'node_modules/capacitor-plugin-cdv-purchase/www/';
 copyFileSync(iap + 'capacitor-plugin.js', out + 'cdv-purchase-bridge.js');
 copyFileSync(iap + 'store.js', out + 'cdv-purchase.js');
 copyFileSync(src + 'icon-180.png', out + 'icon-180.png');
-console.log('www/ built from public/map');
+console.log('www/ built from brinamaps/public/map');

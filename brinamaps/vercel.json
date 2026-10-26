@@ -1,0 +1,78 @@
+{
+  "framework": null,
+  "buildCommand": "",
+  "installCommand": "",
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/api/valhalla/:ep",
+      "destination": "/api/valhalla?ep=:ep"
+    },
+    {
+      "source": "/map",
+      "destination": "/map/index.html"
+    },
+    {
+      "source": "/map/privacy",
+      "destination": "/map/privacy.html"
+    },
+    {
+      "source": "/map/support",
+      "destination": "/map/support.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/map/sw.js",
+      "headers": [
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/map"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/map/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        }
+      ]
+    },
+    {
+      "source": "/map/data/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/privacy",
+      "destination": "/map/privacy",
+      "permanent": false
+    },
+    {
+      "source": "/support",
+      "destination": "/map/support",
+      "permanent": false
+    },
+    {
+      "source": "/((?!map|api).*)",
+      "destination": "/map",
+      "permanent": false
+    }
+  ]
+}
