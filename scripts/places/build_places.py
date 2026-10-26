@@ -1,4 +1,4 @@
-"""Builds BrinaMaps' own place list and loads it into the app's database (Supabase).
+"""Builds BrinaMaps' own place list as one SQLite file, served by the app's route server (scripts/router/places_server.py).
 
 Two open sources, merged:
   - Overture Maps places: wide coverage of businesses, with phone, website and brand
@@ -10,10 +10,13 @@ Run by .github/workflows/places.yml. Settings come from the environment:
   OSM_EXTRACTS   "name=url url;name=url" Geofabrik .osm.pbf files for each region
 Regions are done ONE AT A TIME (read, merge, load, then free the memory), so the build machine never holds them all.
   MIN_CONF       lowest Overture confidence kept (0..1)
-  MAX_ROWS       most places loaded
-  SUPABASE_URL, SUPABASE_KEY (publishable key), IMPORT_TOKEN (the load token)
+  MAX_ROWS       most places kept
+  OUT_DB         path of the SQLite file to write (default places.db)
+The file holds: places (one row per place), names (a trigram index over the folded name, so any part of a name is
+found fast, accents ignored) and pos (an R*Tree over the location). The release workflow packs and publishes it;
+the route server downloads it and swaps it in.
 """
-import json, os, re, subprocess, sys, time, unicodedata, urllib.request, xml.etree.ElementTree as ET
+import json, os, re, sqlite3, subprocess, sys, time, unicodedata, urllib.request, xml.etree.ElementTree as ET
 from collections import defaultdict
 
 import duckdb
@@ -26,8 +29,7 @@ REGIONS = [a[1] for a in AREAS]
 OSM_EXTRACTS = {k.strip(): v.split() for k, v in (x.split('=', 1) for x in os.environ.get('OSM_EXTRACTS', '').split(';') if '=' in x)}
 MIN_CONF = float(os.environ.get('MIN_CONF', '0.6'))
 MAX_ROWS = int(os.environ.get('MAX_ROWS', '1000000'))
-SB_URL, SB_KEY, TOKEN = os.environ['SUPABASE_URL'].rstrip('/'), os.environ['SUPABASE_KEY'], os.environ.get('IMPORT_TOKEN', '')
-DRY = os.environ.get('DRY_RUN') == '1' or not TOKEN   # without the load token (secret not set yet) it only builds and reports
+OUT_DB = os.environ.get('OUT_DB', 'places.db')
 
 
 def log(*a):
@@ -289,43 +291,76 @@ def score(p):
     return s
 
 
-def rpc(fn, payload, timeout=120):
-    req = urllib.request.Request(SB_URL + '/rest/v1/rpc/' + fn, data=json.dumps(payload).encode(), method='POST',
-                                 headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode()
-
-
 LENS = {'name': 160, 'addr': 200, 'city': 80, 'region': 80, 'phone': 40, 'website': 200, 'hours': 300, 'facts': 160, 'wikidata': 20, 'wikipedia': 160, 'brand': 80, 'kind': 60, 'cat': 80}
 
 
-def send(rows, run_id):
-    """Loads one region's places in batches of 1,000; returns how many went in"""
-    total, size = 0, 1000
-    for i in range(0, len(rows), size):
-        payload = {'token': TOKEN, 'run_id': run_id, 'rows': rows[i:i + size]}
-        for attempt in range(5):
-            try:
-                total += int(rpc('import_places', payload))
-                break
-            except Exception as e:
-                log('batch', i, 'failed:', e, '- retrying')
-                time.sleep(5 * (attempt + 1))
-        else:
-            sys.exit('loading failed')
-        if (i // size) % 200 == 0:
-            log('loaded', total, 'of', len(rows))
-    return total
+COLS = ['id', 'name', 'norm', 'cell', 'kind', 'cat', 'lat', 'lon', 'addr', 'city', 'region', 'cc', 'phone', 'website', 'hours', 'facts', 'wikidata', 'wikipedia', 'conf']
+
+
+def open_db():
+    if os.path.exists(OUT_DB):
+        os.remove(OUT_DB)
+    db = sqlite3.connect(OUT_DB)
+    db.executescript("""
+      PRAGMA journal_mode = OFF; PRAGMA synchronous = OFF; PRAGMA page_size = 8192; PRAGMA cache_size = -400000;
+      CREATE TABLE places (rid INTEGER PRIMARY KEY, id TEXT NOT NULL, name TEXT NOT NULL, norm TEXT NOT NULL, cell TEXT NOT NULL, kind TEXT, cat TEXT,
+        lat REAL NOT NULL, lon REAL NOT NULL, addr TEXT, city TEXT, region TEXT, cc TEXT, phone TEXT, website TEXT, hours TEXT,
+        facts TEXT, wikidata TEXT, wikipedia TEXT, conf REAL);
+      CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);
+    """)
+    return db
+
+
+def cell(lat, lon):
+    """Half-degree square (about 55 km) as a word in the name index, so a name search can stay near the person
+    without looking at every place of that name: c + 3 digits of latitude + 3 of longitude"""
+    return 'c%03d%03d' % (min(359, int((lat + 90) * 2)), min(719, int((lon + 180) * 2)))
+
+
+def write(db, rows):
+    """Adds one region's places; returns how many"""
+    out = []
+    for r in rows:
+        name = r.get('name')
+        if not name or r.get('lat') is None or r.get('lon') is None:
+            continue
+        out.append(tuple([r.get('id'), name, fold(name), cell(r['lat'], r['lon'])] + [r.get(k) for k in COLS[4:]]))
+    db.executemany('INSERT INTO places (' + ','.join(COLS) + ') VALUES (' + ','.join('?' * len(COLS)) + ')', out)
+    db.commit()
+    return len(out)
+
+
+def finish(db, summary):
+    """The search indexes, built once all rows are in (much faster than keeping them up to date while loading)"""
+    log('building the name index')
+    db.executescript("""
+      CREATE VIRTUAL TABLE names USING fts5(norm, cell, content='places', content_rowid='rid', tokenize='trigram');
+      INSERT INTO names(rowid, norm, cell) SELECT rid, norm, cell FROM places;
+      INSERT INTO names(names) VALUES ('optimize');
+    """)
+    log('building the location index')
+    db.executescript("""
+      CREATE VIRTUAL TABLE pos USING rtree(rid, minlat, maxlat, minlon, maxlon);
+      INSERT INTO pos SELECT rid, lat, lat, lon, lon FROM places;
+      CREATE INDEX places_cat ON places (cat);
+      CREATE INDEX places_id ON places (id);
+    """)
+    db.execute('INSERT INTO meta VALUES (?, ?)', ('built', time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())))
+    db.execute('INSERT INTO meta VALUES (?, ?)', ('summary', json.dumps(summary)))
+    db.commit()
+    log('compacting')
+    db.execute('VACUUM')
+    db.execute('ANALYZE')
+    db.close()
+    notice('place file', OUT_DB, round(os.path.getsize(OUT_DB) / 1e9, 2), 'GB')
 
 
 def main():
     release = overture_release()
-    run_id = release + '/' + time.strftime('%Y%m%d')
-    if not DRY:   # the table is emptied and its search indexes dropped (quick inserts); rebuilt in the background at the end
-        log('table emptied for the load:', rpc('import_begin', {'token': TOKEN}))
+    db = open_db()
     total_w = sum(a[2] for a in AREAS)
     seen, loaded, summary = set(), 0, {}
-    for name, box, share in AREAS:   # one region at a time: read, merge, load, then let go of it
+    for name, box, share in AREAS:   # one region at a time: read, merge, write, then let go of it
         quota = int(MAX_ROWS * share / total_w)
         rows = merge(load_overture(release, [box]), load_osm(OSM_EXTRACTS.get(name, []), [box]))
         rows = [r for r in rows if not (r['id'] in seen or seen.add(r['id']))]   # boxes overlap at the border
@@ -333,23 +368,15 @@ def main():
         candidates = len(rows)
         rows = [{k: trim(v, LENS.get(k, 400)) for k, v in r.items() if v not in (None, '')} for r in rows[:quota]]
         stats = {'kept': len(rows), 'of': candidates, 'hours': sum(1 for r in rows if r.get('hours')), 'osm_only': sum(1 for r in rows if r.get('src') == 'osm')}
-        if not DRY:
-            stats['loaded'] = send(rows, run_id)
-            loaded += stats['loaded']
+        stats['written'] = write(db, rows)
+        loaded += stats['written']
         summary[name] = stats
         notice(name, stats)
         del rows
-    if DRY:
-        notice('dry run, nothing loaded:', summary)
-        return
-    for attempt in range(5):   # starts the index build in the background; retried so a slow moment does not leave search unindexed
-        try:
-            notice('finished: loaded', loaded, rpc('import_finish', {'token': TOKEN, 'run_id': run_id}))
-            return
-        except Exception as e:
-            log('finish failed:', e, '- retrying')
-            time.sleep(15 * (attempt + 1))
-    sys.exit('loaded, but the index build could not be started')
+    if loaded < 1000:
+        sys.exit('too few places: ' + str(loaded))
+    summary['overture'] = release
+    finish(db, summary)
 
 
 if __name__ == '__main__':

@@ -5,6 +5,8 @@
 #   west      California + Mexico   port 8002   releases router-west-*  (older router-2026... builds count as west)
 #   texas     Texas                 port 8003   releases router-texas-*
 #   illinois  Illinois              port 8004   releases router-illinois-*
+# It also runs the place server (search, nearby, along-the-route, hours reports) on port 8010, served at /places/,
+# and swaps in a new place file (releases places-*) when one is published.
 set -euo pipefail
 source /etc/brinamaps-router.env          # ROUTER_KEY, REPO, HOST
 exec >>/var/log/router-update.log 2>&1
@@ -17,6 +19,7 @@ caddy_conf() {
   echo "$HOST {"
   echo "  @allowed header X-Router-Key $ROUTER_KEY"
   echo "  handle @allowed {"
+  echo "    handle_path /places/* {"; echo "      reverse_proxy 127.0.0.1:8010"; echo "    }"
   for r in $REGIONS; do echo "    handle_path /${r%%:*}/* {"; echo "      reverse_proxy 127.0.0.1:${r##*:}"; echo "    }"; done
   echo "    reverse_proxy 127.0.0.1:8002"
   echo "  }"
@@ -38,6 +41,50 @@ start() {   # region port
     -e server_threads=2 ghcr.io/valhalla/valhalla-scripted:latest >/dev/null
   echo "started $1 on port $2"
 }
+
+# Place server: the program comes from GitHub master; it restarts when it changes
+mkdir -p /srv/places
+if curl -sfL "https://raw.githubusercontent.com/$REPO/master/scripts/router/places_server.py" -o /srv/places/server.py.new && python3 -m py_compile /srv/places/server.py.new; then
+  if ! cmp -s /srv/places/server.py.new /usr/local/bin/places_server.py; then
+    mv /srv/places/server.py.new /usr/local/bin/places_server.py; echo "place server updated"
+    systemctl restart brinamaps-places 2>/dev/null || true
+  else rm -f /srv/places/server.py.new; fi
+fi
+unit='[Unit]
+Description=BrinaMaps place server
+After=network.target
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/places_server.py
+Environment=PLACES_DB=/srv/places/current.db PLACES_REPORTS=/srv/places/reports.db PLACES_PORT=8010
+Restart=always
+RestartSec=3
+Nice=5
+[Install]
+WantedBy=multi-user.target'
+if ! cmp -s <(echo "$unit") /etc/systemd/system/brinamaps-places.service; then
+  echo "$unit" > /etc/systemd/system/brinamaps-places.service; systemctl daemon-reload; systemctl enable --now brinamaps-places; systemctl restart brinamaps-places; echo "place service installed"
+fi
+systemctl is-active -q brinamaps-places || systemctl start brinamaps-places || true
+
+# Place file: newest places-* release, unpacked next to the old one, then the link is switched (the server notices)
+rel=$(echo "$releases" | jq -c '[.[] | select(.tag_name | startswith("places-"))] | sort_by(.published_at) | last')
+tag=$(echo "$rel" | jq -r '.tag_name // empty')
+if [ -n "$tag" ] && [ "$tag" != "$(cat /srv/places/tag 2>/dev/null || true)" ]; then
+  echo "places: new file $tag"
+  rm -rf /srv/places/dl && mkdir -p /srv/places/dl
+  if (cd /srv/places/dl && echo "$rel" | jq -r '.assets[].browser_download_url' | sort | while read -r u; do nice -n 15 ionice -c3 curl -sSfL --limit-rate 40M "$u" -o "$(basename "$u")"; done \
+      && cat places.part.* | nice -n 15 ionice -c3 zstd -dc --long=27 > "/srv/places/$tag.db") \
+      && python3 -c "import sqlite3,sys; c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); assert c.execute('select count(*) from names where names match \'norm : starbucks\'').fetchone()[0]>0" "/srv/places/$tag.db"; then
+    old=$(readlink /srv/places/current.db 2>/dev/null || true)
+    ln -sfn "/srv/places/$tag.db" /srv/places/current.db.new && mv -T /srv/places/current.db.new /srv/places/current.db
+    echo "$tag" > /srv/places/tag
+    [ -n "$old" ] && [ "$old" != "/srv/places/$tag.db" ] && (sleep 120; rm -f "$old") &
+    echo "places: now serving $tag"
+  else
+    echo "places: $tag failed to download or check"; rm -f "/srv/places/$tag.db"
+  fi
+  rm -rf /srv/places/dl
+fi
 
 for r in $REGIONS; do
   region=${r%%:*}; port=${r##*:}
