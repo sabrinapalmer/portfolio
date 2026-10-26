@@ -1,12 +1,12 @@
 // "Add hours": someone tells the app a place's opening hours. The report becomes a public OpenStreetMap note at the
 // place, for volunteer mappers to check and add to the map (which then reaches everyone, BrinaMaps included), and a
-// copy is kept in the app's database. Nothing about the person is sent; the database keeps only a one-way code made
+// copy is kept on the route server. Nothing about the person is sent; the server keeps only a one-way code made
 // from their network address and the day, to stop floods (at most 10 an hour).
 //   POST /api/report  { place_id, name, lat, lon, hours, note }
 export const config = { runtime: 'edge' };
 
-const SB = 'https://vtjkzkvimsywjjmuhrlg.supabase.co/rest/v1/rpc/submit_hours';
-const KEY = 'sb_publishable_mzTbHkZeezy73OgqtraEXA_MQ4tcm2P';
+const place = (path, body) => fetch((process.env.VALHALLA_URL || '').replace(/\/$/, '') + '/places' + path, { method: 'POST',
+  headers: { 'X-Router-Key': process.env.VALHALLA_KEY || '', 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
 const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/];
 
@@ -30,11 +30,11 @@ export default async function handler(req) {
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim();
   const sender = await sha(ip + '|' + new Date().toISOString().slice(0, 10) + '|brinamaps');
 
-  // Check the limits before posting anything public: the database refuses the 11th report in an hour from one sender
-  const save = osm => fetch(SB, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ place_id: clean(b.place_id, 80), place_name: name, at_lat: lat, at_lon: lon, new_hours: hours, note_text: note, sender, osm_note_id: osm }), signal: AbortSignal.timeout(8000) });
-  const r = await save('pending');
-  if (!r.ok) { const t = await r.text(); return json(/too many/.test(t) ? 429 : 400, { error: /too many/.test(t) ? 'Too many reports right now. Try again later.' : 'Could not save that.' }, cors); }
+  // Check the limits before posting anything public: the server refuses the 11th report in an hour from one sender
+  let r;
+  try { r = await place('/report', { place_id: clean(b.place_id, 80), name, lat, lon, hours, note, sender }); }
+  catch (e) { return json(502, { error: 'Could not save that.' }, cors); }
+  if (!r.ok) return json(r.status === 429 ? 429 : 400, { error: r.status === 429 ? 'Too many reports right now. Try again later.' : 'Could not save that.' }, cors);
 
   let osmId = '';
   try {
@@ -45,9 +45,8 @@ export default async function handler(req) {
     if (n.ok) osmId = String(((await n.json()).properties || {}).id || '');
   } catch (e) {}
   try {
-    const rid = +(await r.json());
-    if (rid) await fetch(SB.replace('submit_hours', 'set_report_note'), { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ report_id: rid, sender, osm_note_id: osmId || 'failed' }), signal: AbortSignal.timeout(5000) });
+    const rid = +((await r.json()).id);
+    if (rid) await place('/report-note', { id: rid, sender, osm: osmId || 'failed' });
   } catch (e) {}
   return json(200, { ok: true, osm: osmId ? 'https://www.openstreetmap.org/note/' + osmId : '' }, cors);
 }

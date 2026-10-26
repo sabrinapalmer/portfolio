@@ -1075,10 +1075,53 @@ async function saveArea() {
     } catch (e) {}
   }
   saveArea.busy = false;
+  tripDisown(keys.concat(pkeys.map(([x, y]) => 'p/' + PZ + '/' + x + '/' + y)));
   const areas = store('map.areas') || []; areas.push({ at: Date.now(), tiles: keys.length - failed, mb: +(bytes / 1048576).toFixed(1) }); store('map.areas', areas);
   if (placesSaved) status(placesSaved.toLocaleString() + ' places saved for searching offline.');
   msg(failed ? 'Saved ' + (keys.length - failed) + ' of ' + keys.length + ' map pieces. ' + failed + ' failed; try again with a better connection.' : 'Saved. This area now works without a connection (' + (bytes / 1048576).toFixed(1) + ' MB).');
   drawOffline();
+}
+// Trips: once directions start, the map and the places along the route are saved in the background, so a stretch with
+// no signal still has a map, search and stops. The last two trips are kept; older trip pieces are removed (pieces that
+// also belong to an area you saved yourself are left alone).
+let tripSaving = 0;
+async function saveTrip(rt) {
+  if (!rt || !OFF.tiles || navigator.onLine === false || (navigator.connection && navigator.connection.saveData)) return;
+  const id = ++tripSaving, c = rt.coords, tk = new Set(), pk = new Set();
+  const xy = (lat, lon, z) => { const n = 2 ** z, la = Math.max(-85, Math.min(85, lat)) * Math.PI / 180; return [Math.floor((lon + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n)]; };
+  let last = null;
+  for (let i = 0; i < c.length; i++) {
+    if (last && i < c.length - 1 && meters(last, c[i]) < 300) continue;
+    last = c[i];
+    const dLat = 400 / 111000, dLon = dLat / Math.max(0.2, Math.cos(c[i][0] * Math.PI / 180));
+    for (const [la, lo] of [[c[i][0] - dLat, c[i][1] - dLon], [c[i][0] + dLat, c[i][1] + dLon], [c[i][0] - dLat, c[i][1] + dLon], [c[i][0] + dLat, c[i][1] - dLon]])
+      for (let z = 6; z <= OFF.maxzoom; z++) { const [x, y] = xy(la, lo, z); tk.add('t/' + z + '/' + x + '/' + y); }
+    const [px, py] = ptile(c[i][0], c[i][1]); pk.add('p/' + PZ + '/' + px + '/' + py);
+  }
+  if (tk.size > 4000 || pk.size > 120) return;   // a very long trip: save areas along it by hand instead
+  const all = store('map.trips') || [], trips = all.slice(-1), owned = [], keys = [...tk, ...pk];
+  let next = 0;
+  const work = async () => {
+    while (next < keys.length && id === tripSaving && navigator.onLine !== false) {
+      const k = keys[next++];
+      try {
+        if (await idbDo('saved', 'readonly', s => s.getKey(k)) !== undefined) { if (all.some(t => t.keys.includes(k))) owned.push(k); continue; }
+        if (k[0] === 't') await offFetch(k, undefined, true);
+        else { const r = await fetch(API + '/places?v=2&tile=' + k.slice(2)); if (!r.ok) continue; await offSave(k, await r.arrayBuffer()); placeTiles.delete(k); }
+        owned.push(k);
+      } catch (e) {}
+    }
+  };
+  await pause(8000);   // directions first
+  await Promise.all([work(), work(), work()]);
+  if (id !== tripSaving) return;
+  const keep = new Set([...owned, ...trips.flatMap(t => t.keys)]);
+  (store('map.trips') || []).slice(0, -1).forEach(t => t.keys.forEach(k => { if (!keep.has(k)) idbDo('saved', 'readwrite', s => s.delete(k)); }));
+  store('map.trips', trips.concat([{ at: Date.now(), keys: owned }]));
+}
+function tripDisown(keys) {   // pieces of an area you saved yourself stay, whatever happens to old trips
+  const ks = new Set(keys), trips = store('map.trips'); if (!trips) return;
+  store('map.trips', trips.map(t => ({ at: t.at, keys: t.keys.filter(k => !ks.has(k)) })));
 }
 function drawOffline() {
   const areas = store('map.areas') || [], mb = areas.reduce((a, x) => a + x.mb, 0);
@@ -2364,6 +2407,21 @@ async function ownNear(tags, ref, km) {
     if (!r.ok) return offlinePlaces(null, ref, tags);
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { return offlinePlaces(null, ref, tags); }
+}
+// Places of some kinds along the rest of a route, in one ask (the place server checks the whole line)
+async function ownAlong(c, cum, start, tags, r) {
+  if (Date.now() < dbDownUntil) return null;
+  const pts = [], step = Math.max(300, (cum[cum.length - 1] - start) / 2500);
+  let last = -Infinity;
+  for (let i = 0; i < c.length; i++) if (cum[i] >= start && (cum[i] - last >= step || i === c.length - 1)) { pts.push([+c[i][0].toFixed(5), +c[i][1].toFixed(5)]); last = cum[i]; }
+  if (pts.length < 2) return null;
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
+    const res = await fetch(API + '/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pts, cats: tags, r, lim: 40 }), signal: ctl.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return ((await res.json()).places || []).map(dbPlace);
+  } catch (e) { return null; }
 }
 // Place tiles saved with an offline area: searched on the phone when there is no connection
 const PZ = 12, ptile = (lat, lon) => { const n = 2 ** PZ, la = lat * Math.PI / 180; return [Math.floor((lon + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n)]; };
@@ -4145,6 +4203,7 @@ function startNav() {
   if (BG) startWatch(true);   // switch to a watch that keeps going with the screen locked
   if (here) refix();
   drawStrip();
+  saveTrip(routes[selected]);
 }
 function endNav(arrivedAt) {
   if (!nav) return;
@@ -4697,8 +4756,8 @@ async function findStopsIn(rt, word, label, out, msg, id) {
   const total = cum[cum.length - 1], start = nav ? nav.along || 0 : 0, rem = total - start;
   const at = d => c[Math.max(0, cum.findIndex(x => x >= d))] || c[c.length - 1];
   const fracs = rem < 8000 ? [0.5] : rem < 40000 ? [0.25, 0.7] : [0.08, 0.3, 0.55], radius = Math.min(12, Math.max(2, rem / 1000 * 0.12));
-  let found = [];
-  for (const f of fracs) {   // a few lookups spaced along the way, one at a time
+  let found = await ownAlong(c, cum, start, cat.tags, 1500) || [];   // the app's own place list: the whole route at once
+  if (!found.length) for (const f of fracs) {   // otherwise a few lookups spaced along the way, one at a time
     const list = await nearbyKind(at(start + rem * f), cat, radius).catch(() => []);
     list.forEach(p => { if (!found.some(o => o.main === p.main && meters([o.lat, o.lon], [p.lat, p.lon]) < 150)) found.push(p); });
     if (f !== fracs[fracs.length - 1]) await pause(600);
