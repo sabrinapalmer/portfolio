@@ -45,7 +45,11 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
           sudo docker image prune -af >/dev/null || true
           sudo swapoff -a && sudo rm -f /mnt/swapfile /swapfile || true
-          sudo fallocate -l 24G /mnt/swapfile && sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile >/dev/null && sudo swapon /mnt/swapfile || true
+          # Docker's own files (image, logs) on the big disk too: the whole-US build filled the small one
+          sudo systemctl stop docker docker.socket || true
+          sudo mkdir -p /mnt/docker && echo '{"data-root":"/mnt/docker","log-driver":"none"}' | sudo tee /etc/docker/daemon.json >/dev/null
+          sudo systemctl start docker
+          sudo fallocate -l 12G /mnt/swapfile && sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile >/dev/null && sudo swapon /mnt/swapfile || true
           df -h / /mnt | tail -2; free -g | head -3
       - name: Build routing tiles
         run: |
@@ -59,7 +63,7 @@ jobs:
             | jq '[.[] | select(has("iso3166-1") and .["iso3166-1"] != "US")]' > /mnt/vh/default_speeds.json
           n=$(jq length /mnt/vh/default_speeds.json); [ "$n" -gt 1000 ] || { echo "::error::speed table download failed ($n rows)"; exit 1; }
           echo "::notice::speed table: $n rows (US and worldwide rows dropped)"
-          docker run --rm -e tile_urls="$TILE_URLS" -e serve_tiles=False -e build_admins=True -e build_time_zones=True \
+          docker run --rm --log-driver none -e tile_urls="$TILE_URLS" -e serve_tiles=False -e build_admins=True -e build_time_zones=True \
             -e build_elevation=False -e build_tar=True -e use_default_speeds_config=True -e server_threads=4 -v /mnt/vh:/custom_files ghcr.io/valhalla/valhalla-scripted:latest
           ls -la /mnt/vh; du -sh /mnt/vh/* || true; df -h / /mnt | tail -2
           sudo rm -rf /mnt/vh/valhalla_tiles /mnt/vh/*.pbf || true   # the tar holds the tiles; free the space for packing
