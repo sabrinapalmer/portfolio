@@ -9,6 +9,7 @@ import ActivityKit
 public struct NavAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         public var dist: String      // distance to the next turn, e.g. "0.3 miles"
+        public var road: String      // the street to turn onto, shown big next to the distance ("" if none)
         public var text: String      // the next instruction, already in the app's language
         public var sym: String       // SF Symbol name for the turn arrow
         public var arrive: String    // arrival clock time, e.g. "3:42 PM"

@@ -118,7 +118,7 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
     #if canImport(ActivityKit)
     @available(iOS 16.1, *)
     private func state(_ call: CAPPluginCall) -> NavAttributes.ContentState {
-        NavAttributes.ContentState(dist: call.getString("dist") ?? "", text: call.getString("text") ?? "",
+        NavAttributes.ContentState(dist: call.getString("dist") ?? "", road: call.getString("road") ?? "", text: call.getString("text") ?? "",
                                    sym: call.getString("sym") ?? "arrow.up", arrive: call.getString("arrive") ?? "",
                                    left: call.getString("left") ?? "", progress: min(1, max(0, call.getDouble("progress") ?? 0)))
     }
