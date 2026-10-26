@@ -13,6 +13,9 @@ const ctx = await b.newContext({viewport:{width:390,height:800},deviceScaleFacto
 const p = await ctx.newPage();
 p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
 await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
   if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
   if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
@@ -34,7 +37,7 @@ const before=tiles.length;
 await p.click('#openPrefs'); await p.click('#offSave'); await p.waitForTimeout(4000);
 console.log('save area:', await p.textContent('#offMsg'), '|', await p.textContent('#offUse'), '| new downloads', tiles.length-before, '| z14 included', tiles.some(t=>t.startsWith('14/')));
 await p.click('#closePrefs');
-await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(1500);
+await p.fill('#to','museum'); await p.waitForTimeout(500); await p.click('#suggest li:not(.head):not(.cats)'); await p.waitForTimeout(1500);
 console.log('trip saved:', await p.evaluate(()=>{const t=JSON.parse(localStorage.getItem('map.trip')); return t&&t.routes[0].coords.length+' pts to '+t.to.label}));
 globalThis.OFFLINE=true; const n=tiles.length;
 await p.addInitScript(()=>{Object.defineProperty(navigator,'onLine',{get:()=>false}); window._st=[];addEventListener('DOMContentLoaded',()=>{new MutationObserver(()=>_st.push(document.getElementById('status').textContent)).observe(document.getElementById('status'),{childList:true,characterData:true,subtree:true})})});

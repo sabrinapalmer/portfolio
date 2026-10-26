@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		65561D7B3EA208F03412E80F /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC146B627DC39E5DE280251 /* SceneDelegate.swift */; };
+		A1B999B55602D90E0323FCBA /* CarPlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74988CC9CA9DBC7E77027E80 /* CarPlay.swift */; };
+		4FC6BF2075888F2E0C24EAE0 /* NavActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3561B139D06E18A6ACA8E125 /* NavActivity.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		3ECEC810308FA1A700F9BD0C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3ECEC80F308FA1A700F9BD0C /* WidgetKit.framework */; };
 		3ECEC812308FA1A700F9BD0C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3ECEC811308FA1A700F9BD0C /* SwiftUI.framework */; };
@@ -46,6 +49,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AEC146B627DC39E5DE280251 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		74988CC9CA9DBC7E77027E80 /* CarPlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlay.swift; sourceTree = "<group>"; };
+		3561B139D06E18A6ACA8E125 /* NavActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavActivity.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		3ECEC80E308FA1A700F9BD0C /* BrinaNavWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BrinaNavWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3ECEC80F308FA1A700F9BD0C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = /System/Library/Frameworks/WidgetKit.framework; sourceTree = "<absolute>"; };
@@ -134,6 +140,9 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				AEC146B627DC39E5DE280251 /* SceneDelegate.swift */,
+				74988CC9CA9DBC7E77027E80 /* CarPlay.swift */,
+				3561B139D06E18A6ACA8E125 /* NavActivity.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -313,6 +322,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				65561D7B3EA208F03412E80F /* SceneDelegate.swift in Sources */,
+				A1B999B55602D90E0323FCBA /* CarPlay.swift in Sources */,
+				4FC6BF2075888F2E0C24EAE0 /* NavActivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

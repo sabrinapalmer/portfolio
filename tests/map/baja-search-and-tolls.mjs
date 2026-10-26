@@ -17,6 +17,9 @@ const ctx = await b.newContext({viewport:{width:390,height:800},permissions:['ge
 const p = await ctx.newPage();
 p.on('pageerror',e=>errs.push('PAGE '+e)); p.on('console',m=>{if(m.type()==='error'&&!/ERR_FAILED|Failed to load/.test(m.text()))errs.push(m.text().slice(0,200))});
 await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({contentType:'application/json',body:JSON.stringify(o)});
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if(u.startsWith('http://localhost/map')) return r.fulfill({contentType:'text/html',body:html});
   if(u.includes('maplibre-gl.min.js')) return r.fulfill({contentType:'text/javascript',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.js')});
   if(u.includes('maplibre-gl.min.css')) return r.fulfill({contentType:'text/css',body:fs.readFileSync(ROOT+'node_modules/maplibre-gl/dist/maplibre-gl.css')});
@@ -41,10 +44,10 @@ await p.route('**/*', async r=>{const u=r.request().url(), J=o=>r.fulfill({conte
   return r.abort();});
 await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
 await p.fill('#to','walmart'); await p.waitForTimeout(2500);
-const list = await p.$$eval('#suggest li:not(.head)',e=>e.map(x=>x.innerText.replace(/\n/g,' / ')));
+const list = await p.$$eval('#suggest li:not(.head):not(.cats)',e=>e.map(x=>x.innerText.replace(/\n/g,' / ')));
 console.log('walmart list:', list);
 check(list.length>0 && /Rosarito/.test(list[0]), 'Rosarito Walmart listed first');
-await p.fill('#to','ensenada'); await p.waitForTimeout(2000); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(2000);
+await p.fill('#to','ensenada'); await p.waitForTimeout(2000); await p.click('#suggest li:not(.head):not(.cats)'); await p.waitForTimeout(2000);
 const card = (await p.innerText('#routes')).replace(/\n/g,' / ');
 console.log('routes:', card);
 const n = await p.evaluate(()=>routes.length), free = await p.evaluate(()=>routes.some(r=>!r.toll));

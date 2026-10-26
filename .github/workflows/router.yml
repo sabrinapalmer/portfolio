@@ -46,8 +46,17 @@ jobs:
       - name: Build routing tiles
         run: |
           mkdir -p /mnt/vh 2>/dev/null || sudo mkdir -p /mnt/vh; sudo chmod 777 /mnt/vh
+          # Speed table (OpenStreetMapSpeeds): measured average speeds by country/state, used for every road it covers,
+          # even roads with a posted limit. Its US rows are averages well under the limits (a 75 mph interstate became
+          # 61 mph), and US roads were falling through to its worldwide row anyway. So the US and worldwide rows are
+          # dropped: US roads use their posted limits (and Valhalla's own defaults where none is posted), while Mexico,
+          # where few roads carry a posted limit in the map data, keeps its measured speeds.
+          curl -sfL https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/master/default_speeds.json \
+            | jq '[.[] | select(has("iso3166-1") and .["iso3166-1"] != "US")]' > /mnt/vh/default_speeds.json
+          n=$(jq length /mnt/vh/default_speeds.json); [ "$n" -gt 1000 ] || { echo "::error::speed table download failed ($n rows)"; exit 1; }
+          echo "::notice::speed table: $n rows (US and worldwide rows dropped)"
           docker run --rm -e tile_urls="$TILE_URLS" -e serve_tiles=False -e build_admins=True -e build_time_zones=True \
-            -e build_elevation=False -e build_tar=True -e server_threads=4 -v /mnt/vh:/custom_files ghcr.io/valhalla/valhalla-scripted:latest
+            -e build_elevation=False -e build_tar=True -e use_default_speeds_config=True -e server_threads=4 -v /mnt/vh:/custom_files ghcr.io/valhalla/valhalla-scripted:latest
           ls -la /mnt/vh; du -sh /mnt/vh/* || true
       - name: Package
         run: |

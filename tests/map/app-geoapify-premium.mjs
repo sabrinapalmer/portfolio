@@ -57,6 +57,9 @@ const p = await ctx.newPage();
 p.on('pageerror', e => errs.push('PAGE ' + e)); p.on('console', m => { if (m.type() === 'error' && !/ERR_FAILED|Failed to load/.test(m.text())) errs.push(m.text().slice(0, 200)); });
 await p.route('**/*', async r => {
   const u = r.request().url(), J = o => r.fulfill({ contentType: 'application/json', body: JSON.stringify(o), headers: { 'access-control-allow-origin': '*' } });
+  if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
+  if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/(places|valhalla\/)/.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if (u.startsWith('http://localhost/map')) return r.fulfill({ contentType: 'text/html', body: html });
   if (u.includes('maplibre-gl.min.js')) return r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.js') });
   if (u.includes('maplibre-gl.min.css')) return r.fulfill({ contentType: 'text/css', body: fs.readFileSync(ROOT + 'node_modules/maplibre-gl/dist/maplibre-gl.css') });
@@ -98,13 +101,13 @@ await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
 check(await p.evaluate(() => document.body.classList.contains('native')), 'runs in app mode');
 
 await p.fill('#to', 'walmart'); await p.waitForTimeout(2500);
-const list = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
+const list = await p.$$eval('#suggest li:not(.head):not(.cats)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
 console.log('walmart list:', list);
 check(list.length && /Rosarito/.test(list[0]), 'search via Geoapify lists the Rosarito Walmart first');
 check(calls.filter(c => c === 'geo autocomplete').length <= 2, 'one search request per query (was three)');
 check(list.length === 3 && /Supercenter/.test(list[1]) && /Chula Vista/.test(list[2]), 'all results in one list nearest first, the Supercenter included, the pharmacy folded into its store');
 await p.waitForTimeout(1200);
-const timed = await p.$$eval('#suggest li:not(.head) em', e => e.map(x => x.innerText));
+const timed = await p.$$eval('#suggest li:not(.head):not(.cats) em', e => e.map(x => x.innerText));
 console.log('right column:', timed);
 check(timed.length === 3 && timed.every(t => /min/.test(t)), 'each option shows the drive time');
 const toBefore = await p.evaluate(() => pts.to);
@@ -116,17 +119,17 @@ check(await p.evaluate(() => poiMarkers.length) >= 1, 'Return pins the nearby op
 // Near the border, the other country's places are asked for too and listed by distance
 const cb = calls.length;
 await p.fill('#to', 'oxxo'); await p.waitForTimeout(2500);
-const ox = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
+const ox = await p.$$eval('#suggest li:not(.head):not(.cats)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
 console.log('oxxo list:', ox);
 check(ox.length === 3 && ox.some(x => /San Ysidro/.test(x)) && /Rosarito/.test(ox[0]), 'search near the border lists both countries, nearest first');
 check(calls.slice(cb).filter(c => c === 'geo autocomplete').length === 2 && calls.slice(cb).filter(c => c.startsWith('poi')).length === 1, 'one extra request for the other side, one to the place list');
 // A business the open map data lacks comes from the place list
 await p.fill('#to', 'hacienda km 43'); await p.waitForTimeout(2500);
-const hk = await p.$$eval('#suggest li:not(.head)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
+const hk = await p.$$eval('#suggest li:not(.head):not(.cats)', e => e.map(x => x.innerText.replace(/\n/g, ' / ')));
 console.log('hacienda list:', hk);
 check(/Hacienda Km 43/.test(hk[0] || '') && calls.some(c => c === 'poi hacienda km 43'), 'a restaurant missing from the open map data is found through the place list');
 
-await p.fill('#to', 'ensenada'); await p.waitForTimeout(1500); await p.click('#suggest li:not(.head)'); await p.waitForTimeout(2500);
+await p.fill('#to', 'ensenada'); await p.waitForTimeout(1500); await p.click('#suggest li:not(.head):not(.cats)'); await p.waitForTimeout(2500);
 console.log('routes:', (await p.innerText('#routes')).replace(/\n/g, ' / '));
 const rs = await p.evaluate(() => routes.map(r => ({ toll: r.toll, steps: r.steps.length, kinds: r.steps.map(s => s.kind).join(','), road: r.steps[0].road, dist: +r.dist.toFixed(1) })));
 console.log('route data:', JSON.stringify(rs));
@@ -155,10 +158,10 @@ const asks = calls.slice(before).filter(c => c.startsWith('geo routing'));
 console.log('routing asks with settings on:', asks);
 check(asks.some(c => /location:/.test(c)), 'unpaved / alley / border stretch blocked and asked again');
 check(await p.evaluate(() => routes.length && !geoBreaks(routes[0]).length), 'chosen route has no unpaved road, alley or border crossing');
-await p.evaluate(async () => { prefs.noUnpaved = false; prefs.noAlleys = false; prefs.noBorders = false; await route(); });
+await p.evaluate(async () => { geoCache.clear(); prefs.noUnpaved = false; prefs.noAlleys = false; prefs.noBorders = false; await route(); });   // cache cleared: this stub answers the same address differently now
 await p.waitForTimeout(1000);
 check(await p.evaluate(() => routes[0].segs.some(s => s.surf === 'dirt')), 'with the settings off the quicker dirt route is used');
-dirty = false;
+dirty = false; await p.evaluate(() => geoCache.clear());   // the dirt answers above are cached under the same addresses
 
 // Several stops, the trip panel, and Home in the quick buttons
 await p.evaluate(async () => { await addStop({ lat: 32.30, lon: -117.03, name: 'Oxxo', label: 'Oxxo, Rosarito' }); await new Promise(r => setTimeout(r, 800)); await addStop({ lat: 32.10, lon: -116.90, name: 'Pemex', label: 'Pemex, La Mision' }); });

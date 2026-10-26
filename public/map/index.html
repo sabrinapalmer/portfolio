@@ -150,6 +150,8 @@
   #routes::-webkit-scrollbar { display:none; }
   #routes button { flex:0 0 auto; text-align:left; border-radius:18px; padding:9px 14px; background:var(--bg); border:2px solid var(--line); }
   #routes button.on { background:var(--soft); border-color:var(--accent); }
+  html.car body > *:not(#map):not(script) { display:none !important; }   /* the car screen: the map only */
+  html.car .maplibregl-ctrl-bottom-right, html.car .maplibregl-ctrl-bottom-left { display:none; }
   #routes button small.port { display:block; font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; }
   #routes b { display:block; font-size:19px; font-weight:700; }
   #routes span { display:block; font-size:12px; color:var(--muted); font-weight:700; }
@@ -353,6 +355,13 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 </head>
 <body>
 <div id="map"></div>
+<script>
+// Car screen: the map only, moved by the phone. It never asks for location itself (the phone sends it).
+if (/[?&]car=1\b/.test(location.search)) {
+  document.documentElement.classList.add('car');
+  try { const g = navigator.geolocation; if (g) { g.getCurrentPosition = () => {}; g.watchPosition = () => 0; g.clearWatch = () => {}; } } catch (e) {}
+}
+</script>
 <div id="strip"></div>
 <div id="searchScrim" aria-hidden="true"></div>
 
@@ -389,7 +398,7 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 
 <div id="bottom" class="panel">
   <div id="destHead">
-    <span id="destName"></span>
+    <span id="destName" data-raw></span>
     <button id="save" class="round ghost" title="Save this place" aria-label="Save this place"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.600-7 10-7 10z"/></svg></button>
     <button id="clear" class="round ghost" title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
@@ -485,6 +494,8 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
   <div class="chips" data-mapset="units"><button data-v="mi">Miles</button><button data-v="km">Kilometres</button></div>
   <p style="margin-top:10px">Speeds (signs in Mexico are in km/h)</p>
   <div class="chips" data-mapset="speedUnits"><button data-v="mph">mph</button><button data-v="kmh">km/h</button></div>
+  <h3>Language</h3>
+  <div class="chips" data-mapset="lang"><button data-v="auto">Automatic</button><button data-v="en" data-raw>English</button><button data-v="es" data-raw>Español</button></div>
   <h3>Map colours</h3>
   <div class="chips"><button data-map="autoNight">Dark map at night</button></div>
   <div id="themes"></div>
@@ -611,6 +622,320 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script>
+// ---------- Language: English or Spanish (Automatic follows the phone) ----------
+// Every piece of text the app shows passes through tr() as it appears on screen (a watcher on the page), and
+// everything spoken does too, so new screens are covered without wrapping each string. Whole pieces of text are
+// matched first; inside composed sentences the longer phrases are swapped. Place names, addresses and street names
+// sit inside [data-raw] and are left alone. Directions come from the routers already in the chosen language.
+const LANG = (() => { let p = null; try { p = (JSON.parse(localStorage.getItem('map.prefs')) || {}).lang; } catch (e) {}
+  return p === 'en' || p === 'es' ? p : /^es\b/i.test(navigator.language || '') ? 'es' : 'en'; })();
+const ROUTE_LANG = LANG === 'es' ? 'es-ES' : 'en-US', VOICE_LANG = LANG === 'es' ? 'es-MX' : 'en-US';
+document.documentElement.lang = LANG;
+// Spanish (Mexico). Keys are the app's English text; whole pieces of text are matched first, then the longer phrases
+// inside composed sentences. Place names, addresses and street names are never translated.
+const ES = {
+  // ---- Search, places, kinds
+  'Where to?': '¿A dónde?', 'Search': 'Buscar', 'Search a place or address': 'Busca un lugar o dirección', 'Close search': 'Cerrar búsqueda',
+  'Searching...': 'Buscando...', 'Looking further...': 'Buscando más lejos...', 'Finding...': 'Buscando...', 'Find': 'Buscar', 'Find a spot': 'Buscar un lugar',
+  'Search is not answering right now. Try again in a moment.': 'La búsqueda no responde ahora. Intente de nuevo en un momento.',
+  'No internet connection. Search needs one; your saved places still work.': 'Sin conexión a internet. La búsqueda la necesita; sus lugares guardados siguen funcionando.',
+  'Nothing nearby matches "': 'Nada cercano coincide con "', '". These are further away.': '". Estos están más lejos.',
+  'No matches for "': 'Sin resultados para "', 'Could not find "': 'No se encontró "', '". Try a fuller address.': '". Pruebe con una dirección más completa.',
+  'Looking for "': 'Buscando "', 'Looking up "': 'Buscando "', 'Looking for ': 'Buscando ', 'No "': 'No hay "',
+  'Other matches': 'Otros resultados', 'Further away': 'Más lejos', ' further away': ' más lejos', ' more matches': ' resultados más', 'Show ': 'Mostrar ',
+  'Open now': 'Abierto ahora', 'Within ': 'A menos de ', 'Closest first': 'Más cercanos primero', ' near you': ' cerca de usted', 'near you': 'cerca de usted',
+  'None known to be open. Many places have no hours listed.': 'Ninguno se sabe abierto. Muchos lugares no tienen horario.',
+  'Nothing that close. Turn the filter off to see more.': 'Nada tan cerca. Quite el filtro para ver más.',
+  'Nothing of that kind nearby, so here is anything close. ': 'No hay de ese tipo cerca, así que aquí hay lugares cercanos. ',
+  'Or a place name, like Starbucks': 'O el nombre de un lugar, como Starbucks', 'Recent': 'Recientes', 'Clear recent': 'Borrar recientes',
+  'My places': 'Mis lugares', 'Your places': 'Sus lugares', 'Saved places': 'Lugares guardados', 'Places I like': 'Lugares que me gustan', 'Your place': 'Su lugar',
+  'Home': 'Casa', 'Work': 'Trabajo', 'Home and work': 'Casa y trabajo', 'Set home': 'Poner casa', 'Set work': 'Poner trabajo', 'Me': 'Yo', 'Here': 'Aquí',
+  'None yet.': 'Ninguno todavía.', 'None yet. Tap the heart on a destination to save it.': 'Ninguno todavía. Toque el corazón en un destino para guardarlo.',
+  'Your own names for places, like "My spa". They show first when you search.': 'Sus propios nombres para lugares, como "Mi spa". Aparecen primero al buscar.',
+  'Name, for example My spa': 'Nombre, por ejemplo Mi spa', 'Add a name': 'Agregar un nombre', 'Give it a name if you like:': 'Póngale un nombre si quiere:',
+  'First give it a name': 'Primero póngale un nombre', 'Save name': 'Guardar nombre', 'new name': 'nombre nuevo', 'Name': 'Nombre',
+  'Save this place': 'Guardar este lugar', 'Saved to your places.': 'Guardado en sus lugares.', ' saved to your places.': ' guardado en sus lugares.',
+  'Saved': 'Guardado', 'Saved ': 'Guardado ', 'Unnamed': 'Sin nombre', 'Unnamed place': 'Lugar sin nombre', 'Dropped pin': 'Marcador',
+  'My location': 'Mi ubicación', 'You are here': 'Usted está aquí', 'This destination': 'Este destino', 'my destination': 'mi destino',
+  'Go here': 'Ir aquí', 'Start here': 'Salir de aquí', 'Call': 'Llamar', 'Website': 'Sitio web', 'Share': 'Compartir', 'Remove': 'Quitar',
+  'Search its address': 'Buscar su dirección', 'Search for the address of ': 'Buscar la dirección de ', 'On the map': 'En el mapa',
+  'Address': 'Dirección', 'Street': 'Calle', 'City': 'Ciudad', 'Town': 'Pueblo', 'Village': 'Pueblo', 'County': 'Condado', 'State': 'Estado', 'Country': 'País',
+  'Postcode': 'Código postal', 'Neighbourhood': 'Colonia', 'Neighbourhoods: ': 'Colonias: ', 'Building': 'Edificio', 'Buildings': 'Edificios', 'Business': 'Negocio',
+  'Place': 'Lugar', 'Places: ': 'Lugares: ', 'Population ': 'Población ', 'Feature': 'Lugar', 'Point': 'Punto', 'Area around ': 'Zona alrededor de ',
+  'Hours: ': 'Horario: ', 'Opening hours': 'Horario', 'Open 24 hours': 'Abierto 24 horas', 'Open until ': 'Abierto hasta las ', 'Closes at ': 'Cierra a las ',
+  'Closed now': 'Cerrado ahora', 'Closed': 'Cerrado', 'Closed, opens ': 'Cerrado, abre ', 'Closed on holidays': 'Cerrado en días festivos', ', opens ': ', abre ',
+  'Closed now, open when you arrive (until ': 'Cerrado ahora, abierto cuando llegue (hasta las ', ', before you would arrive': ', antes de que llegue', 'Open': 'Abierto',
+  'Mo': 'Lu', 'Tu': 'Ma', 'We': 'Mi', 'Th': 'Ju', 'Fr': 'Vi', 'Sa': 'Sá', 'Su': 'Do', ' tomorrow': ' mañana',
+  'Add hours': 'Agregar horario', 'Type the opening hours first, for example Mon–Fri 9 AM–6 PM.': 'Escriba primero el horario, por ejemplo Lun–Vie 9 AM–6 PM.',
+  'Mon–Fri 9 AM–6 PM, Sat 10 AM–2 PM': 'Lun–Vie 9 AM–6 PM, Sáb 10 AM–2 PM', 'Note (optional)': 'Nota (opcional)', 'Send': 'Enviar', 'Sending...': 'Enviando...',
+  'Shared publicly as an OpenStreetMap note, so volunteer mappers can check it and add it to the map for everyone.': 'Se comparte públicamente como nota de OpenStreetMap para que mapeadores voluntarios la revisen y la agreguen al mapa para todos.',
+  'Thanks! Mappers will check it and add it to the map.': '¡Gracias! Los mapeadores lo revisarán y lo agregarán al mapa.',
+  'That did not go through. Try again later.': 'No se pudo enviar. Intente más tarde.', 'Report a map problem': 'Reportar un problema del mapa',
+  'Outdoor seating': 'Mesas al aire libre', 'Wheelchair accessible': 'Accesible en silla de ruedas', 'Takeout': 'Para llevar', 'Delivery': 'Entrega a domicilio', 'Wi-Fi': 'Wi-Fi',
+  'Anything': 'Cualquier lugar', 'Coffee': 'Café', 'Cafe': 'Cafetería', 'Food': 'Comida', 'Restaurant': 'Restaurante', 'Fast food': 'Comida rápida', 'fast food': 'comida rápida',
+  'Food court': 'Zona de comida', 'Bakery': 'Panadería', 'Bakeries': 'Panaderías', 'Ice cream': 'Helados', 'Candy': 'Dulces', 'Drinks': 'Bebidas', 'Bar': 'Bar', 'Bars': 'Bares',
+  'Brewery': 'Cervecería', 'Winery': 'Vinícola', 'Club': 'Club', 'Groceries': 'Supermercado', 'Grocery store': 'Supermercado', 'Supermarket': 'Supermercado',
+  'Convenience store': 'Tienda de conveniencia', 'Market': 'Mercado', 'Mall': 'Centro comercial', 'Shop': 'Tienda', 'Store': 'Tienda', 'Stores': 'Tiendas',
+  'Clothing store': 'Tienda de ropa', 'Hardware': 'Ferretería', 'Hardware store': 'Ferretería', 'hardware store': 'ferretería', 'Gas': 'Gasolina',
+  'Gas station': 'Gasolinera', 'gas station': 'gasolinera', ' gas station': ' gasolinera', 'Gas on the way': 'Gasolina en el camino',
+  'EV charging': 'Carga eléctrica', 'Charging': 'Carga eléctrica', 'Chargers': 'Cargadores', 'charging station': 'estación de carga',
+  'Car repair': 'Taller mecánico', 'Car wash': 'Autolavado', 'Parking': 'Estacionamiento', 'Pharmacy': 'Farmacia', 'Pharmacies': 'Farmacias',
+  'Hospital': 'Hospital', 'Hospitals': 'Hospitales', 'Hospitals and clinics': 'Hospitales y clínicas', 'Clinic': 'Clínica', 'Dentist': 'Dentista', 'Vet': 'Veterinario',
+  'Bank': 'Banco', 'Banks and ATMs': 'Bancos y cajeros', 'ATM': 'Cajero', 'Post office': 'Correos', 'Post offices': 'Oficinas de correos', 'post office': 'correos',
+  'Police': 'Policía', 'Fire station': 'Bomberos', 'Town hall': 'Presidencia municipal', 'Library': 'Biblioteca', 'Libraries': 'Bibliotecas', 'School': 'Escuela',
+  'College': 'Universidad', 'University': 'Universidad', 'Place of worship': 'Templo', 'Restrooms': 'Baños', 'Hotel': 'Hotel', 'Hotels': 'Hoteles', 'Motel': 'Motel',
+  'Hostel': 'Hostal', 'Guest house': 'Casa de huéspedes', 'Campground': 'Campamento', 'Campgrounds': 'Campamentos', 'RV park': 'Parque para casas rodantes',
+  'Park': 'Parque', 'Parks': 'Parques', 'A park': 'Un parque', 'Garden': 'Jardín', 'Beach': 'Playa', 'Beaches': 'Playas', 'Viewpoint': 'Mirador', 'Attraction': 'Atracción',
+  'Museum': 'Museo', 'Cinema': 'Cine', 'Theatre': 'Teatro', 'Stadium': 'Estadio', 'Gym': 'Gimnasio', 'Golf course': 'Campo de golf', 'Spa': 'Spa', 'Marina': 'Marina',
+  'Beauty salon': 'Salón de belleza', 'Hair salon': 'Estética', 'Airport': 'Aeropuerto', 'Bus stop': 'Parada de autobús', 'Station': 'Estación',
+  'Lake': 'Lago', 'River': 'Río', 'Stream': 'Arroyo', 'Sea': 'Mar', 'Ocean': 'Océano', 'Bay': 'Bahía', 'Water': 'Agua', 'Peak': 'Cerro', 'Service': 'Servicio',
+  // ---- Routes and route card
+  'Finding routes...': 'Buscando rutas...', 'Route options': 'Opciones de ruta', 'Route options  ›': 'Opciones de ruta  ›', 'Your route': 'Su ruta',
+  'Fastest': 'Más rápida', 'No tolls': 'Sin cuota', 'Fewest left turns': 'Menos vueltas a la izquierda', 'Fewest turns': 'Menos vueltas', 'Fewer turns': 'Menos vueltas',
+  'No highway': 'Sin autopista', 'Shortest': 'Más corta', 'Another way': 'Otra ruta', 'Via ': 'Por ', 'The quickest way there.': 'La ruta más rápida.',
+  ' fewer left turn': ' vuelta a la izquierda menos', ' fewer left turns': ' vueltas a la izquierda menos', ' more left turn': ' vuelta a la izquierda más', ' more left turns': ' vueltas a la izquierda más',
+  ' across traffic': ' cruzando el tráfico', ' fewer turns': ' vueltas menos', ' more turns': ' vueltas más', ' fewer highway miles': ' millas de autopista menos', ' more highway miles': ' millas de autopista más',
+  ' slower': ' más lenta', ' longer': ' más larga', ' shorter': ' más corta', ' sooner': ' antes', ' by a different set of roads.': ' por otras calles.',
+  ' turn': ' vuelta', ' turns': ' vueltas', ' left turn': ' vuelta a la izquierda', ' left turns': ' vueltas a la izquierda', ', no left turns': ', sin vueltas a la izquierda',
+  ' highway': ' de autopista', ' avg': ' prom.', 'Has tolls': 'Tiene cuota', 'Uses part of a toll road': 'Usa parte de una carretera de cuota',
+  'Free stretch of a toll road, no booth': 'Tramo libre de una carretera de cuota, sin caseta', 'Uses a ferry': 'Usa un ferry', ' unpaved': ' sin pavimentar',
+  'Show steps': 'Ver pasos', 'Hide steps': 'Ocultar pasos', 'Tap a turn to see it on the map.': 'Toque una vuelta para verla en el mapa.', 'Start': 'Iniciar', 'Starting...': 'Iniciando...',
+  'Show every alternative': 'Mostrar todas las opciones', 'Avoid': 'Evitar', 'Highways': 'Autopistas', 'Tolls': 'Cuotas', 'Ferries': 'Ferris', 'Unpaved roads': 'Caminos sin pavimentar',
+  'Alleys and service roads': 'Callejones y calles de servicio', 'Border crossings': 'Cruces fronterizos', 'Route style': 'Estilo de ruta', 'Shortest, not fastest': 'La más corta, no la más rápida',
+  'Relaxed, under 55 mph': 'Tranquila, menos de 90 km/h', 'Used for every route until you change them.': 'Se usan en todas las rutas hasta que las cambie.',
+  'Avoiding ': 'Evitando ', 'highways': 'autopistas', 'tolls': 'cuotas', 'ferries': 'ferris', 'unpaved roads': 'caminos sin pavimentar', 'alleys': 'callejones', 'border crossings': 'cruces fronterizos',
+  'Drive': 'Auto', 'Walk': 'A pie', 'Bike': 'Bici', 'Biking': 'En bici', 'Rig': 'Remolque', 'Rig (used in Rig mode)': 'Remolque (en modo Remolque)',
+  'Height (ft)': 'Altura (pies)', 'Length (ft)': 'Largo (pies)', 'Weight (tons)': 'Peso (toneladas)', 'Avoid hills': 'Evitar subidas', 'Prefer bike paths': 'Preferir ciclovías',
+  'For a camper, trailer or tall vehicle. Routes avoid roads and bridges posted below these limits.': 'Para casa rodante, remolque o vehículo alto. Las rutas evitan calles y puentes con límites menores.',
+  ' (routes use the nearest truck class)': ' (las rutas usan la clase de camión más cercana)', 'exact rig size': 'tamaño exacto del remolque',
+  'Swap': 'Invertir', 'Swap start and destination': 'Invertir salida y destino', 'Plan a route from somewhere else': 'Planear una ruta desde otro lugar',
+  'Start from my location instead': 'Salir desde mi ubicación', 'Choose a start instead': 'Elegir otro punto de salida', 'Choose where the trip starts.': 'Elija dónde empieza el viaje.',
+  'Starting from ': 'Saliendo de ', 'Starting from...': 'Saliendo de...', 'Choose a place': 'Elija un lugar', 'Pick ': 'Elegir ', 'Pick a spot on the map': 'Elija un punto en el mapa',
+  'Add a stop': 'Agregar una parada', 'Add stop': 'Agregar parada', 'Add a stop on the way': 'Agregar una parada en el camino', 'Adding stop ': 'Agregando parada ', 'Stops': 'Paradas',
+  'No stops yet.': 'Sin paradas todavía.', 'Remove this stop': 'Quitar esta parada', 'Stop removed.': 'Parada quitada.', 'Your trip': 'Su viaje', 'This trip': 'Este viaje', 'Your trip has ': 'Su viaje tiene ',
+  ' stop': ' parada', ' stops': ' paradas', 'Tap a place to see it on the map. × removes a stop.': 'Toque un lugar para verlo en el mapa. × quita una parada.',
+  'Tap the map where you want to stop': 'Toque el mapa donde quiere parar', 'Tap the map where ': 'Toque el mapa donde ', 'Close to your route': 'Cerca de su ruta',
+  'Tap one to add it to your trip.': 'Toque uno para agregarlo a su viaje.', 'Tap one to add it to your trip. The time is how much it adds.': 'Toque uno para agregarlo a su viaje. El tiempo es cuánto agrega.',
+  'Tap one to add it to your trip. Working out how much time each adds...': 'Toque uno para agregarlo a su viaje. Calculando cuánto tiempo agrega cada uno...',
+  'Closest to your route first. Working out how much time each adds...': 'Primero los más cercanos a su ruta. Calculando cuánto tiempo agrega cada uno...',
+  'Nothing found close to your route.': 'No se encontró nada cerca de su ruta.', ' along your route...': ' en su ruta...', ' off route': ' fuera de la ruta', 'on the way': 'en el camino',
+  'Arrive about ': 'Llega aprox. ', 'Arrive by': 'Llegar a las', 'Leave now': 'Salir ahora', 'Leave by ': 'Salga antes de las ', 'Now': 'Ahora', ' from now': ' desde ahora',
+  'You would arrive about ': 'Llegaría aprox. ', ' late. ': ' tarde. ', ' to arrive by ': ' para llegar a las ', ' drive': ' en auto', ' walk': ' a pie', ' ride': ' en bici', ' min to park': ' min para estacionarse',
+  'Time to park: ': 'Tiempo para estacionarse: ', 'checking the area...': 'revisando la zona...', 'set by you': 'puesto por usted', 'More parking time': 'Más tiempo para estacionarse',
+  'Less parking time': 'Menos tiempo para estacionarse', 'busy area': 'zona concurrida', 'fairly busy area': 'zona algo concurrida', 'quiet area': 'zona tranquila',
+  'default, could not check the area': 'predeterminado, no se pudo revisar la zona', ', park at the door': ', estacionamiento en la puerta', ', street parking': ', en la calle', ', car park ': ', estacionamiento ',
+  ' · tap here to go back to now': ' · toque aquí para volver a ahora', ' (traffic is clear)': ' (sin tráfico)', ' of traffic)': ' de tráfico)', ' (includes ': ' (incluye ',
+  ' (some times are estimates)': ' (algunos tiempos son estimados)', 'About the same time': 'Casi el mismo tiempo', 'about the same time': 'casi el mismo tiempo',
+  'No route found.': 'No se encontró ruta.', 'No other way found.': 'No se encontró otra ruta.', 'Routing is unavailable right now. Try again in a moment.': 'Las rutas no están disponibles ahora. Intente en un momento.',
+  'No connection. Showing the route saved at ': 'Sin conexión. Mostrando la ruta guardada a las ', 'No connection. Try again when you are back online.': 'Sin conexión. Intente de nuevo cuando tenga internet.',
+  'Backup router in use: ': 'Usando el servidor de rutas de respaldo: ', 'Backup router in use: it cannot avoid areas. Check the route against the shaded areas.': 'Usando el servidor de respaldo: no puede evitar zonas. Revise la ruta contra las zonas sombreadas.',
+  'There is no way around a spot you avoid, so this route goes through it.': 'No hay forma de rodear un punto que evita, así que esta ruta pasa por él.',
+  'Avoided spots not applied': 'Puntos evitados no aplicados', ' not applied.': ' no aplicados.', ' avoided spot': ' punto evitado', ' avoided spots': ' puntos evitados',
+  'No way around found: this route still has a ': 'No se encontró cómo rodearlo: esta ruta aún tiene ', 'This route goes through ': 'Esta ruta pasa por ',
+  'Your start or destination is inside or near the ': 'Su salida o destino está dentro o cerca de ', 'an area you avoid': 'una zona que evita', 'a fire area': 'una zona de incendio',
+  'service road or alley': 'calle de servicio o callejón', 'unpaved road': 'camino sin pavimentar', 'border crossing': 'cruce fronterizo', 'Spots you avoid': 'Puntos que evita',
+  'Press and hold the map, then choose "Avoid this spot". Tap an avoided spot to make it bigger or smaller.': 'Mantenga presionado el mapa y elija "Evitar este punto". Toque un punto evitado para agrandarlo o achicarlo.',
+  'Avoid this spot': 'Evitar este punto', 'Avoiding this spot. Tap it to make it bigger or smaller, or to stop avoiding it.': 'Evitando este punto. Tóquelo para agrandarlo o achicarlo, o para dejar de evitarlo.',
+  'Avoiding that spot.': 'Evitando ese punto.', 'Stop avoiding': 'Dejar de evitar', '+ Wider': '+ Más grande', '− Smaller': '− Más chico', 'just this spot': 'solo este punto',
+  'Avoid road ahead': 'Evitar el camino adelante', 'Finding another way.': 'Buscando otra ruta.', 'Looking for another way...': 'Buscando otra ruta...',
+  'Tip: press and hold the map to go there, save it or avoid it.': 'Consejo: mantenga presionado el mapa para ir ahí, guardarlo o evitarlo.',
+  // ---- Border
+  'Crossing at ': 'Cruce por ', ', border in ': ', frontera en ', 'border in ': 'frontera en ', ' · border in ': ' · frontera en ', ' (about ': ' (aprox. ', 'Into Mexico at ': 'Entrada a México por ',
+  ' wait now: ': ' espera ahora: ', ', included in the trip time (US border agency).': ', incluida en el tiempo del viaje (agencia fronteriza de EE. UU.).', ': no wait time reported.': ': sin tiempo de espera reportado.',
+  ' Nearby crossings now: ': ' Otros cruces cercanos ahora: ', 'Regular lane': 'Carril regular', 'Ready Lane': 'Ready Lane', 'SENTRI': 'SENTRI', 'no wait': 'sin espera', 'none': 'ninguna',
+  ' has no time reported': ' no tiene tiempo reportado', '; your pass lets you use the ': '; su pase le permite usar ', ' is closed now. ': ' está cerrado ahora. ', 'your lane': 'su carril',
+  'Get in the ': 'Fórmese en la fila ', ' line for the ': ' para el cruce de ', ' border crossing.': '.', ' line': ' fila', 'Cross at ': 'Cruzar por ', ' instead': ' mejor',
+  'Finding a way through ': 'Buscando ruta por ', 'Could not find a good way through ': 'No se encontró una buena ruta por ', 'Through ': 'Por ', 'Quicker through ': 'Más rápido por ',
+  ' right now: ': ' ahora: ', ' sooner with the border line counted.': ' antes contando la fila de la frontera.', ' overall, border line counted.': ' en total, contando la fila de la frontera.',
+  'Border lane (US-Mexico)': 'Carril en la frontera (EE. UU.-México)', 'Used for wait times when crossing into the US.': 'Para los tiempos de espera al cruzar a EE. UU.', 'Regular': 'Regular',
+  // ---- Fires
+  'Wildfires': 'Incendios forestales', 'Show and avoid wildfires': 'Mostrar y evitar incendios', 'Routes keep at least half a mile away.': 'Las rutas se mantienen a por lo menos 800 m.',
+  'Fire areas from US fire agencies and NASA satellites. Routes stay at least half a mile away. For evacuations and road closures, follow local officials.': 'Zonas de incendio de las agencias de EE. UU. y satélites de la NASA. Las rutas se mantienen a por lo menos 800 m. Para evacuaciones y cierres, siga a las autoridades locales.',
+  'No active fires nearby. ': 'No hay incendios activos cerca. ', ' active fire': ' incendio activo', ' active fires': ' incendios activos', 'Updated ': 'Actualizado ',
+  ' Fire area': ' Zona de incendio', ' Fire area. Check evacuation orders and road closures.': ' Zona de incendio. Revise órdenes de evacuación y cierres de caminos.', ' Fire': ' Incendio',
+  ' fire area is ahead. Finding a way around.': ' hay una zona de incendio adelante. Buscando cómo rodearla.', 'Updated wildfire data: finding a way around ': 'Datos de incendios actualizados: buscando cómo rodear ',
+  'Updated wildfire data: finding a way around a fire...': 'Datos de incendios actualizados: buscando cómo rodear un incendio...', 'Fully contained, so routes are not changed.': 'Controlado por completo; las rutas no cambian.',
+  'Fire seen by satellite': 'Incendio visto por satélite', 'Satellite-detected': 'Detectado por satélite', 'Regular heat source': 'Fuente de calor habitual',
+  ' heat spots seen by NASA satellites in the last 2 days, latest ': ' puntos de calor vistos por satélites de la NASA en los últimos 2 días, el más reciente hace ',
+  'Not confirmed by a fire agency: it can be a controlled or farm burn. A circle around the spots is avoided.': 'No confirmado por una agencia: puede ser una quema controlada o agrícola. Se evita un círculo alrededor.',
+  'Not seen there in the last 3 months, so it looks new. ': 'No se vio ahí en los últimos 3 meses, así que parece nuevo. ', 'The same spot was hot on ': 'El mismo punto estuvo caliente ',
+  ' other days in the last 3 months, which points to something there that is often hot (a factory, power station, gas flare or dump) rather than a new fire. Routes are not changed.': ' otros días en los últimos 3 meses, lo que indica algo que suele estar caliente (una fábrica, planta eléctrica, quemador de gas o basurero) y no un incendio nuevo. Las rutas no cambian.',
+  'Could not get wildfire data, so this route is not checked for fires.': 'No se obtuvieron datos de incendios, así que esta ruta no se revisó.', 'Could not get wildfire data (': 'No se obtuvieron datos de incendios (',
+  '). Routes are not being checked for fires.': '). Las rutas no se están revisando por incendios.', ' acres': ' acres', '% contained': '% controlado', 'containment not reported': 'control no reportado',
+  'size not reported': 'tamaño no reportado', '. Outline mapped ': '. Contorno trazado ', ' hours ago': ' horas', ' days ago': ' días', 'under an hour ago': 'hace menos de una hora',
+  // ---- Navigation and voice
+  'Starting directions.': 'Iniciando indicaciones.', 'You have arrived.': 'Ha llegado.', 'You have arrived at your destination.': 'Ha llegado a su destino.', 'You have arrived in ': 'Ha llegado a ',
+  'You made it!': '¡Llegó!', 'Arrive at stop ': 'Llegada a la parada ', 'Arrive at your stop.': 'Llegada a su parada.', 'Rerouting.': 'Recalculando.', 'Rerouting...': 'Recalculando...',
+  'Traffic has changed. Taking a faster route.': 'El tráfico cambió. Tomando una ruta más rápida.', 'Continue for ': 'Continúe por ', 'Continue': 'Continúe', 'Continue.': 'Continúe.',
+  'Continue straight': 'Siga derecho', 'In ': 'En ', 'Then ': 'Luego ', ' Then ': ' Luego ', 'Then: ': 'Luego: ', 'then ': 'luego ', 'Next: ': 'Siguiente: ', 'Your next turn': 'Su próxima vuelta',
+  'Turn left': 'Gire a la izquierda', 'Turn right': 'Gire a la derecha', 'Sharp left': 'Vuelta cerrada a la izquierda', 'Sharp right': 'Vuelta cerrada a la derecha',
+  'Bear left': 'Manténgase a la izquierda', 'Bear right': 'Manténgase a la derecha', 'Keep left': 'Manténgase a la izquierda', 'Keep right': 'Manténgase a la derecha',
+  'Make a U-turn': 'Dé vuelta en U', 'Make a U-turn.': 'Dé vuelta en U.', ' U-turn': ' vuelta en U', 'Merge': 'Incorpórese', 'Take the exit': 'Tome la salida',
+  'Take the exit on the left': 'Tome la salida a la izquierda', 'Take the exit on the right': 'Tome la salida a la derecha', 'Take the ramp': 'Tome la rampa',
+  'Take the ramp on the right': 'Tome la rampa a la derecha', 'Take the ramp on the ': 'Tome la rampa a la ', 'Take the roundabout': 'Entre a la glorieta', 'Exit the roundabout': 'Salga de la glorieta',
+  'At the roundabout, take exit ': 'En la glorieta, tome la salida ', 'exit roundabout': 'salga de la glorieta', 'exit rotary': 'salga de la glorieta', 'Exit ': 'Salida ', ', exit ': ', salida ',
+  ' onto ': ' hacia ', 'onto ': 'hacia ', ' toward ': ' dirección ', 'toward ': 'dirección ', ' on the left': ' a la izquierda', ' on the right': ' a la derecha', ' at the fork': ' en la bifurcación',
+  ' at the end of the road': ' al final del camino', 'end of road': 'final del camino', 'just after ': 'justo después de ', 'Use the left ': 'Use los ', 'Use the middle ': 'Use los ', 'Use the right ': 'Use los ',
+  ' lanes': ' carriles', 'Which lane to be in': 'En qué carril ir', 'Landmarks at turns': 'Referencias en las vueltas', 'Speed and speed limit': 'Velocidad y límite',
+  'Recenter': 'Centrar', 'Whole route': 'Ruta completa', 'Repeat direction': 'Repetir indicación', 'Mute voice': 'Silenciar voz', 'Voice muted': 'Voz silenciada', 'End': 'Terminar',
+  'Directions are running': 'Indicaciones en curso', 'On-screen directions': 'Indicaciones en pantalla', 'Voice directions': 'Indicaciones de voz', 'Voice': 'Voz',
+  'Brief': 'Breve', 'Standard': 'Normal', 'Detailed': 'Detallada', 'All turns': 'Todas las vueltas', 'Off': 'Apagado', 'While driving, show': 'Al manejar, mostrar',
+  'Map faces my direction': 'El mapa gira con mi dirección', 'North up': 'Norte arriba', 'You’re in ': 'Está en ', 'Welcome to ': 'Bienvenido a ',
+  'Share arrival': 'Compartir llegada', 'On my way to ': 'Voy en camino a ', ', arrive ': ', llego ', 'Copied. Paste it in a message.': 'Copiado. Péguelo en un mensaje.',
+  'a quarter mile': 'un cuarto de milla', 'half a mile': 'media milla', ' miles': ' millas', ' mile': ' milla', ' feet': ' pies', ' ft': ' pies', ' metres': ' metros', ' kilometres': ' kilómetros',
+  ' ft tall, ': ' pies de alto, ', ' tons': ' toneladas',
+  // ---- Meet in the middle
+  'Meet in the middle': 'Verse a medio camino', 'Where is your friend?': '¿Dónde está su amigo?', 'Enter your friend\'s location first.': 'Primero escriba la ubicación de su amigo.',
+  'Getting the route between you...': 'Obteniendo la ruta entre ustedes...', 'Checking each place for you both...': 'Revisando cada lugar para los dos...', 'Fairest first': 'Más justo primero',
+  'Looking for places near the middle...': 'Buscando lugares a medio camino...', 'Meet at ': 'Verse en ', 'Link copied. Send it to your friend.': 'Enlace copiado. Envíeselo a su amigo.',
+  ' route between you two. Check both locations.': ' ruta entre ustedes. Revise ambas ubicaciones.', '" near the middle...': '" a medio camino...',
+  '" found near the middle of your trip. Check the spelling, or clear the name and pick a kind of place.': '" a medio camino. Revise cómo se escribe, o borre el nombre y elija un tipo de lugar.',
+  'No named places found near the middle of your trip. Try "Anything", or a different pair of locations.': 'No hay lugares con nombre a medio camino. Pruebe "Cualquier lugar" u otras ubicaciones.',
+  'There is nothing near the even point between you, so these are the closest options. ': 'No hay nada cerca del punto medio, así que estas son las opciones más cercanas. ', ' - Friend ': ' - Amigo ',
+  // ---- Location
+  'Finding your location...': 'Buscando su ubicación...', 'Getting your location...': 'Obteniendo su ubicación...', 'Checking your location...': 'Revisando su ubicación...',
+  'Waiting for your location...': 'Esperando su ubicación...', 'Still looking for your location...': 'Aún buscando su ubicación...', 'Showing your location': 'Mostrando su ubicación',
+  'Your location is not known yet.': 'Aún no se conoce su ubicación.', 'No location yet': 'Sin ubicación todavía', 'No location yet: tap the target button for help': 'Sin ubicación: toque el botón de ubicación para ayuda',
+  'No location here': 'Sin ubicación aquí', 'Your location is off': 'Su ubicación está apagada', 'Location is off': 'La ubicación está apagada',
+  'Location is off for BrinaMaps': 'La ubicación está apagada para BrinaMaps', 'Location is off for BrinaMaps.': 'La ubicación está apagada para BrinaMaps.',
+  'Location is off. Allow location for BrinaMaps in Settings.': 'La ubicación está apagada. Permita la ubicación para BrinaMaps en Ajustes.',
+  'Location is off. Turn it on for BrinaMaps in Settings to navigate.': 'La ubicación está apagada. Actívela para BrinaMaps en Ajustes para navegar.',
+  'Location is still off for BrinaMaps.': 'La ubicación sigue apagada para BrinaMaps.', 'Location is blocked': 'La ubicación está bloqueada', 'Location is blocked for this site': 'La ubicación está bloqueada para este sitio',
+  'Location is still blocked for this site.': 'La ubicación sigue bloqueada para este sitio.', 'Location is off. Allow location for this site': 'La ubicación está apagada. Permita la ubicación para este sitio',
+  'Location is off. Allow location for this site to navigate.': 'La ubicación está apagada. Permita la ubicación para este sitio para navegar.',
+  'Location is not available in this browser.': 'La ubicación no está disponible en este navegador.', 'This browser has no location': 'Este navegador no tiene ubicación',
+  'Location is not available. Tap the route button next to the search box to choose a start.': 'La ubicación no está disponible. Toque el botón de ruta junto a la búsqueda para elegir una salida.',
+  'Turn on location, or set a starting point on the main screen first.': 'Active la ubicación o elija primero un punto de salida en la pantalla principal.', ', or choose a start with the route button.': ', o elija una salida con el botón de ruta.',
+  'Turn on Precise Location.': 'Active la Ubicación exacta.', 'Turn on Location in your phone\'s quick settings.': 'Active la Ubicación en los ajustes rápidos de su teléfono.',
+  'Settings > Privacy & Security > Location Services: turn it on.': 'Ajustes > Privacidad y seguridad > Localización: actívela.',
+  'In that same list, open Safari Websites (or your browser) and choose "While Using the App", with Precise Location on.': 'En esa misma lista, abra Sitios web de Safari (o su navegador) y elija "Al usar la app", con Ubicación exacta activada.',
+  'Back here, tap the "aA" or page-menu button in the address bar > Website Settings > Location > Allow.': 'De regreso aquí, toque el botón "aA" en la barra de direcciones > Ajustes del sitio web > Ubicación > Permitir.',
+  'Click the icon at the left of the address bar > Location > Allow.': 'Haga clic en el ícono a la izquierda de la barra de direcciones > Ubicación > Permitir.',
+  'Tap the icon at the left of the address bar > Permissions > Location > Allow.': 'Toque el ícono a la izquierda de la barra de direcciones > Permisos > Ubicación > Permitir.',
+  'On a Mac, also check System Settings > Privacy & Security > Location Services is on for your browser.': 'En una Mac, revise también Ajustes del Sistema > Privacidad y seguridad > Localización para su navegador.',
+  'If your browser is asking to use your location, choose Allow.': 'Si su navegador pide usar su ubicación, elija Permitir.', 'Then tap Try again.': 'Luego toque Intentar de nuevo.',
+  'Then click Try again.': 'Luego haga clic en Intentar de nuevo.', 'Come back and tap Try again.': 'Regrese y toque Intentar de nuevo.', 'Try again': 'Intentar de nuevo',
+  'This browser does not offer location. Open the map in Safari or Chrome.': 'Este navegador no ofrece ubicación. Abra el mapa en Safari o Chrome.',
+  'You are inside another app\'s built-in browser, which often blocks location. Use its menu to open this page in Safari or Chrome.': 'Está en el navegador interno de otra app, que suele bloquear la ubicación. Use su menú para abrir esta página en Safari o Chrome.',
+  'BrinaMaps uses your location to start routes from where you are and to show what is nearby.': 'BrinaMaps usa su ubicación para iniciar rutas desde donde está y mostrar lo que hay cerca.',
+  'BrinaMaps is using your location to guide you.': 'BrinaMaps está usando su ubicación para guiarle.', 'Your location is off for BrinaMaps': 'Su ubicación está apagada para BrinaMaps',
+  // ---- Offline
+  'Offline maps': 'Mapas sin conexión', 'Save the area on screen': 'Guardar la zona en pantalla', 'No saved areas yet.': 'Aún no hay zonas guardadas.', 'Remove saved areas': 'Quitar zonas guardadas',
+  'Saved areas removed.': 'Zonas guardadas quitadas.', 'Saving ': 'Guardando ', ' map pieces. ': ' piezas de mapa. ', 'Saved. This area now works without a connection (': 'Guardado. Esta zona ahora funciona sin conexión (',
+  ' saved area, about ': ' zona guardada, aprox. ', ' saved areas, about ': ' zonas guardadas, aprox. ', ' places saved for searching offline.': ' lugares guardados para buscar sin conexión.',
+  'That area is too big to save in one go. Zoom in to about a city or county and try again.': 'Esa zona es demasiado grande para guardarla de una vez. Acerque el mapa a una ciudad o municipio e intente de nuevo.',
+  'Areas you have looked at work without signal for a while. To be sure, move the map to an area and save it. Search and new routes need a connection; a route you already have keeps working.': 'Las zonas que ha visto funcionan sin señal por un tiempo. Para asegurarse, mueva el mapa a una zona y guárdela. La búsqueda y las rutas nuevas necesitan conexión; una ruta que ya tiene sigue funcionando.',
+  'Offline: maps and search need a connection': 'Sin conexión: mapas y búsqueda necesitan internet', ' failed; try again with a better connection.': ' falló; intente con mejor conexión.',
+  'The map has not loaded yet. Try again in a moment.': 'El mapa aún no carga. Intente en un momento.',
+  // ---- Settings
+  'Settings': 'Ajustes', 'Direction settings': 'Ajustes de indicaciones', 'Options': 'Opciones', 'Done': 'Listo', 'Close': 'Cerrar', 'Cancel': 'Cancelar', 'Save': 'Guardar',
+  'Clear': 'Borrar', 'Change': 'Cambiar', ' ›  Change': ' ›  Cambiar', 'Add': 'Agregar', 'Ok': 'OK', 'Enter': 'Entrar', 'Not set': 'Sin definir', 'Fewer options': 'Menos opciones',
+  'Units': 'Unidades', 'Distances': 'Distancias', 'Miles': 'Millas', 'Kilometres': 'Kilómetros', 'Speeds (signs in Mexico are in km/h)': 'Velocidades (en México las señales están en km/h)',
+  'Map colours': 'Colores del mapa', 'Dark map at night': 'Mapa oscuro de noche', 'Day map': 'Mapa de día', 'Night map': 'Mapa de noche', 'Map': 'Mapa', 'Night': 'Noche', 'Dark': 'Oscuro',
+  'High contrast': 'Alto contraste', 'Label size': 'Tamaño de etiquetas', 'Small': 'Chico', 'Large': 'Grande', 'Font': 'Letra', 'Text': 'Texto', 'Keyboard': 'Teclado', 'System': 'Sistema',
+  'Shop and cafe icons': 'Íconos de tiendas y cafés', 'Always mark these:': 'Marcar siempre:', 'Names shown in gold so you notice them as you pass, like Dunkin\' or Oxxo.': 'Nombres en dorado para notarlos al pasar, como Dunkin\' u Oxxo.',
+  'Show traffic on the map': 'Mostrar tráfico en el mapa', 'Route around traffic': 'Evitar el tráfico', 'Language': 'Idioma', 'Automatic': 'Automático',
+  'Live traffic (optional)': 'Tráfico en vivo (opcional)', 'Steadier search (optional)': 'Búsqueda más estable (opcional)', 'Geoapify key': 'Clave de Geoapify',
+  'Paste a free Geoapify key from': 'Pegue una clave gratis de Geoapify de', ' if search is slow. It stays on this device, and what you search is sent to Geoapify.': ' si la búsqueda es lenta. Se queda en este dispositivo, y lo que busca se envía a Geoapify.',
+  'Paste a free TomTom key from developer.tomtom.com. It stays on this device. Driving routes then come from TomTom and avoid jams, and your trip\'s start and end are sent to TomTom.': 'Pegue una clave gratis de TomTom de developer.tomtom.com. Se queda en este dispositivo. Las rutas vendrán de TomTom y evitarán el tráfico; la salida y el destino se envían a TomTom.',
+  'Key saved. Search now uses Geoapify first.': 'Clave guardada. La búsqueda usa Geoapify primero.', 'Key removed. Using the free search.': 'Clave quitada. Usando la búsqueda gratis.',
+  'Key saved. Traffic shows on your next route.': 'Clave guardada. El tráfico aparece en su próxima ruta.', 'Key removed. Traffic is off.': 'Clave quitada. El tráfico está apagado.',
+  'Geoapify did not accept that key.': 'Geoapify no aceptó esa clave.', 'Traffic routing is on.': 'Rutas con tráfico activadas.', 'Traffic is on.': 'Tráfico activado.',
+  'Traffic routing failed (': 'Falló la ruta con tráfico (', '). Using routes without traffic.': '). Usando rutas sin tráfico.', 'Traffic is unavailable right now (': 'El tráfico no está disponible ahora (',
+  'Traffic routing does not support: ': 'Las rutas con tráfico no permiten: ', 'Not supported here: ': 'No disponible aquí: ', 'rig size': 'tamaño del remolque', 'rig limits': 'límites del remolque',
+  'About': 'Acerca de', 'Privacy policy': 'Política de privacidad', 'Terms of use': 'Términos de uso', 'powered by Geoapify': 'con tecnología de Geoapify',
+  'No ads, no sponsored places, no account. Your places and settings stay on this device.': 'Sin anuncios, sin lugares patrocinados, sin cuenta. Sus lugares y ajustes se quedan en este dispositivo.',
+  '. Map tiles by': '. Mapas de', ', which anyone can correct. Places also from': ', que cualquiera puede corregir. Lugares también de', '. Search and routing': '. Búsqueda y rutas',
+  'Map data &copy;': 'Datos del mapa &copy;', '. Traffic &copy; TomTom. Fire data from NIFC and NASA FIRMS. Border waits from US Customs and Border Protection.': '. Tráfico &copy; TomTom. Incendios de NIFC y NASA FIRMS. Esperas en la frontera de la CBP de EE. UU.',
+  // ---- Premium
+  'BrinaMaps Premium: live traffic': 'BrinaMaps Premium: tráfico en vivo', 'Monthly': 'Mensual', 'Yearly': 'Anual', 'Monthly: ': 'Mensual: ', 'Yearly: ': 'Anual: ',
+  ' per month': ' al mes', ' per year': ' al año', 'Restore purchases': 'Restaurar compras', 'Premium is on. Traffic is included in your routes.': 'Premium activado. El tráfico se incluye en sus rutas.',
+  'Routes around jams, arrival times that include traffic, and traffic colours on the map. Everything else is free.': 'Rutas que evitan el tráfico, horas de llegada con tráfico y colores de tráfico en el mapa. Todo lo demás es gratis.',
+  'Payment is charged to your Apple ID. The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it in your iPhone\'s Settings under your name, then Subscriptions.': 'El pago se carga a su Apple ID. La suscripción se renueva automáticamente salvo que la cancele al menos 24 horas antes del fin del periodo. Adminístrela o cancélela en Ajustes del iPhone, en su nombre y luego Suscripciones.',
+  'Prices could not be loaded from the App Store. Check your connection and open this screen again.': 'No se cargaron los precios del App Store. Revise su conexión y abra esta pantalla de nuevo.',
+  'Connecting to the App Store...': 'Conectando con el App Store...', 'Opening the App Store...': 'Abriendo el App Store...', 'Checking your purchases...': 'Revisando sus compras...',
+  'Confirming your subscription...': 'Confirmando su suscripción...', 'No active subscription found on this Apple ID.': 'No hay una suscripción activa en este Apple ID.',
+  'This subscription is not available right now.': 'Esta suscripción no está disponible ahora.', 'The purchase did not go through. ': 'La compra no se completó. ',
+  'Premium could not be confirmed (': 'No se pudo confirmar Premium (', '). Try Restore purchases.': '). Pruebe Restaurar compras.', 'something went wrong': 'algo salió mal',
+  'unknown error': 'error desconocido', 'timed out': 'se agotó el tiempo',
+  // ---- Misc
+  'Distance': 'Distancia', 'Turns': 'Vueltas', ' ahead': ' adelante', ' away': ' de distancia', 'Near ': 'Cerca de ', 'On ': 'En ', 
+  'Checked for ': 'Revisado: ', 'Checking the ': 'Revisando ', 'Looking for places': 'Buscando lugares', 'about ': 'aprox. ',
+  // ---- Composed lines (route card, banner, results)
+  ' miles left': ' millas restantes', ' mile left': ' milla restante', ' km left': ' km restantes', ' m left': ' m restantes', ' ft left': ' pies restantes',
+  '  ·  arrive about ': '  ·  llega aprox. ', '  ·  arrive ': '  ·  llega ', ' arrive about ': ' llega aprox. ', 'arrive about ': 'llega aprox. ',
+  ' min traffic': ' min de tráfico', ' traffic + ': ' de tráfico + ', ' h traffic': ' h de tráfico', ' nearby. ': ' cerca. ', ' Updated ': ' Actualizado ',
+  ', with ': ', con ', ' and ': ' y ', 'no highway': 'sin autopista', 'no tolls': 'sin cuota', ' highways': ' autopistas', ' tolls': ' cuotas', ' ferries': ' ferris',
+  ' unpaved roads': ' caminos sin pavimentar', ' alleys': ' callejones', ' border crossings': ' cruces fronterizos', ' of ': ' de ', 'Leave from ': 'Salga de ',
+  'Continue to center': 'Seguir al centro', 'Keep going to the center, or pick somewhere in town.': 'Siga al centro o elija un lugar en el pueblo.',
+  ' There was no way around it. Check road closures before you go.': ' No había forma de rodearla. Revise los cierres de caminos antes de salir.',
+  ' Tap a place for directions.': ' Toque un lugar para ver cómo llegar.', 'Open Settings': 'Abrir Ajustes', '. A new one goes where it fits best on the way.': '. Una nueva se acomoda donde mejor quede en el camino.',
+  'They will': 'Su amigo va', 'You will': 'Usted va', '  ·  then ': '  ·  luego ', ' on it': ' por ahí', 'in ': 'en ', ', at ': ', en ',
+  ': lane closed': ': carril cerrado', 'Could not find a ': 'No se encontró una ', ' route between you two. Check both locations.': ' ruta entre ustedes. Revise ambas ubicaciones.',
+  'Stopped at the "': 'Se detuvo en el paso "', '" step: ': '": ', '. Try again in a moment.': '. Intente en un momento.', ' to stay': ' para seguir',
+  ' from the results.': ' de los resultados.', 'your route settings': 'sus ajustes de ruta', 'Paper and ink': 'Papel y tinta', 'Forest night': 'Noche de bosque',
+  'Tap Location and choose "While Using the App". For directions with the screen off, choose "Always".': 'Toque Ubicación y elija "Al usar la app". Para indicaciones con la pantalla apagada, elija "Siempre".',
+  'Tap Open Settings below (or open the Settings app > Apps > BrinaMaps).': 'Toque Abrir Ajustes abajo (o abra Ajustes > Apps > BrinaMaps).',
+  'TomTom did not accept that key.': 'TomTom no aceptó esa clave.', 'TomTom did not accept that key. Using routes without traffic.': 'TomTom no aceptó esa clave. Usando rutas sin tráfico.',
+  'TomTom key': 'Clave de TomTom', 'Location': 'Ubicación', 'your ': 'su ', 'Pick your ': 'Elija su ', ' (about ': ' (aprox. ', 
+  'Drive': 'Auto', 'Directions': 'Indicaciones', 'Sunset': 'Atardecer', 'Ocean': 'Océano', 'Warm': 'Cálido', 'Soft': 'Suave', 'Fresh': 'Fresco', 'Classic': 'Clásico', 'Neon': 'Neón',
+  'You ': 'Usted ', 'You have arrived': 'Ha llegado', ' min driving': ' min en auto', ' min biking': ' min en bici', ' min walking': ' min a pie', ' h driving': ' h en auto',
+  'trip too long for fire data': 'viaje demasiado largo para revisar incendios', 'fire data unavailable': 'datos de incendios no disponibles',
+  ', with no highway': ', sin autopista', ', with no tolls': ', sin cuota', ', with no highway, no tolls': ', sin autopista ni cuota',
+};
+const tr = (() => {
+  if (LANG !== 'es') return s => s;
+  const exact = new Map(), parts = new Map();
+  Object.entries(ES).forEach(([en, es]) => {
+    en = en.replace(/&copy;/g, '©'); es = es.replace(/&copy;/g, '©');
+    if (en === es) return;
+    exact.set(en.trim(), es.trim());
+    const t = en.trim();
+    // inside longer text: phrases of two or more words, and the pieces that are glued onto numbers or names
+    if (en.length >= 4 && (/ /.test(t) || /^ /.test(en) || /\W$/.test(t))) {
+      parts.set(en, es);
+      // the same sentence after "In 700 feet, ...": its first letter is lowered
+      if (/^[A-Z][a-z]/.test(en) && / /.test(t)) parts.set(en[0].toLowerCase() + en.slice(1), es[0].toLowerCase() + es.slice(1));
+    }
+  });
+  // a phrase right after a space must win over a shorter piece that starts at that space (" turn" inside " turn left")
+  [...parts].forEach(([en, es]) => { if (/^\p{L}/u.test(en) && / /.test(en.trim()) && !parts.has(' ' + en)) parts.set(' ' + en, ' ' + es); });
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const keys = [...parts.keys()].sort((a, b) => b.length - a.length);
+  const re = new RegExp(keys.map(k => (/^\p{L}/u.test(k) ? '(?<!\\p{L})' : '') + esc(k) + (/\p{L}$/u.test(k) ? '(?!\\p{L})' : '')).join('|'), 'gu');
+  // prefixes like "In ", "Show ", "Via ": one word with a trailing space, only at the very start
+  const starts = Object.entries(ES).filter(([en]) => /^\S+ $/.test(en)).map(([en, es]) => [en, es]);
+  return s => {
+    if (!s || !/[A-Za-z]/.test(s)) return s;
+    const lead = s.match(/^\s*/)[0], tail = s.match(/\s*$/)[0], core = s.trim();
+    if (exact.has(core)) return lead + exact.get(core) + tail;
+    let out = s.replace(re, m => parts.get(m) || m);
+    for (const [en, es] of starts) if (out.startsWith(en)) { out = es + out.slice(en.length); break; }   // after the phrases, so "Turn left" stays whole
+    return out;
+  };
+})();
+function translatePage() {
+  if (LANG !== 'es') return;
+  const raw = n => { const e = n.nodeType === 1 ? n : n.parentElement; return !e || !!e.closest('[data-raw],script,style,textarea,.maplibregl-canvas-container'); };
+  const done = new WeakMap();
+  const text = n => { if (raw(n) || done.get(n) === n.data) return; const t = tr(n.data); if (t !== n.data) n.data = t; done.set(n, n.data); };
+  const attrs = e => { if (raw(e)) return; ['placeholder', 'title', 'aria-label'].forEach(a => { const v = e.getAttribute(a); if (v) { const t = tr(v); if (t !== v) e.setAttribute(a, t); } }); };
+  const walk = root => {
+    if (root.nodeType === 3) { text(root); return; }
+    if (root.nodeType !== 1) return;
+    attrs(root);
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) n.nodeType === 3 ? text(n) : attrs(n);
+  };
+  walk(document.body);
+  new MutationObserver(list => list.forEach(m => {
+    if (m.type === 'characterData') text(m.target);
+    else if (m.type === 'attributes') attrs(m.target);
+    else m.addedNodes.forEach(walk);
+  })).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+}
+translatePage();
+
 // ---------- Services (all built on OpenStreetMap data, none need a key; swap these to self-host) ----------
 const STYLE    = 'https://tiles.openfreemap.org/styles/bright';   // OpenFreeMap vector tiles; recoloured per theme below
 const GEOCODER = 'https://photon.komoot.io';             // Photon search
@@ -625,7 +950,7 @@ const $ = id => document.getElementById(id);
 // plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
-const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), LIVE = plugin('LiveNav'), CAR = plugin('CarNav'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
 // In the app the keyboard slides over the page instead of shrinking it (resizing the page redraws the whole map, which
 // made the search box slow to respond). The search list is kept above the keyboard instead.
 if (KEYS && KEYS.addListener) {
@@ -752,7 +1077,7 @@ const hasTraffic = () => !!prefs.ttKey || (premium.active && passOk());
 const tParam = () => passOk() ? '&t=' + encodeURIComponent(premium.pass.pass) : '';
 const ttRoute = (locs, qs) => prefs.ttKey ? `https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?${qs}&key=${encodeURIComponent(prefs.ttKey)}` : `${API}/traffic?ep=route&locs=${locs}&${qs}${tParam()}`;
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
-const prefs = Object.assign({ poiKinds: [], favNames: [], lane: 'standard', fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
+const prefs = Object.assign({ poiKinds: [], favNames: [], lane: 'standard', fires: true, mode: 'auto', noHwy: false, noToll: false, noFerry: false, noUnpaved: false, simple: false, voice: 'standard', banner: 'standard', lanes: true, landmarks: false, ttKey: '', geoKey: '', showSpeed: true, trafficLayer: true, trafficRoute: true, northUp: false, theme: 'brina', nightTheme: 'twilight', autoNight: true, labels: 'm', showPois: true, showBuildings: true, units: 'mi', lang: 'auto', font: 'jakarta', rig: { h: 11, l: 25, w: 5 } }, store('map.prefs') || {});
 let avoid = store('map.avoid') || [], saved = store('map.saved') || [], recent = store('map.recent') || [];
 let places = store('map.places') || { home: null, work: null }, visits = store('map.visits') || {}, settingPlace = null;   // visits: how often you go to each place
 const pts = { from: null, to: null, stops: [] }, markers = { from: null, to: null, stops: [] };   // stops: places on the way, in order
@@ -842,6 +1167,33 @@ function arrow(step) {
   if (Math.abs(a) >= 170) return s + '<g' + (a > 0 ? ' transform="translate(48,0) scale(-1,1)"' : '') + '><path d="M32 44V20a9 9 0 0 0-18 0v12M7 25l7 7 7-7"/></g></svg>';
   return s + '<path d="M24 44V26"/><g transform="rotate(' + a + ' 24 26)"><path d="M24 26V8M15 17l9-9 9 9"/></g></svg>';
 }
+// The same turn as an SF Symbol name, for the lock screen and Dynamic Island (drawn by the iPhone, not this page)
+function turnSymbol(step) {
+  if (!step) return 'arrow.up';
+  if (step.kind === 'arrive' || step.kind === 'stop') return 'mappin.circle.fill';
+  if (step.kind === 'roundabout') return 'arrow.triangle.turn.up.right.circle';
+  const a = step.angle || 0;
+  if (Math.abs(a) >= 170) return a > 0 ? 'arrow.uturn.right' : 'arrow.uturn.left';
+  if (Math.abs(a) < 15) return 'arrow.up';
+  if (Math.abs(a) < 60) return a > 0 ? 'arrow.up.right' : 'arrow.up.left';
+  return a > 0 ? 'arrow.turn.up.right' : 'arrow.turn.up.left';
+}
+// Lock screen / Dynamic Island: sent when the turn or the shown distance changes, at most every 2 seconds otherwise
+let liveLast = '', liveAt = 0, liveOn = false;
+function liveSend(force) {
+  if (!LIVE || !nav) return;
+  const st = { dist: tr($('navDist').textContent), text: tr($('navText').textContent), sym: nav.sym || 'arrow.up', arrive: $('navArrive').textContent,
+    left: tr($('navLeft').textContent.split(' \u00b7 ')[0]), progress: parseFloat($('navProg').style.width) / 100 || 0 };
+  const key = st.dist + '|' + st.text + '|' + st.arrive;
+  if (!force && (key === liveLast || Date.now() - liveAt < 2000)) return;
+  liveLast = key; liveAt = Date.now();
+  if (!liveOn) { liveOn = true; LIVE.start(Object.assign({ dest: pts.to ? pts.to.name || pts.to.label.split(',')[0] : '' }, st)).then(r => { if (!r || !r.on) liveOn = false; }).catch(() => { liveOn = false; }); }
+  else LIVE.update(st).catch(() => {});
+}
+// CarPlay: the phone's directions mirrored on the car screen (dormant until the app has Apple's CarPlay entitlement)
+let carAt = 0;
+function carSend(o) { if (!CAR || !nav || Date.now() - carAt < 1000) return; carAt = Date.now(); CAR.update(o).catch(() => {}); }
+const carRoutePts = rt => { const c = rt.coords, k = Math.max(1, Math.ceil(c.length / 1500)); return c.filter((_, i) => i % k === 0 || i === c.length - 1).map(q => [+q[0].toFixed(6), +q[1].toFixed(6)]); };
 const ICON_SOUND = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/></svg>';
 const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9l5 6M22 9l-5 6"/></svg>';
 
@@ -1090,6 +1442,11 @@ function drawThemes() {
 }
 
 maplibregl.addProtocol('omt', async (params, ac) => ({ data: await offFetch(params.url.slice(6), ac.signal) }));
+// The CarPlay screen loads this page with ?car=1 and moves it from the phone (see CarPlay.swift)
+let carLast = null;
+window.carRoute = pts => mapReady.then(() => map.getSource('routes').setData({ type: 'FeatureCollection', features: pts.length > 1 ? [{ type: 'Feature', properties: { i: 0, sel: true }, geometry: { type: 'LineString', coordinates: pts.map(q => [q[1], q[0]]) } }] : [] }));
+window.carPos = (lat, lon, h) => { carLast = [lat, lon, h]; mapReady.then(() => { showMe([lat, lon], h); map.easeTo({ center: [lon, lat], zoom: 16, bearing: h, pitch: 45, duration: 900 }); }); };
+window.carRecenter = () => { if (carLast) window.carPos(...carLast); };
 mapReady = (async () => {
   let style = STYLE; shownTheme = themeKey();
   try { style = await themedStyle(); } catch (e) {}
@@ -1719,10 +2076,10 @@ function kindIcon(kind, mine) {
 }
 // info: { kind, mine, hours: { text, ok } }: an icon for what the place is, and its hours before the address
 function suggestion(which, main, sub, right, p, info) {
-  const li = el('li'), text = el('span', 'tx', main);
+  const li = el('li'), text = el('span', 'tx'); text.appendChild(el('span', '', main)).dataset.raw = '';
   if (info) li.appendChild(kindIcon(info.kind, info.mine));
-  if (info && info.hours) { const sm = el('small'); sm.appendChild(el('b', info.hours.ok ? 'ok' : 'no', info.hours.text)); if (sub) sm.appendChild(document.createTextNode(' · ' + sub)); text.appendChild(sm); }
-  else if (sub) text.appendChild(el('small', '', sub));
+  if (info && info.hours) { const sm = el('small'); sm.appendChild(el('b', info.hours.ok ? 'ok' : 'no', info.hours.text)); if (sub) sm.appendChild(el('span', '', ' · ' + sub)).dataset.raw = ''; text.appendChild(sm); }
+  else if (sub) text.appendChild(el('small', '', sub)).dataset.raw = '';
   li.append(text, el('em', '', right || ''));
   li.onclick = () => { listFor(which).style.display = 'none'; if (which !== 'friend') exitSearch(); $(which).blur(); if (which === 'friend') meetPick(p); else setPoint(which, p); };
   return li;
@@ -1904,18 +2261,26 @@ function dbPlace(r) {
     wikidata: r.wikidata, wiki: r.wikipedia, dbid: r.id };
 }
 let dbDownUntil = 0;
+// The place list gets 2.5 s. Slower than that (the database busy or down) and search goes on without it, and skips
+// it for the next 2 minutes, so a slow database never makes search slow.
+function dbFetch(url, signal) {
+  const c = new AbortController(), t = setTimeout(() => { c.slow = true; c.abort(); }, 2500);
+  if (signal) { if (signal.aborted) c.abort(); else signal.addEventListener('abort', () => c.abort(), { once: true }); }
+  return fetch(url, { signal: c.signal }).then(r => { clearTimeout(t); if (!r.ok && r.status >= 500) dbDownUntil = Date.now() + 120000; return r; },
+    e => { clearTimeout(t); if (c.slow) { dbDownUntil = Date.now() + 120000; const x = new Error('place list slow'); x.name = 'SlowError'; throw x; } throw e; });
+}
 async function ownSearch(q, ref, signal) {
   if (Date.now() < dbDownUntil) return offlinePlaces(q, ref);
   try {
-    const r = await fetch(API + '/places?v=2&q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
-    if (!r.ok) { if (r.status >= 500) dbDownUntil = Date.now() + 120000; return offlinePlaces(q, ref); }
+    const r = await dbFetch(API + '/places?v=2&q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), signal);
+    if (!r.ok) return offlinePlaces(q, ref);
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { if (e.name === 'AbortError') throw e; return offlinePlaces(q, ref); }
 }
 async function ownNear(tags, ref, km) {
   if (Date.now() < dbDownUntil) return offlinePlaces(null, ref, tags);
   try {
-    const r = await fetch(API + '/places?v=2&cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
+    const r = await dbFetch(API + '/places?v=2&cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
     if (!r.ok) return offlinePlaces(null, ref, tags);
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { return offlinePlaces(null, ref, tags); }
@@ -2562,7 +2927,7 @@ async function satFires(box) {
   const sq = squares(box); if (sq.length > 40) return null;
   const parts = await Promise.all(sq.map(q => fetch(API + '/firms?bbox=' + q.join(','), { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined }).then(r => r.ok ? r.json() : null).catch(() => null)));
   if (!parts.some(Boolean)) return null;
-  const d = { spots: parts.flatMap(x => x ? x.spots || [] : []), history: parts.some(x => x && x.history) }, hist = !!d.history;
+  const seenSpot = new Set(), d = { spots: parts.flatMap(x => x ? x.spots || [] : []).filter(s => { const k = s.join(','); if (seenSpot.has(k)) return false; seenSpot.add(k); return true; }), history: parts.some(x => x && x.history) }, hist = !!d.history;   // a spot on the edge of two squares comes back twice
   const spots = (d.spots || []).filter(s => !inUS(s[0], s[1]) && s[0] >= box[1] && s[0] <= box[3] && s[1] >= box[0] && s[1] <= box[2]);
   const groups = [];
   spots.forEach(s => {
@@ -2618,7 +2983,7 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
   const body = {
     // A port to cross at is a pass-through point (no stop), only matched to roads heading north into the US
     locations: viaPts(via).map(q => q.via ? { lat: q.lat, lon: q.lon, type: 'through', heading: 0, heading_tolerance: 89 } : { lat: q.lat, lon: q.lon }),
-    costing, costing_options: { [costing]: opt }, alternates: quiet || pts.stops.length ? 0 : 2, units: 'miles', language: 'en-US'
+    costing, costing_options: { [costing]: opt }, alternates: quiet || pts.stops.length ? 0 : 2, units: 'miles', language: ROUTE_LANG
   };
   // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
   // misses the spot whenever the tap lands a few metres off the road or on the other side of a divided road.
@@ -2721,7 +3086,7 @@ function tomtomShort(m) {
 }
 async function tomtomRoutes(quiet, more) {
   const locs = tripPts().map(q => q.lat.toFixed(5) + ',' + q.lon.toFixed(5)).join(':');
-  const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=en-US', 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
+  const q = ['traffic=true', 'computeTravelTimeFor=all', 'instructionsType=text', 'language=' + ROUTE_LANG, 'routeRepresentation=polyline', 'sectionType=toll', 'sectionType=motorway', 'sectionType=ferry', 'sectionType=lanes',
     'travelMode=' + (prefs.mode === 'rig' ? 'truck' : 'car'), 'routeType=' + (prefs.shortest ? 'shortest' : 'fastest'), 'maxAlternatives=' + (quiet || pts.stops.length ? 0 : 2)];
   if (prefs.noHwy) q.push('avoid=motorways'); if (prefs.noToll) q.push('avoid=tollRoads'); if (prefs.noFerry) q.push('avoid=ferries'); if (prefs.noUnpaved) q.push('avoid=unpavedRoads'); if (prefs.noBorders) q.push('avoid=borderCrossings');
   if (prefs.relaxed) q.push('vehicleMaxSpeed=89');
@@ -2894,7 +3259,7 @@ const geoRouting = () => (useGeo() || !FREE_OK) && !(FREE_OK && geoMissing().len
 async function geoapifyRoutes(quiet, via = null) {
   const where = viaPts(via).map(q => q.lat.toFixed(6) + ',' + q.lon.toFixed(6)).join('|');
   const motor = prefs.mode === 'auto' || prefs.mode === 'rig';
-  const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details' + (prefs.noBorders && motor ? ',admin_areas' : ''), units: 'metric', lang: 'en', format: 'geojson' };
+  const base = { waypoints: where, mode: prefs.mode === 'rig' ? geoRigMode() : GEO_MODE[prefs.mode], details: 'instruction_details,route_details' + (prefs.noBorders && motor ? ',admin_areas' : ''), units: 'metric', lang: LANG, format: 'geojson' };
   if (motor && prefs.shortest) base.type = 'short'; else if (motor && prefs.simple) base.type = 'less_maneuvers';
   if (motor && prefs.relaxed) base.max_speed = 89;
   const rules = [prefs.noHwy && motor && 'highways:1', prefs.noToll && motor && 'tolls:1', prefs.noFerry && 'ferries:1'].filter(Boolean);
@@ -3048,7 +3413,7 @@ function checkTurns(t) {
       : Math.abs(nearTurn) >= 45 && Math.sign(nearTurn) !== sign && Math.sign(whole) === Math.sign(nearTurn);
     if (!wrong) return;
     const ang = nearTurn, side = ang > 0 ? 'right' : 'left', mag = Math.abs(ang), onto = st.road ? ' onto ' + st.road : '';
-    const after = steps[k + 1], ramp = /\bramp\b|\bexit\b/i.test(st.instruction) || (after && (after.highway || /^merge/i.test(after.instruction || '')));
+    const after = steps[k + 1], ramp = /\bramp\b|\bexit\b|\brampa\b|\bsalida\b/i.test(st.instruction) || (after && (after.highway || /^(merge|incorp)/i.test(after.instruction || '')));
     let text, short;
     if (mag < 25) { text = 'Continue' + onto + '.'; short = 'Continue.'; }
     else if (ramp) { text = 'Take the ramp on the ' + side + onto + '.'; short = 'Take the ramp on the ' + side + '.'; }
@@ -3456,9 +3821,10 @@ function layout() {   // keep the floating button and map credit clear of the ro
 const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
 function say(text, level) {
   if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text) return;
-  if (TTS) { TTS.speak({ text, lang: 'en-US' }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
+  text = tr(text);   // the app's own sentences in the chosen language; the routers' directions already are
+  if (TTS) { TTS.speak({ text, lang: VOICE_LANG }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
   if (!window.speechSynthesis) return;
-  try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {}
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = VOICE_LANG; speechSynthesis.speak(u); } catch (e) {}
 }
 function spokenDist(m) {
   if (prefs.units === 'km') return m < 950 ? Math.max(50, Math.round(m / 50) * 50) + ' metres' : (m < 10000 ? Math.round(m / 500) / 2 : Math.round(m / 1000)) + ' kilometres';
@@ -3561,6 +3927,7 @@ function loadNavRoute() {   // (re)build the progress tables for the current rou
   Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null, peek: null, live: null });
   $('nav').classList.remove('peek');
   loadLimits(rt);
+  if (CAR && nav.carOn) CAR.route({ route: carRoutePts(rt) }).catch(() => {});   // rerouted: the new line on the car screen
 }
 function startNav() {
   if (!routes.length) return;
@@ -3569,6 +3936,7 @@ function startNav() {
   // Going to a city or town: the point the search gives is just its middle, so arriving in the town is the real arrival
   nav.city = TOWN_R[pts.to.kind] ? { name: pts.to.name || pts.to.label.split(',')[0], kind: pts.to.kind, at: 0 } : null;
   loadNavRoute();
+  if (CAR) { nav.carOn = true; CAR.start({ dest: pts.to.name || pts.to.label.split(',')[0], destLat: pts.to.lat, destLon: pts.to.lon, route: carRoutePts(routes[selected]) }).catch(() => {}); }
   document.body.classList.add('nav'); document.body.classList.remove('free');
   $('navArrow').innerHTML = ''; $('navDist').textContent = ''; $('navText').textContent = 'Finding your location...'; $('navThen').textContent = '';
   $('navArrive').textContent = '--'; $('navLeft').textContent = ''; $('navProg').style.width = '0';
@@ -3581,6 +3949,12 @@ function startNav() {
 }
 function endNav(arrivedAt) {
   if (!nav) return;
+  if (LIVE && liveOn) {   // arrived: the lock screen says so for a few minutes; stopped early: it goes away
+    if (arrivedAt) LIVE.update({ dist: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
+    LIVE.end({ arrived: !!arrivedAt }).catch(() => {});
+  }
+  liveOn = false; liveLast = '';
+  if (CAR) CAR.end({ arrived: !!arrivedAt }).catch(() => {});
   if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
   if (nav.city) clearTimeout(nav.city.t);
   nav = null; tempAvoid = null;
@@ -3749,10 +4123,13 @@ function onFix(p) {
   $('navThen').textContent = level !== 'brief' && after ? 'Then: ' + (level === 'detailed' ? after.instruction : after.short) : '';
   }
   $('navArrive').textContent = arrive;
+  nav.sym = turnSymbol(next);
   const bd = rt.border && rt.border.idx > s.i ? rt.border : null;
   let toBorder = 0; if (bd) { for (let i = cur; i < steps.length && steps[i].begin < bd.idx; i++) toBorder += i === cur ? (steps[i].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0) : steps[i].time || 0; }
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
+  liveSend();
+  carSend({ text: tr($('navText').textContent), sym: nav.sym, dist: toNext, left: secs, leftDist: left, lat: ll[0], lon: ll[1], heading: head });
   // Further out the faster you go, closer in for a turn in town. One smooth curve on the smoothed speed (steps made the
   // map zoom in and out whenever the speed hovered around a step).
   nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));
@@ -3828,6 +4205,8 @@ function guidance(step) {   // what to add to a prompt, given the toggles and wh
     const ok = lanes.map((l, i) => l.valid ? i : -1).filter(i => i >= 0), n = lanes.length, k = ok.length, run = ok[k - 1] - ok[0] + 1 === k;
     const word = c => c === 1 ? 'lane' : (c === 2 ? 'two' : c === 3 ? 'three' : c) + ' lanes';
     laneText = !run ? '' : ok[0] === 0 ? 'Use the left ' + word(k) : ok[k - 1] === n - 1 ? 'Use the right ' + word(k) : 'Use the middle ' + word(k);
+    if (LANG === 'es' && run) { const side = ok[0] === 0 ? 'izquierda' : ok[k - 1] === n - 1 ? 'derecha' : 'centro', cnt = { 2: 'dos', 3: 'tres' }[k] || k;
+      laneText = k === 1 ? (side === 'centro' ? 'Use el carril central' : 'Use el carril de la ' + side) : side === 'centro' ? 'Use los ' + cnt + ' carriles centrales' : 'Use los ' + cnt + ' carriles de la ' + side; }
   }
   return { lanes, laneText, mark: prefs.landmarks && step.mark ? step.mark : '' };
 }
@@ -4276,7 +4655,7 @@ document.querySelectorAll('[data-traffic]').forEach(b => b.onclick = () => { pre
 $('offSave').onclick = saveArea; $('offClear').onclick = clearAreas; drawOffline();
 $('geoSave').onclick = () => { prefs.geoKey = $('geoKey').value.trim(); geoDownUntil = 0; savePrefs(); $('geoMsg').textContent = prefs.geoKey ? 'Key saved. Search now uses Geoapify first.' : 'Key removed. Using the free search.'; };
 $('ttSave').onclick = () => { prefs.ttKey = $('ttKey').value.trim(); savePrefs(); $('ttMsg').textContent = prefs.ttKey ? 'Key saved. Traffic shows on your next route.' : 'Key removed. Traffic is off.'; addTraffic(); if (routes.length) loadTraffic().then(drawTiming); };
-const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'units' || k === 'speedUnits') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
+const mapPrefChanged = k => { savePrefs(); syncPrefs(); if (k === 'lang') { location.reload(); return; } if (k === 'units' || k === 'speedUnits') { if (routes.length) draw(false); drawStrip(); } else { drawThemes(); refreshStyle(); } };
 document.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prefs[b.dataset.map] = !prefs[b.dataset.map]; mapPrefChanged(b.dataset.map); });
 document.querySelectorAll('[data-mapset] button').forEach(b => b.onclick = () => { prefs[b.parentElement.dataset.mapset] = b.dataset.v; mapPrefChanged(b.parentElement.dataset.mapset); });
 [['rigH', 'h'], ['rigL', 'l'], ['rigW', 'w']].forEach(([id, k]) => $(id).onchange = () => { const v = parseFloat($(id).value); if (v > 0) { prefs.rig[k] = v; savePrefs(); if (prefs.mode === 'rig') route(); } });
