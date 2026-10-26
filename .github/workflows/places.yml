@@ -27,7 +27,7 @@ jobs:
       REGIONS: 'pacific:-125,32.5,-114,49.1;mountain:-114,31.3,-102,49.1;plains:-102,25.8,-94,49.4;central:-94,28.9,-87,49.4;southeast:-87,24.4,-75,37;northeast:-87,37,-66.9,47.6;alaska:-179.9,51,-129.9,71.5;hawaii:-160.6,18.8,-154.7,22.4;baja:-118.6,22.8,-109.3,32.75'
       OSM_EXTRACTS: 'pacific=US;mountain=US;plains=US;central=US;southeast=US;northeast=US;alaska=US;hawaii=US;baja=https://download.geofabrik.de/north-america/mexico-latest.osm.pbf'
       MIN_CONF: '0.6'
-      MAX_ROWS: '40000000'
+      MAX_ROWS: '100000000'
     steps:
       - name: The US map file for every US region
         run: echo "OSM_EXTRACTS=${OSM_EXTRACTS//=US/=https://download.geofabrik.de/north-america/us-latest.osm.pbf}" >> "$GITHUB_ENV"
