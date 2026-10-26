@@ -9,7 +9,7 @@
 // VALHALLA_URL and VALHALLA_KEY are set in the Vercel project. Routes are kept at the edge for an hour.
 export const config = { runtime: 'edge' };
 
-const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
+const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
 const EPS = { route: 3600, sources_to_targets: 3600, trace_attributes: 0, locate: 3600 };
 // [west, south, east, north] boxes per region, most specific first
@@ -30,7 +30,7 @@ function pointsOf(ep, req) {   // [[lat, lon], ...] the request touches
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '', cors = {};
   if (origin && ORIGINS.some(o => o.test(origin))) { cors['Access-Control-Allow-Origin'] = '*'; }
-  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?sabrinapalmer\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
+  else if (origin || !(req.headers.get('sec-fetch-site') === 'same-origin' || /^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com\//.test(req.headers.get('referer') || ''))) return json(403, { error: 'origin not allowed' });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' }, cors) });
   const base = (process.env.VALHALLA_URL || '').replace(/\/$/, ''), key = process.env.VALHALLA_KEY;
   const u = new URL(req.url), ep = u.searchParams.get('ep');

@@ -2,7 +2,7 @@
 // what the map needs and cached for 5 minutes. CBP publishes no wait times for entering Mexico.
 export const config = { runtime: 'edge' };
 
-const ORIGINS = [/^https:\/\/(www\.)?sabrinapalmer\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
+const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\/\/[a-z0-9-]+-sabrinapalmers-projects\.vercel\.app$/, /^https:\/\/portfolio[a-z0-9-]*\.vercel\.app$/,
   /^capacitor:\/\/localhost$/, /^ionic:\/\/localhost$/, /^http:\/\/localhost(:\d+)?$/];
 
 const lane = l => !l ? null : { status: l.operational_status || '', minutes: l.delay_minutes === '' || l.delay_minutes == null ? null : +l.delay_minutes, open: l.lanes_open === '' ? null : +l.lanes_open, updated: l.update_time || '' };

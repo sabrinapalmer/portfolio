@@ -70,5 +70,40 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/privacy",
+      "has": [
+        {
+          "type": "host",
+          "value": "brinamaps.com"
+        }
+      ],
+      "destination": "/map/privacy",
+      "permanent": false
+    },
+    {
+      "source": "/support",
+      "has": [
+        {
+          "type": "host",
+          "value": "brinamaps.com"
+        }
+      ],
+      "destination": "/map/support",
+      "permanent": false
+    },
+    {
+      "source": "/((?!map|api).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "brinamaps.com"
+        }
+      ],
+      "destination": "/map",
+      "permanent": false
+    }
   ]
 }
