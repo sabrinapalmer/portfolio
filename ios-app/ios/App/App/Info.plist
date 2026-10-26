@@ -28,6 +28,10 @@
 	<string>BrinaMaps uses your location to keep giving directions while the screen is locked.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>BrinaMaps uses your location to show where you are, search nearby, and give directions.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
