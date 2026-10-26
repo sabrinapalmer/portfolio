@@ -1,6 +1,9 @@
 import UIKit
 import Capacitor
 import AVFoundation
+#if canImport(ActivityKit)
+import ActivityKit   // lock screen / Dynamic Island (LiveNavPlugin below)
+#endif
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
