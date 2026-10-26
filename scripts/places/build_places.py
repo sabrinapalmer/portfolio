@@ -46,7 +46,7 @@ def inside(lon, lat, boxes):
 
 
 def fold(t):
-    t = unicodedata.normalize('NFD', t or '').encode('ascii', 'ignore').decode().lower()
+    t = unicodedata.normalize('NFD', (t or '').replace("'", '')).encode('ascii', 'ignore').decode().lower()   # Portillo's -> portillos
     return re.sub(r'[^a-z0-9]+', ' ', t).strip()
 
 
