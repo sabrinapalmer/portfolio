@@ -34,7 +34,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+        LiveNavPlugin.endAllNow()   // no trip left on the lock screen after the app is closed
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
@@ -114,6 +114,16 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "end", returnType: CAPPluginReturnPromise)
     ]
     private var current: Any?   // Activity<NavAttributes>, kept untyped so the class still loads on iOS 15
+    private var gen = 0         // bumped by every start and end, so a start that finishes after an end is taken back
+
+    // A trip left on the lock screen by a closed or crashed app is cleared when the app starts again
+    override public func load() {
+        #if canImport(ActivityKit)
+        if #available(iOS 16.1, *) {
+            Task { @MainActor in for a in Activity<NavAttributes>.activities { await a.end(dismissalPolicy: .immediate) } }
+        }
+        #endif
+    }
 
     #if canImport(ActivityKit)
     @available(iOS 16.1, *)
@@ -128,7 +138,9 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *), ActivityAuthorizationInfo().areActivitiesEnabled else { call.resolve(["on": false]); return }
         let st = state(call), attrs = NavAttributes(dest: call.getString("dest") ?? "")
-        Task {
+        Task { @MainActor in
+            self.gen += 1
+            let mine = self.gen
             for a in Activity<NavAttributes>.activities { await a.end(dismissalPolicy: .immediate) }   // one trip at a time
             do {
                 let a: Activity<NavAttributes>
@@ -136,6 +148,10 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
                     a = try Activity.request(attributes: attrs, content: ActivityContent(state: st, staleDate: Date().addingTimeInterval(300)))
                 } else {
                     a = try Activity.request(attributes: attrs, contentState: st)
+                }
+                if mine != self.gen {   // directions ended while this was starting
+                    await a.end(dismissalPolicy: .immediate)
+                    call.resolve(["on": false]); return
                 }
                 self.current = a
                 call.resolve(["on": true])
@@ -148,9 +164,10 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func update(_ call: CAPPluginCall) {
         #if canImport(ActivityKit)
-        guard #available(iOS 16.1, *), let a = current as? Activity<NavAttributes> else { call.resolve(); return }
+        guard #available(iOS 16.1, *) else { call.resolve(); return }
         let st = state(call)
-        Task {
+        Task { @MainActor in
+            guard let a = self.current as? Activity<NavAttributes> else { call.resolve(); return }
             if #available(iOS 16.2, *) { await a.update(ActivityContent(state: st, staleDate: Date().addingTimeInterval(300))) }
             else { await a.update(using: st) }
             call.resolve()
@@ -164,16 +181,30 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { call.resolve(); return }
         let arrived = call.getBool("arrived") ?? false
-        let last = current as? Activity<NavAttributes>
-        current = nil
-        Task {
-            // Arrived: leave "You have arrived" up for a few minutes; ended early: take it away now
-            let policy: ActivityUIDismissalPolicy = arrived ? .after(Date().addingTimeInterval(240)) : .immediate
-            for a in Activity<NavAttributes>.activities where last == nil || a.id == last!.id { await a.end(dismissalPolicy: policy) }
+        Task { @MainActor in
+            self.gen += 1
+            self.current = nil
+            // Arrived: "You have arrived" stays for a minute; ended early: it goes away now. Every trip activity ends,
+            // including any a crashed or reloaded page left behind.
+            let policy: ActivityUIDismissalPolicy = arrived ? .after(Date().addingTimeInterval(60)) : .immediate
+            for a in Activity<NavAttributes>.activities { await a.end(dismissalPolicy: policy) }
             call.resolve()
         }
         #else
         call.resolve()
+        #endif
+    }
+
+    // Called when the app is closed from the app switcher: the lock screen should not keep showing a trip
+    public static func endAllNow() {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.1, *) else { return }
+        let done = DispatchSemaphore(value: 0)
+        Task.detached {
+            for a in Activity<NavAttributes>.activities { await a.end(dismissalPolicy: .immediate) }
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + 1.5)
         #endif
     }
 }

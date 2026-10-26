@@ -256,7 +256,11 @@
   button.pill { border:1.5px solid var(--accent); color:var(--accent); background:transparent; border-radius:999px; padding:7px 12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
   button.pill svg { width:16px; height:16px; stroke-width:2.8; }
   .stopBtns { display:flex; gap:6px; align-items:center; }
-  #why .border { margin-top:6px; font-size:13px; font-weight:600; }
+  #why .kv { display:grid; grid-template-columns:max-content 1fr; gap:3px 10px; margin:6px 0 0; font-size:14px; }
+  #why .kv dt { color:var(--muted); font-weight:600; }
+  #why .kv dd { margin:0; font-weight:700; }
+  #why .vs { font-size:13px; color:var(--muted); font-weight:600; }
+  #why .fine { margin-top:4px; font-size:11px; color:var(--muted); }
   #why button.cross { margin:6px 6px 0 0; padding:6px 12px; border-radius:14px; border:1px solid var(--line); background:var(--bg); color:inherit; font-size:13px; }
   #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
   #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
@@ -760,6 +764,9 @@ const ES = {
   'Avoid road ahead': 'Evitar el camino adelante', 'Finding another way.': 'Buscando otra ruta.', 'Looking for another way...': 'Buscando otra ruta...',
   'Tip: press and hold the map to go there, save it or avoid it.': 'Consejo: mantenga presionado el mapa para ir ahí, guardarlo o evitarlo.',
   // ---- Border
+  'Crossing': 'Cruce', 'Into Mexico': 'Entrada a México', 'Time to border': 'Tiempo a la frontera', 'Other crossings': 'Otras garitas', 'Closed now': 'Cerrado ahora',
+  'No time reported': 'Sin tiempo reportado', 'No wait': 'Sin espera', 'Waits from the US border agency, included in the trip time.': 'Esperas de la agencia fronteriza de EE. UU., incluidas en el tiempo del viaje.',
+  'Vs quickest: ': 'Contra la más rápida: ', 'Same time': 'Mismo tiempo', 'different roads': 'otras calles',
   'Crossing at ': 'Cruce por ', ', border in ': ', frontera en ', 'border in ': 'frontera en ', ' · border in ': ' · frontera en ', ' (about ': ' (aprox. ', 'Into Mexico at ': 'Entrada a México por ',
   ' wait now: ': ' espera ahora: ', ', included in the trip time (US border agency).': ', incluida en el tiempo del viaje (agencia fronteriza de EE. UU.).', ': no wait time reported.': ': sin tiempo de espera reportado.',
   ' Nearby crossings now: ': ' Otros cruces cercanos ahora: ', 'Regular lane': 'Carril regular', 'Ready Lane': 'Ready Lane', 'SENTRI': 'SENTRI', 'no wait': 'sin espera', 'none': 'ninguna',
@@ -3638,7 +3645,7 @@ function titles() {   // a short name for each option, taken from what makes it 
 }
 function why(rt) {   // one sentence comparing this option with the fastest
   const best = routes.reduce((a, b) => b.time < a.time ? b : a), bits = [];
-  if (rt === best) return routes.length > 1 ? 'The quickest way there.' : '';
+  if (rt === best) return '';
   const dLeft = best.lefts - rt.lefts;
   if (dLeft >= 1) bits.push(dLeft + (dLeft === 1 ? ' fewer left turn' : ' fewer left turns') + ' across traffic');
   if (dLeft <= -1) bits.push(-dLeft + (dLeft === -1 ? ' more left turn' : ' more left turns'));
@@ -3649,8 +3656,8 @@ function why(rt) {   // one sentence comparing this option with the fastest
   if (!rt.basic && dHwy <= -1) bits.push(Math.round(-dHwy) + ' more highway miles');
   if (best.toll && !rt.toll) bits.push('no tolls');
   if (dDist >= 0.3) bits.push(fmtDist(dDist) + ' shorter');
-  const slow = dt < 45 ? 'About the same time' : fmtTime(dt) + ' slower';
-  return bits.length ? slow + ', with ' + bits.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.' : slow + ' by a different set of roads.';
+  const slow = dt < 45 ? 'Same time' : '+' + fmtTime(dt);
+  return 'Vs quickest: ' + [slow].concat(bits.length ? bits : ['different roads']).join(' \u00b7 ');
 }
 
 // ---------- Tolls: a road can be tagged as a toll road all along, while you only pay at booths ----------
@@ -3778,17 +3785,20 @@ async function checkBorder(list) {
     }
   });
 }
-function borderLine(rt) {
-  const b = rt && rt.border; if (!b) return '';
+function borderRows(rt) {   // [label, value] rows for the border on this route: short, one fact per line
+  const b = rt && rt.border; if (!b) return [];
   const clock = sec => new Date(Date.now() + sec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const name = b.port + (b.crossing && !/^passenger$/.test(b.crossing) ? ' (' + b.crossing.replace(/\b\w/g, m => m.toUpperCase()) + ')' : '');
-  const when = 'border in ' + fmtTime(b.eta) + ' (about ' + clock(b.eta) + ')';
-  if (!b.north) return 'Into Mexico at ' + name + ', ' + when + '.';
-  if (b.closed) return name + ': ' + (b.lane || 'your lane') + ' is closed now. ' + when.charAt(0).toUpperCase() + when.slice(1) + '.';
-  const other = b.yours ? ' (' + b.yours.lane + (b.yours.wait != null ? ' is ' + fmtTime(b.yours.wait * 60) : ' has no time reported') + '; your pass lets you use the ' + b.lane + ')' : '';
-  const alts = (b.others || []).map(o => o.port + ' ' + (o.minutes ? fmtTime(o.minutes * 60) : 'no wait') + (o.lane !== b.lane ? ' (' + o.lane + ')' : ''));
-  const also = alts.length ? ' Nearby crossings now: ' + alts.join(', ') + '.' : '';
-  return 'Crossing at ' + name + ', ' + when + '. ' + (b.lane || 'Regular lane') + (b.wait != null ? ' wait now: ' + (b.wait ? fmtTime(b.wait * 60) : 'none') + other + ', included in the trip time (US border agency).' : ': no wait time reported.') + also;
+  const waitOf = m => m == null ? tr('No time reported') : m ? fmtTime(m * 60) : tr('No wait');
+  const laneWait = lane => LANG === 'es' ? 'Espera ' + tr(lane) : lane + ' wait';
+  const rows = [[b.north ? 'Crossing' : 'Into Mexico', name], ['Time to border', fmtTime(b.eta) + ' \u00b7 ' + clock(b.eta)]];
+  if (!b.north) return rows;
+  const lane = b.lane || 'Regular';
+  rows.push([laneWait(lane), b.closed ? tr('Closed now') : waitOf(b.wait)]);
+  if (b.yours) rows.push([laneWait(b.yours.lane), waitOf(b.yours.wait)]);
+  const alts = (b.others || []).map(o => o.port + ' ' + (o.minutes ? fmtTime(o.minutes * 60) : tr('No wait')) + (o.lane !== b.lane ? ' (' + tr(o.lane) + ')' : ''));
+  if (alts.length) rows.push(['Other crossings', alts.join(' \u00b7 ')]);
+  return rows;
 }
 
 // Where each line starts, for ports where the way into a lane is not the obvious one. Points along each lane's
@@ -3936,8 +3946,14 @@ function draw(fit) {
     box.appendChild(b);
   });
   const w = $('why'); w.innerHTML = '';
-  const text = why(rt); if (text) w.appendChild(el('div', '', text));
-  const bl = borderLine(rt); if (bl) w.appendChild(el('div', 'border', bl));
+  const text = why(rt); if (text) w.appendChild(el('div', 'vs', text));
+  const br = borderRows(rt);
+  if (br.length) {   // "Time to border: 45 min" rows, easy to scan while deciding
+    const dl = el('dl', 'kv');
+    br.forEach(([k, v]) => { const dd = el('dd', '', v); dd.dataset.raw = ''; dl.append(el('dt', '', k + ':'), dd); });
+    w.appendChild(dl);
+    if (rt.border.north && rt.border.wait != null) w.appendChild(el('div', 'fine', 'Waits from the US border agency, included in the trip time.'));
+  }
   const bd0 = rt.border;   // a button for each nearby port with a shorter line that has no route shown yet
   if (bd0 && bd0.north && bd0.wait != null && !nav) (bd0.others || []).filter(o => o.minutes < bd0.wait && !routes.some(r => r.border && r.border.port === o.port)).slice(0, 2).forEach(o => {
     const cb = el('button', 'cross', 'Cross at ' + o.port + ' instead'); cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
@@ -4202,13 +4218,21 @@ function startNav() {
   keepAwake();
   if (BG) startWatch(true);   // switch to a watch that keeps going with the screen locked
   if (here) refix();
+  // One smooth move from the route overview to the driving view, once the directions panels have their size;
+  // the follow camera takes over from where it lands, so the map does not swing back and forth while it settles
+  if (here) requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (!nav || !nav.cam || !here) return;
+    refix();
+    const t = nav.cam; glide.cam = null; camHold = performance.now() + 1000;
+    map.easeTo({ center: [here[1], here[0]], zoom: t.z, pitch: t.p, bearing: prefs.northUp ? 0 : nav.head || 0, padding: t.pad, duration: 950, easing: x => 1 - Math.pow(1 - x, 3) });
+  }));
   drawStrip();
   saveTrip(routes[selected]);
 }
 function endNav(arrivedAt) {
   if (!nav) return;
-  if (LIVE && liveOn) {   // arrived: the lock screen says so for a few minutes; stopped early: it goes away
-    if (arrivedAt) LIVE.update({ dist: '', road: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
+  if (LIVE) {   // arrived: the lock screen says so for a minute; stopped early: it goes away (always asked, even mid-start)
+    if (arrivedAt && liveOn) LIVE.update({ dist: '', road: '', text: tr('You have arrived.'), sym: 'mappin.circle.fill', arrive: $('navArrive').textContent, left: '', progress: 1 }).catch(() => {});
     LIVE.end({ arrived: !!arrivedAt }).catch(() => {});
   }
   liveOn = false; liveLast = '';
@@ -4324,7 +4348,10 @@ function onFix(p) {
   const head = onRoute && c[s.i + 1] ? bearing(c[s.i], c[s.i + 1]) : (p.coords.heading >= 0 && speed > 1 ? p.coords.heading : nav.head || 0);
   nav.head = head;
   // Where the map should sit: the follow camera eases toward this every frame (and pauses while a finger is on the map)
-  const pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
+  let pad = viewPad(); if (!prefs.northUp) pad.top = Math.max(pad.top, Math.round(innerHeight * 0.42));   // heading-up: you sit low so more road ahead shows
+  // The banner growing or shrinking by a line should not nudge the map: only a real layout change moves it
+  const was = nav.cam && nav.cam.pad;
+  if (was && ['top', 'bottom', 'left', 'right'].every(k => Math.abs(was[k] - pad[k]) < 40)) pad = was;
   nav.cam = { z: nav.zoom, p: prefs.northUp ? 0 : 50, pad };
   showMe(ll, head, gap);
   drawSpeed(ll, speed);
