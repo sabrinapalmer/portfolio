@@ -150,6 +150,8 @@
   #routes::-webkit-scrollbar { display:none; }
   #routes button { flex:0 0 auto; text-align:left; border-radius:18px; padding:9px 14px; background:var(--bg); border:2px solid var(--line); }
   #routes button.on { background:var(--soft); border-color:var(--accent); }
+  html.car body > *:not(#map):not(script) { display:none !important; }   /* the car screen: the map only */
+  html.car .maplibregl-ctrl-bottom-right, html.car .maplibregl-ctrl-bottom-left { display:none; }
   #routes button small.port { display:block; font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; }
   #routes b { display:block; font-size:19px; font-weight:700; }
   #routes span { display:block; font-size:12px; color:var(--muted); font-weight:700; }
@@ -353,6 +355,13 @@ body.native .webonly, body:not(.native) .apponly { display: none !important; }
 </head>
 <body>
 <div id="map"></div>
+<script>
+// Car screen: the map only, moved by the phone. It never asks for location itself (the phone sends it).
+if (/[?&]car=1\b/.test(location.search)) {
+  document.documentElement.classList.add('car');
+  try { const g = navigator.geolocation; if (g) { g.getCurrentPosition = () => {}; g.watchPosition = () => 0; g.clearWatch = () => {}; } } catch (e) {}
+}
+</script>
 <div id="strip"></div>
 <div id="searchScrim" aria-hidden="true"></div>
 
@@ -941,7 +950,7 @@ const $ = id => document.getElementById(id);
 // plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
-const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), LIVE = plugin('LiveNav'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), LIVE = plugin('LiveNav'), CAR = plugin('CarNav'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
 // In the app the keyboard slides over the page instead of shrinking it (resizing the page redraws the whole map, which
 // made the search box slow to respond). The search list is kept above the keyboard instead.
 if (KEYS && KEYS.addListener) {
@@ -1181,6 +1190,10 @@ function liveSend(force) {
   if (!liveOn) { liveOn = true; LIVE.start(Object.assign({ dest: pts.to ? pts.to.name || pts.to.label.split(',')[0] : '' }, st)).then(r => { if (!r || !r.on) liveOn = false; }).catch(() => { liveOn = false; }); }
   else LIVE.update(st).catch(() => {});
 }
+// CarPlay: the phone's directions mirrored on the car screen (dormant until the app has Apple's CarPlay entitlement)
+let carAt = 0;
+function carSend(o) { if (!CAR || !nav || Date.now() - carAt < 1000) return; carAt = Date.now(); CAR.update(o).catch(() => {}); }
+const carRoutePts = rt => { const c = rt.coords, k = Math.max(1, Math.ceil(c.length / 1500)); return c.filter((_, i) => i % k === 0 || i === c.length - 1).map(q => [+q[0].toFixed(6), +q[1].toFixed(6)]); };
 const ICON_SOUND = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/></svg>';
 const ICON_MUTE  = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9l5 6M22 9l-5 6"/></svg>';
 
@@ -1429,6 +1442,11 @@ function drawThemes() {
 }
 
 maplibregl.addProtocol('omt', async (params, ac) => ({ data: await offFetch(params.url.slice(6), ac.signal) }));
+// The CarPlay screen loads this page with ?car=1 and moves it from the phone (see CarPlay.swift)
+let carLast = null;
+window.carRoute = pts => mapReady.then(() => map.getSource('routes').setData({ type: 'FeatureCollection', features: pts.length > 1 ? [{ type: 'Feature', properties: { i: 0, sel: true }, geometry: { type: 'LineString', coordinates: pts.map(q => [q[1], q[0]]) } }] : [] }));
+window.carPos = (lat, lon, h) => { carLast = [lat, lon, h]; mapReady.then(() => { showMe([lat, lon], h); map.easeTo({ center: [lon, lat], zoom: 16, bearing: h, pitch: 45, duration: 900 }); }); };
+window.carRecenter = () => { if (carLast) window.carPos(...carLast); };
 mapReady = (async () => {
   let style = STYLE; shownTheme = themeKey();
   try { style = await themedStyle(); } catch (e) {}
@@ -3909,6 +3927,7 @@ function loadNavRoute() {   // (re)build the progress tables for the current rou
   Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null, peek: null, live: null });
   $('nav').classList.remove('peek');
   loadLimits(rt);
+  if (CAR && nav.carOn) CAR.route({ route: carRoutePts(rt) }).catch(() => {});   // rerouted: the new line on the car screen
 }
 function startNav() {
   if (!routes.length) return;
@@ -3917,6 +3936,7 @@ function startNav() {
   // Going to a city or town: the point the search gives is just its middle, so arriving in the town is the real arrival
   nav.city = TOWN_R[pts.to.kind] ? { name: pts.to.name || pts.to.label.split(',')[0], kind: pts.to.kind, at: 0 } : null;
   loadNavRoute();
+  if (CAR) { nav.carOn = true; CAR.start({ dest: pts.to.name || pts.to.label.split(',')[0], destLat: pts.to.lat, destLon: pts.to.lon, route: carRoutePts(routes[selected]) }).catch(() => {}); }
   document.body.classList.add('nav'); document.body.classList.remove('free');
   $('navArrow').innerHTML = ''; $('navDist').textContent = ''; $('navText').textContent = 'Finding your location...'; $('navThen').textContent = '';
   $('navArrive').textContent = '--'; $('navLeft').textContent = ''; $('navProg').style.width = '0';
@@ -3934,6 +3954,7 @@ function endNav(arrivedAt) {
     LIVE.end({ arrived: !!arrivedAt }).catch(() => {});
   }
   liveOn = false; liveLast = '';
+  if (CAR) CAR.end({ arrived: !!arrivedAt }).catch(() => {});
   if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
   if (nav.city) clearTimeout(nav.city.t);
   nav = null; tempAvoid = null;
@@ -4108,6 +4129,7 @@ function onFix(p) {
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
   liveSend();
+  carSend({ text: tr($('navText').textContent), sym: nav.sym, dist: toNext, left: secs, leftDist: left, lat: ll[0], lon: ll[1], heading: head });
   // Further out the faster you go, closer in for a turn in town. One smooth curve on the smoothed speed (steps made the
   // map zoom in and out whenever the speed hovered around a step).
   nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));

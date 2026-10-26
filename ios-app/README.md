@@ -65,6 +65,57 @@ Xcode has to create the target around it once.
 
 The app still runs on iOS 15; there the lock-screen view is simply not shown.
 
+## CarPlay (switched off until Apple approves)
+
+The code is in place: `App/CarPlay.swift` (car screen, turn panel, `CarNavPlugin`), `App/SceneDelegate.swift`,
+and the car-mode map page (`/map/?car=1`). It stays off until both steps below are done, so builds without it
+behave exactly as before.
+
+1. Ask Apple for the CarPlay navigation entitlement: https://developer.apple.com/contact/carplay/ ,
+   choose **Navigation (turn-by-turn)**, app BrinaMaps (`com.sabrinapalmer.map`). Approval can take weeks.
+2. When it is granted, add an `App.entitlements` file to the App target with
+   `com.apple.developer.carplay-maps` = YES, set Build Settings > Code Signing Entitlements to `App/App.entitlements`,
+   and regenerate the provisioning profile (Xcode does this with automatic signing).
+3. Add this to `App/Info.plist` (it switches the app to scenes; `SceneDelegate` takes over the phone window):
+
+```xml
+<key>UIApplicationSceneManifest</key>
+<dict>
+	<key>UIApplicationSupportsMultipleScenes</key>
+	<true/>
+	<key>UISceneConfigurations</key>
+	<dict>
+		<key>UIWindowSceneSessionRoleApplication</key>
+		<array>
+			<dict>
+				<key>UISceneConfigurationName</key>
+				<string>Phone</string>
+				<key>UISceneDelegateClassName</key>
+				<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				<key>UISceneStoryboardFile</key>
+				<string>Main</string>
+			</dict>
+		</array>
+		<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+		<array>
+			<dict>
+				<key>UISceneConfigurationName</key>
+				<string>CarPlay</string>
+				<key>UISceneDelegateClassName</key>
+				<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+			</dict>
+		</array>
+	</dict>
+</dict>
+```
+
+4. Test: run on the iPhone simulator, then I/O > External Displays > CarPlay. Start directions on the phone;
+   the car screen shows the map following you and the next turn. Check that the phone app still opens links and
+   restores purchases after the switch to scenes.
+
+What the car screen does now: mirrors directions started on the phone. Not yet: choosing a destination or
+searching from the car screen.
+
 ## Not done yet
 
 - Launch screen is the Capacitor default.
