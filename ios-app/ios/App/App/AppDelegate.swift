@@ -180,5 +180,6 @@ class BrinaViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(VoicePlugin())
         bridge?.registerPluginInstance(LiveNavPlugin())
+        bridge?.registerPluginInstance(CarNavPlugin())
     }
 }
