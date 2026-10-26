@@ -62,9 +62,36 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
     public let jsName = "Voice"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "voices", returnType: CAPPluginReturnPromise)
     ]
     private let synth = AVSpeechSynthesizer()
+
+    // The best voice on this iPhone for a language: Premium, then Enhanced (both downloaded in Settings > Accessibility >
+    // Spoken Content > Voices), then the built-in one; the exact region (en-US, es-MX) first. Novelty voices are left out.
+    // Siri's own voices are not offered to apps by iOS.
+    private static func ranked(_ lang: String) -> [AVSpeechSynthesisVoice] {
+        let pre = String(lang.prefix(2))
+        func rank(_ v: AVSpeechSynthesisVoice) -> Int {
+            var r = v.language == lang ? 5 : 0
+            if v.quality == .enhanced { r += 10 }
+            if #available(iOS 16.0, *) { if v.quality == .premium { r += 20 } }
+            return r
+        }
+        return AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(pre) && !$0.identifier.contains("speech.synthesis.voice") && !$0.identifier.contains("eloquence") }
+            .sorted { rank($0) != rank($1) ? rank($0) > rank($1) : $0.name < $1.name }
+    }
+
+    @objc func voices(_ call: CAPPluginCall) {
+        let lang = call.getString("lang") ?? "en-US"
+        let list = VoicePlugin.ranked(lang).map { v -> [String: Any] in
+            var q = v.quality == .enhanced ? "Enhanced" : "Standard"
+            if #available(iOS 16.0, *) { if v.quality == .premium { q = "Premium" } }
+            return ["id": v.identifier, "name": v.name, "lang": v.language, "quality": q]
+        }
+        call.resolve(["voices": list])
+    }
     private var waiting: CAPPluginCall?
 
     override public func load() { synth.delegate = self }
@@ -72,6 +99,7 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
     @objc func speak(_ call: CAPPluginCall) {
         let text = call.getString("text") ?? ""
         let lang = call.getString("lang") ?? "en-US"
+        let chosen = call.getString("voice").flatMap { $0.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: $0) }
         DispatchQueue.main.async {
             if self.synth.isSpeaking { self.synth.stopSpeaking(at: .immediate) }
             self.waiting?.resolve(); self.waiting = call
@@ -80,7 +108,7 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
             try? session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
             try? session.setActive(true)
             let u = AVSpeechUtterance(string: text)
-            u.voice = AVSpeechSynthesisVoice(language: lang)
+            u.voice = chosen ?? VoicePlugin.ranked(lang).first ?? AVSpeechSynthesisVoice(language: lang)
             u.rate = AVSpeechUtteranceDefaultSpeechRate
             self.synth.speak(u)
         }

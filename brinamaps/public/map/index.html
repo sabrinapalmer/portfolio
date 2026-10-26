@@ -506,6 +506,8 @@ if (/[?&]car=1\b/.test(location.search)) {
   <ul class="list" id="savedList"></ul>
   <h3>Voice directions</h3>
   <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
+  <div id="voicePickBox" hidden><p>Voice</p><div class="row"><select id="voicePick" data-raw style="flex:1;min-width:0;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit"></select><button id="voiceTry" class="small">Hear it</button></div>
+    <p class="fine">For a more natural voice, download one on your iPhone: Settings &gt; Accessibility &gt; Spoken Content &gt; Voices, then pick a voice marked Enhanced or Premium. It shows up here. (iOS does not let apps use Siri's voice.)</p></div>
   <h3>On-screen directions</h3>
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
   <h3>While driving, show</h3>
@@ -806,6 +808,8 @@ const ES = {
   ' lanes': ' carriles', 'Which lane to be in': 'En qué carril ir', 'Landmarks at turns': 'Referencias en las vueltas', 'Speed and speed limit': 'Velocidad y límite',
   'Recenter': 'Centrar', 'Whole route': 'Ruta completa', 'Repeat direction': 'Repetir indicación', 'Mute voice': 'Silenciar voz', 'Voice muted': 'Voz silenciada', 'End': 'Terminar',
   'Directions are running': 'Indicaciones en curso', 'On-screen directions': 'Indicaciones en pantalla', 'Voice directions': 'Indicaciones de voz', 'Voice': 'Voz',
+  'Best available': 'La mejor disponible', 'In 500 feet, turn right.': 'En 150 metros, gire a la derecha.', 'Premium': 'Premium', 'Enhanced': 'Mejorada', 'Hear it': 'Escuchar',
+  'For a more natural voice, download one on your iPhone: Settings > Accessibility > Spoken Content > Voices, then pick a voice marked Enhanced or Premium. It shows up here. (iOS does not let apps use Siri\'s voice.)': 'Para una voz más natural, descárguela en su iPhone: Configuración > Accesibilidad > Contenido leído > Voces, y elija una voz Mejorada o Premium. Aparecerá aquí. (iOS no permite que las apps usen la voz de Siri).',
   'Brief': 'Breve', 'Standard': 'Normal', 'Detailed': 'Detallada', 'All turns': 'Todas las vueltas', 'Off': 'Apagado', 'While driving, show': 'Al manejar, mostrar',
   'Map faces my direction': 'El mapa gira con mi dirección', 'North up': 'Norte arriba', 'You’re in ': 'Está en ', 'Welcome to ': 'Bienvenido a ',
   'Share arrival': 'Compartir llegada', 'On my way to ': 'Voy en camino a ', ', arrive ': ', llego ', 'Copied. Paste it in a message.': 'Copiado. Péguelo en un mensaje.',
@@ -4079,9 +4083,22 @@ const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
 function say(text, level) {
   if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text) return;
   text = tr(text);   // the app's own sentences in the chosen language; the routers' directions already are
-  if (TTS) { TTS.speak({ text, lang: VOICE_LANG }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
+  if (TTS) { TTS.speak({ text, lang: VOICE_LANG, voice: prefs['voiceId_' + LANG] || '' }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
   if (!window.speechSynthesis) return;
   try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = VOICE_LANG; speechSynthesis.speak(u); } catch (e) {}
+}
+// The voice picker (iPhone app): the voices installed for the app's language, best first
+async function fillVoices() {
+  if (!TTS || !TTS.voices) return;
+  let list = [];
+  try { list = ((await TTS.voices({ lang: VOICE_LANG })) || {}).voices || []; } catch (e) { return; }
+  const sel = $('voicePick'), key = 'voiceId_' + LANG; sel.innerHTML = '';
+  sel.appendChild(new Option(tr('Best available') + (list[0] ? ' (' + list[0].name + ')' : ''), ''));
+  list.forEach(v => sel.appendChild(new Option(v.name + ' \u00b7 ' + tr(v.quality) + ' \u00b7 ' + v.lang, v.id)));
+  sel.value = list.some(v => v.id === prefs[key]) ? prefs[key] : '';
+  sel.onchange = () => { prefs[key] = sel.value; savePrefs(); TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {}); };
+  $('voiceTry').onclick = () => TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {});
+  $('voicePickBox').hidden = false;
 }
 function spokenDist(m) {
   if (prefs.units === 'km') return m < 950 ? Math.max(50, Math.round(m / 50) * 50) + ' metres' : (m < 10000 ? Math.round(m / 500) / 2 : Math.round(m / 1000)) + ' kilometres';
@@ -4985,7 +5002,7 @@ $('mineHow').querySelectorAll('button').forEach(b => b.onclick = () => {
   $(kind + 'Del').onclick = () => savePlace(kind, null);
 });
 $('openPrefs').onclick = () => {
-  drawLists(); drawPlaces(); drawThemes(); syncPrefs();
+  drawLists(); drawPlaces(); drawThemes(); syncPrefs(); fillVoices();
   if (map) { const c = map.getCenter(); $('report').href = `https://www.openstreetmap.org/note/new#map=${Math.max(15, Math.round(map.getZoom()))}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`; }
   document.body.classList.add('prefs');
 };
