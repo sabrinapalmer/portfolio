@@ -29,6 +29,15 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' }, cors) });
   const u = new URL(req.url), q = u.searchParams;
   const noStore = Object.assign({ 'Cache-Control': 'no-store' }, cors);
+  if (q.get('health') !== null) {   // is the place list answering quickly? kept for a minute at the edge, so the app asks once
+    const t0 = Date.now();
+    try {
+      const r = await fetch(SB + 'places_near', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cats: ['amenity:cafe'], at_lat: 32.72, at_lon: -117.16, radius_km: 1, lim: 1 }), signal: AbortSignal.timeout(1500) });
+      const ok = r.ok;
+      return json(200, { ok, ms: Date.now() - t0 }, Object.assign({ 'Cache-Control': 'public, s-maxage=60, max-age=30' }, cors));
+    } catch (e) { return json(200, { ok: false, ms: Date.now() - t0 }, Object.assign({ 'Cache-Control': 'public, s-maxage=60, max-age=30' }, cors)); }
+  }
   try {
     const tile = q.get('tile');
     if (tile) {

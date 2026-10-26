@@ -2339,6 +2339,8 @@ function dbPlace(r) {
     wikidata: r.wikidata, wiki: r.wikipedia, dbid: r.id };
 }
 let dbDownUntil = 0;
+// At start, one quick health check (shared by everyone for a minute): a slow or down place list is skipped for 10 minutes
+fetch(API + '/places?health', { signal: AbortSignal.timeout ? AbortSignal.timeout(2500) : undefined }).then(r => r.json()).then(h => { if (!h.ok) dbDownUntil = Date.now() + 600000; }).catch(() => { dbDownUntil = Date.now() + 600000; });
 // The place list gets 2.5 s. Slower than that (the database busy or down) and search goes on without it, and skips
 // it for the next 2 minutes, so a slow database never makes search slow.
 function dbFetch(url, signal) {
@@ -3749,16 +3751,13 @@ const LANE_APPROACH = {
     sentri: { path: [[32.54778, -116.9638], [32.54818, -116.95925], [32.54857, -116.95459], [32.54886, -116.95125], [32.54824, -116.94939], [32.54691, -116.94844], [32.54509, -116.94794], [32.54378, -116.94776], [32.54343, -116.94691], [32.54312, -116.94399], [32.54318, -116.94169], [32.54332, -116.9399], [32.54356, -116.93746], [32.54394, -116.93718]], via: [13], start: 'Vía de la Juventud Oriente' }
   },
   'Calexico west': {
-    sentri: { path: [[32.63926, -115.48189], [32.64181, -115.48136], [32.64419, -115.48089], [32.64597, -115.48055], [32.64718, -115.4807], [32.64821, -115.48125], [32.64912, -115.48221], [32.65057, -115.48527], [32.6521, -115.48731], [32.65391, -115.4886], [32.65525, -115.48982], [32.65682, -115.49143], [32.65764, -115.4922], [32.66044, -115.49469], [32.6612, -115.49531]], via: [7, 14], start: 'Calzada de los Presidentes' },
-    // one line for Ready Lane and all traffic: Cristobal Colon westbound, keep right at the back of the line
-    ready: { path: [[32.66729, -115.4625], [32.66672, -115.47049], [32.66625, -115.47691], [32.66565, -115.48493], [32.66519, -115.49161], [32.66497, -115.4945], [32.66496, -115.49464]], via: [6], start: 'Av. Cristóbal Colón' },
-    standard: { path: [[32.66729, -115.4625], [32.66672, -115.47049], [32.66625, -115.47691], [32.66565, -115.48493], [32.66519, -115.49161], [32.66497, -115.4945], [32.66496, -115.49464]], via: [6], start: 'Av. Cristóbal Colón' }
+    sentri: { path: [[32.63926, -115.48189], [32.64181, -115.48136], [32.64419, -115.48089], [32.64597, -115.48055], [32.64718, -115.4807], [32.64821, -115.48125], [32.64912, -115.48221], [32.65057, -115.48527], [32.6521, -115.48731], [32.65391, -115.4886], [32.65525, -115.48982], [32.65682, -115.49143], [32.65764, -115.4922], [32.66044, -115.49469], [32.6612, -115.49531]], via: [7, 14], start: 'Calzada de los Presidentes' }
+    // Ready Lane / all traffic (Cristobal Colon westbound) left out: the route passed the line and U-turned at the port
   },
   'Calexico east': {
     sentri: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' },
-    ready: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' },
-    // all traffic: past the port to the turnaround, then back to the lanes
-    standard: { path: [[32.6718, -115.39652], [32.67115, -115.39447], [32.67001, -115.3934], [32.66816, -115.39231], [32.66673, -115.39007], [32.66652, -115.38763], [32.66626, -115.38355], [32.66573, -115.38023], [32.66495, -115.3788], [32.66572, -115.37976], [32.66638, -115.38226], [32.66664, -115.38682]], via: [8, 11], start: 'Calzada Abelardo L. Rodríguez' }
+    ready: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' }
+    // all traffic (past the port to the turnaround and back) left out: the route looped at Calle Bernardo Reyes
   }
 };
 function laneVia(b) {   // where to pass for your lane at this port: the start of the approach, then its key points

@@ -10,6 +10,7 @@ p.on('pageerror', e => errs.push('PAGE ' + e.message));
 await p.route('**/*', async r => { const u = r.request().url(), J = o => r.fulfill({ contentType: 'application/json', body: JSON.stringify(o) });
   if(/\/api\/(fires|firms)\b/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify(/firms/.test(u)?{features:[]}:{at:Date.now(),per:{features:[]},loc:{features:[]}})});
   if(/\/api\/valhalla\/status/.test(u)) return r.fulfill({contentType:'application/json',body:JSON.stringify({ok:false})});
+  if(/\/api\/places\?health/.test(u)) return r.fulfill({contentType:'application/json',body:'{"ok":true}'});
   if(/\/api\/places/.test(u)) { asked++; await new Promise(z => setTimeout(z, 6000)); return r.fulfill({contentType:'application/json',body:'{"places":[]}'}).catch(()=>{}); }
   if(/\/api\/valhalla\//.test(u)) return r.fulfill({status:503,contentType:'application/json',body:'{}'});
   if (u.startsWith('http://localhost/map')) return r.fulfill({ contentType: 'text/html', body: html });
