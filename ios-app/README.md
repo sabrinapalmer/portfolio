@@ -57,8 +57,8 @@ Xcode has to create the target around it once.
 3. Xcode creates a `BrinaNavWidget` folder with sample files. Delete its generated `.swift` files
    (Move to Trash), then drag `ios/App/BrinaNavWidget/BrinaNavWidget.swift` from Finder into that group.
    Tick only the BrinaNavWidget target. Keep Xcode's own `Info.plist` and `Assets.xcassets`.
-4. Select `App/NavActivity.swift` > File inspector (right panel) > Target Membership: tick both **App**
-   and **BrinaNavWidget**.
+4. Select `App/NavActivity.swift` > File inspector (right panel) > Target Membership: **App** is already
+   ticked; tick **BrinaNavWidget** too.
 5. BrinaNavWidget target > General: Minimum Deployments **iOS 16.1**. Signing & Capabilities: same Team
    as the App. Its bundle id should be `com.sabrinapalmer.map.BrinaNavWidget`.
 6. Build and run on an iPhone, start directions, lock the phone.
