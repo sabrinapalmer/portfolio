@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		229F7C8470EA8F1D5B00FA61 /* NavActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3561B139D06E18A6ACA8E125 /* NavActivity.swift */; };
 		65561D7B3EA208F03412E80F /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC146B627DC39E5DE280251 /* SceneDelegate.swift */; };
 		A1B999B55602D90E0323FCBA /* CarPlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74988CC9CA9DBC7E77027E80 /* CarPlay.swift */; };
 		4FC6BF2075888F2E0C24EAE0 /* NavActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3561B139D06E18A6ACA8E125 /* NavActivity.swift */; };
@@ -314,6 +315,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				229F7C8470EA8F1D5B00FA61 /* NavActivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -378,9 +380,9 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrinaNavWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = BrinaNavWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = BrinaMaps;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -432,9 +434,9 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrinaNavWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = BrinaNavWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = BrinaMaps;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
