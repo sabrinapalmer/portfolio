@@ -17,7 +17,7 @@ const num = (v, lo, hi) => { const n = +v; return v !== null && v !== '' && isFi
 const slim = r => { const o = {}; COLS.forEach(k => { const v = r[k]; if (v !== null && v !== undefined && v !== '') o[k] = (k === 'lat' || k === 'lon') ? Math.round(v * 1e6) / 1e6 : v; }); if (r.d != null) o.d = Math.round(r.d); return o; };
 
 async function rpc(fn, args) {
-  const r = await fetch(SB + fn, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(8000) });
+  const r = await fetch(SB + fn, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(4000) });   // the app stops waiting after 2.5 s anyway
   if (!r.ok) { const e = new Error('places ' + r.status); e.status = r.status; throw e; }
   return r.json();
 }

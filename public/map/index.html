@@ -2243,18 +2243,26 @@ function dbPlace(r) {
     wikidata: r.wikidata, wiki: r.wikipedia, dbid: r.id };
 }
 let dbDownUntil = 0;
+// The place list gets 2.5 s. Slower than that (the database busy or down) and search goes on without it, and skips
+// it for the next 2 minutes, so a slow database never makes search slow.
+function dbFetch(url, signal) {
+  const c = new AbortController(), t = setTimeout(() => { c.slow = true; c.abort(); }, 2500);
+  if (signal) { if (signal.aborted) c.abort(); else signal.addEventListener('abort', () => c.abort(), { once: true }); }
+  return fetch(url, { signal: c.signal }).then(r => { clearTimeout(t); if (!r.ok && r.status >= 500) dbDownUntil = Date.now() + 120000; return r; },
+    e => { clearTimeout(t); if (c.slow) { dbDownUntil = Date.now() + 120000; const x = new Error('place list slow'); x.name = 'SlowError'; throw x; } throw e; });
+}
 async function ownSearch(q, ref, signal) {
   if (Date.now() < dbDownUntil) return offlinePlaces(q, ref);
   try {
-    const r = await fetch(API + '/places?v=2&q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), { signal });
-    if (!r.ok) { if (r.status >= 500) dbDownUntil = Date.now() + 120000; return offlinePlaces(q, ref); }
+    const r = await dbFetch(API + '/places?v=2&q=' + encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, ' ')) + '&lat=' + ref[0].toFixed(2) + '&lon=' + ref[1].toFixed(2), signal);
+    if (!r.ok) return offlinePlaces(q, ref);
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { if (e.name === 'AbortError') throw e; return offlinePlaces(q, ref); }
 }
 async function ownNear(tags, ref, km) {
   if (Date.now() < dbDownUntil) return offlinePlaces(null, ref, tags);
   try {
-    const r = await fetch(API + '/places?v=2&cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
+    const r = await dbFetch(API + '/places?v=2&cats=' + encodeURIComponent(tags.join(',')) + '&lat=' + ref[0].toFixed(3) + '&lon=' + ref[1].toFixed(3) + '&r=' + km);
     if (!r.ok) return offlinePlaces(null, ref, tags);
     return ((await r.json()).places || []).map(dbPlace);
   } catch (e) { return offlinePlaces(null, ref, tags); }
