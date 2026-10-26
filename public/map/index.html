@@ -878,8 +878,8 @@ const ES = {
   'Premium could not be confirmed (': 'No se pudo confirmar Premium (', '). Try Restore purchases.': '). Pruebe Restaurar compras.', 'something went wrong': 'algo salió mal',
   'unknown error': 'error desconocido', 'timed out': 'se agotó el tiempo',
   // ---- Misc
-  'Distance': 'Distancia', 'Back to now': 'Volver a ahora', 'Preview · turn ': 'Vista previa · vuelta ', ' of ': ' de ', 'Line for ': 'La fila para ', 'the regular lanes': 'los carriles regulares',
-  ' starts here, on ': ' empieza aquí, en ', 'Regular line starts here': 'La fila regular empieza aquí', 'SENTRI line starts here': 'La fila SENTRI empieza aquí', 'Ready Lane line starts here': 'La fila Ready Lane empieza aquí', 'Turns': 'Vueltas', ' ahead': ' adelante', ' away': ' de distancia', 'Near ': 'Cerca de ', 'On ': 'En ', 
+  'Distance': 'Distancia', 'Back to now': 'Volver a ahora', 'Preview · turn ': 'Vista previa · vuelta ', ' of ': ' de ', 'From here, follow the signs for ': 'Desde aquí, siga los letreros de ', 'the regular lanes': 'los carriles regulares',
+  'Regular line': 'Fila regular', 'SENTRI line': 'Fila SENTRI', 'Ready Lane line': 'Fila Ready Lane', ' wait': ' de espera', 'Turns': 'Vueltas', ' ahead': ' adelante', ' away': ' de distancia', 'Near ': 'Cerca de ', 'On ': 'En ', 
   'Checked for ': 'Revisado: ', 'Checking the ': 'Revisando ', 'Looking for places': 'Buscando lugares', 'about ': 'aprox. ',
   // ---- Composed lines (route card, banner, results)
   ' miles left': ' millas restantes', ' mile left': ' milla restante', ' km left': ' km restantes', ' m left': ' m restantes', ' ft left': ' pies restantes',
@@ -3077,7 +3077,7 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
       const L = body.locations, k = L.findIndex(q => q.type === 'through' && q.lat === via.split.lat && q.lon === via.split.lon);
       const entry = Object.assign({}, L[k], { type: 'break' });
       const bodyA = Object.assign({}, body, { alternates: 0, locations: L.slice(0, k).concat([entry]) });
-      const bodyB = Object.assign({}, body, { alternates: 0, locations: [entry].concat(L.slice(k + 1)), costing_options: { [costing]: Object.assign({}, opt, { ignore_access: true }) } });
+      const bodyB = Object.assign({}, body, { alternates: 0, locations: [entry].concat(L.slice(k + 1)), costing_options: { [costing]: Object.assign({}, opt, { ignore_access: !!via.split.lane }) } });   // only the SENTRI lane itself is closed to general traffic in the map data
       const [ra, rb] = await Promise.all([bodyA, bodyB].map(b2 => fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(b2))}`)));
       const [da, db] = await Promise.all([ra.json(), rb.json()]);
       if (!da.trip || !db.trip) return [da.trip ? rb : ra, da.trip ? db : da];
@@ -3736,7 +3736,7 @@ const LANE_APPROACH = {
   'San Ysidro': {
     // SENTRI: round the Zaragoza monument, then Blvd. Padre Kino to the SENTRI entry
     // path points in driving order; the route passes the marked ones (index), and the last is where the lane begins
-    sentri: { pts: [[32.52627, -117.00908], [32.52681, -117.00993], [32.53475, -117.01641], [32.53744, -117.02055]], start: 'Blvd. Padre Kino' },
+    sentri: { pts: [[32.52627, -117.00908], [32.52681, -117.00993], [32.53475, -117.01641], [32.53744, -117.02055]], start: 'Blvd. Padre Kino', closed: true },
     // Ready Lane: Via Rapida Oriente westbound to the Ready Lane ramp
     ready: { pts: [[32.52771, -117.0143], [32.52801, -117.01478], [32.53474, -117.0253], [32.53493, -117.0256]], start: 'Vía Rápida Oriente' },
     // Regular lanes: across Puente Bandera to the all-traffic lanes
@@ -3756,7 +3756,7 @@ async function laneRoute(rt) {
   if (passesAll(rt, lv.list)) { markApproach(rt, lv); return rt; }   // already goes the right way
   const q = tripPts(), near = pt => { let best = Infinity, bi = 0; rt.coords.forEach((c, i) => { const d = meters(c, [pt.lat, pt.lon]); if (d < best) { best = d; bi = i; } }); return bi; };
   let at = q.findIndex((pt, i) => i > 0 && near(pt) > b.idx); if (at < 1) at = q.length - 1;
-  const last = lv.list[lv.list.length - 1], via = { at, list: lv.list, split: { lat: last.lat, lon: last.lon } };
+  const last = lv.list[lv.list.length - 1], via = { at, list: lv.list, split: { lat: last.lat, lon: last.lon, lane: !!lv.a.closed } };
   if (Date.now() < ownDownUntil) return null;   // needs the app's own route server (it can follow the lane itself)
   const list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
   const alt = list && list[0]; if (!alt) return null;
@@ -3778,7 +3778,7 @@ function markApproach(rt, lv) {   // where your line starts on this route: the f
   // The turn where your line starts says so (once): "Get in the SENTRI line: turn left onto ..."
   const st = rt.steps.filter(x => x.begin <= bi + 2).pop();
   if (st && !st.lineStart) {
-    const lane = LANES[rt.approach.lane] || 'Regular lane', pre = 'Line for ' + (rt.approach.lane === 'standard' ? 'the regular lanes' : lane) + ' starts here, on ' + lv.a.start + '. ';
+    const lane = LANES[rt.approach.lane] || 'Regular lane', pre = 'From here, follow the signs for ' + (rt.approach.lane === 'standard' ? 'the regular lanes' : lane) + '. ';
     Object.assign(st, { lineStart: true, instruction: pre + st.instruction, say: pre + (st.say || st.instruction) });
   }
 }
@@ -3792,7 +3792,7 @@ function drawQueue() {
   const line = rt.coords.slice(a.idx, b.idx + 1).map(c => [c[1], c[0]]);
   map.getSource('queue').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line } }] });
   const lane = a.lane === 'standard' ? 'Regular line' : (LANES[a.lane] || 'Lane') + ' line';
-  const e = el('div', 'queueTag', lane + ' starts here' + (b.wait != null ? ' \u00b7 ' + (b.wait ? fmtTime(b.wait * 60) : 'no wait') : ''));
+  const e = el('div', 'queueTag', lane + (b.wait != null ? ' \u00b7 ' + (b.wait ? fmtTime(b.wait * 60) + ' wait' : 'no wait') : ''));
   queueMark = new maplibregl.Marker({ element: e, anchor: 'bottom', offset: [0, -8] }).setLngLat(line[0]).addTo(map);
 }
 
