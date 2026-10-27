@@ -38,7 +38,7 @@ console.log(reqs.at(-1), '| steps:', await p.$$eval('#steps li span:nth-child(2)
 await p.click('#go'); await p.waitForTimeout(800);
 await ctx.setGeolocation({latitude:41.902,longitude:-87.698,accuracy:5}); await p.waitForTimeout(1300);
 console.log('strip nav:', await p.textContent('#strip'), '| banner:', await p.textContent('#navText'), '| progress', await p.$eval('#navProg',e=>e.style.width));
-await p.click('#openSteps'); await p.waitForTimeout(300);
+await p.click('#openMenu'); await p.waitForTimeout(300); await p.click('#openSteps'); await p.waitForTimeout(300);
 console.log('all turns:', await p.$$eval('#navStepList li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))));
 await p.click('#navSteps [data-close]');
 await p.click('#openMenu'); await p.waitForTimeout(200); await p.click('#mSettings'); await p.waitForTimeout(200); await p.click('#prefs [data-set=northUp] [data-v=true]'); await p.click('#prefs [data-set=voice] [data-v=brief]'); await p.evaluate(() => closeSheets()); await p.waitForTimeout(1200);

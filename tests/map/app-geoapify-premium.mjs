@@ -185,7 +185,7 @@ await p.evaluate(async () => { clearAll(); pts.from = { lat: 32.355, lon: -117.0
 const free = await p.evaluate(() => routes.map(r => [!!r.toll, !!r.freeToll]));
 console.log('no booths:', JSON.stringify(free));
 check(free.length && free.every(([t]) => !t) && free.some(([, f]) => f), 'toll road without a booth on the way does not count as tolls');
-check(await p.evaluate(() => /Free stretch of a toll road/.test($('why').innerText) && !/Has tolls/.test($('why').innerText)), 'route card says free stretch, not Has tolls');
+check(await p.evaluate(() => /Free stretch of a toll road/.test($('why').textContent) && !/Has tolls/.test($('why').textContent)), 'route card says free stretch, not Has tolls');
 tollBooths = [[32.1075, -117.08]];
 await p.evaluate(async () => { boothCache.clear(); await route(); });
 await p.waitForTimeout(1500);

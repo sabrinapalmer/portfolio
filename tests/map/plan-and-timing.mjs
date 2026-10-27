@@ -42,7 +42,7 @@ await pick('#from','old house');
 console.log('3 planned start:', froms.at(-1));
 await pick('#to','coffee');
 console.log('4 still planned start, new dest:', froms.at(-1));
-await p.click('#timeEdit'); await p.click('#tmode [data-t=by]'); await p.fill('#arriveAt','23:59'); await p.waitForTimeout(200);
+await p.click('#toggleSteps'); await p.waitForTimeout(200); await p.click('#timeEdit'); await p.click('#tmode [data-t=by]'); await p.fill('#arriveAt','23:59'); await p.waitForTimeout(200);
 console.log('arrive by 23:59:', (await p.innerText('#when')).replace(/\n/g,' / '));
 await p.click('#parkMore'); await p.click('#parkMore');
 console.log('after +2 parking:', (await p.innerText('#when')).replace(/\n/g,' / '), '|', await p.textContent('#parkNote'), await p.textContent('#parkMin'));

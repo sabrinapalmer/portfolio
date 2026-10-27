@@ -20,7 +20,7 @@ await p.goto('http://localhost/map'); await p.waitForTimeout(2000);
 const run = async (center, zoom) => p.evaluate(async ([c, z]) => {
   map.jumpTo({ center: c, zoom: z }); await new Promise(r => setTimeout(r, 300));
   const zs = []; const on = () => zs.push(map.getZoom()); map.on('move', on);
-  $('locate').click(); await new Promise(r => setTimeout(r, 2200)); map.off('move', on);
+  $('locate').click(); await new Promise(r => setTimeout(r, 3300)); map.off('move', on);
   const ce = map.getCenter(); return { minZ: Math.min(...zs, map.getZoom()), endZ: map.getZoom(), dist: meters([ce.lat, ce.lng], here) };
 }, [center, zoom]);
 const near = await run([-116.8790, 32.0512], 15);
