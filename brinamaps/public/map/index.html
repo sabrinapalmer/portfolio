@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
 <style>
   :root {
-    --bg:#f7f4ff; --card:#ffffff; --fg:#2a1f4a; --muted:#857c9e; --line:#e8e2f6;
+    --bg:#f7f4ff; --card:#ffffff; --fg:#2a1f4a; --muted:#6f6690; --line:#e8e2f6;
     --accent:#8b5cf6; --accent-ink:#ffffff; --soft:#ede7ff; --alt:#b3a9cf;
     --start:#3fc49c; --me:#4c9dff; --warn:#f2a341; --shadow:0 8px 26px rgba(120,70,90,.2);
   }
@@ -389,6 +389,9 @@
   body.nav .maplibregl-ctrl-bottom-right { bottom:calc(88px + env(safe-area-inset-bottom)); }
 body.native .webonly, body:not(.native) .apponly { display: none !important; }
 .fine { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
 </style>
 </head>
 <body>
@@ -424,7 +427,7 @@ if (/[?&]car=1\b/.test(location.search)) {
     </div>
     <button id="openRouteOpts" class="pill" title="Route options"><svg viewBox="0 0 24 24"><circle cx="6" cy="18.5" r="2.3"/><circle cx="18" cy="5.5" r="2.3"/><path d="M8.3 18.5H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.7"/></svg>Options</button>
   </div>
-  <div id="status"></div>
+  <div id="status" role="status" aria-live="polite"></div>
 </div>
 
 <div id="quick"></div>
@@ -522,7 +525,7 @@ if (/[?&]car=1\b/.test(location.search)) {
   <ul class="list" id="savedList"></ul>
   <h3>Voice directions</h3>
   <div class="chips" data-set="voice"><button data-v="off">Off</button><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
-  <div id="voicePickBox" hidden><p>Voice</p><div class="row"><select id="voicePick" data-raw style="flex:1;min-width:0;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit"></select><button id="voiceTry" class="small">Hear it</button></div>
+  <div id="voicePickBox" hidden><p>Voice</p><div class="row"><select id="voicePick" aria-label="Voice for directions" data-raw style="flex:1;min-width:0;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit"></select><button id="voiceTry" class="small">Hear it</button></div>
     <p class="fine">For a more natural voice, download one on your iPhone: Settings &gt; Accessibility &gt; Spoken Content &gt; Voices, then pick a voice marked Enhanced or Premium. It shows up here. (iOS does not let apps use Siri's voice.)</p></div>
   <h3>On-screen directions</h3>
   <div class="chips" data-set="banner"><button data-v="brief">Brief</button><button data-v="standard">Standard</button><button data-v="detailed">Detailed</button></div>
@@ -1224,6 +1227,40 @@ const kmhSpeeds = () => (prefs.speedUnits || (prefs.units === 'km' ? 'kmh' : 'mp
 const fmtSpeed = mph => kmhSpeeds() ? Math.round(mph * 1.60934) + ' km/h' : Math.round(mph) + ' mph';
 function fmtTime(s) { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+// ---------- Accessibility ----------
+// Rows you tap (search results, stops, turns, crossings) are announced as buttons and work from a keyboard;
+// sheets are dialogs, get focus when they open and give it back when they close; Escape closes them.
+const REDUCE_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function a11yRows() {
+  document.querySelectorAll('li, div.xrow').forEach(e => {
+    if (typeof e.onclick === 'function' && !e.hasAttribute('role')) { e.setAttribute('role', 'button'); e.tabIndex = 0; }
+  });
+}
+let a11yQ = false;
+new MutationObserver(() => { if (!a11yQ) { a11yQ = true; queueMicrotask(() => { a11yQ = false; a11yRows(); }); } }).observe(document.body, { childList: true, subtree: true });
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && t && t.getAttribute && t.getAttribute('role') === 'button' && !/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) { e.preventDefault(); t.click(); }
+  if (e.key === 'Escape' && document.querySelector('.sheet.a11yOpen')) closeSheets();
+});
+let sheetFrom = null;
+function a11ySheets() {
+  document.querySelectorAll('.sheet').forEach(sh => {
+    if (!sh.hasAttribute('role')) {
+      const h = sh.querySelector('h2'); sh.setAttribute('role', 'dialog');
+      if (h) { if (!h.id) h.id = sh.id + 'Title'; sh.setAttribute('aria-labelledby', h.id); h.tabIndex = -1; }
+    }
+    const open = getComputedStyle(sh).display !== 'none' && getComputedStyle(sh).visibility !== 'hidden';
+    if (open && !sh.classList.contains('a11yOpen')) {
+      sh.classList.add('a11yOpen'); sheetFrom = document.activeElement;
+      const h = sh.querySelector('h2'); if (h) setTimeout(() => { if (!sh.contains(document.activeElement)) h.focus({ preventScroll: true }); }, 60);
+    } else if (!open && sh.classList.contains('a11yOpen')) {
+      sh.classList.remove('a11yOpen');
+      if (sheetFrom && document.contains(sheetFrom) && (!document.activeElement || document.activeElement === document.body || sh.contains(document.activeElement))) try { sheetFrom.focus({ preventScroll: true }); } catch (e) {}
+    }
+  });
+}
+new MutationObserver(() => setTimeout(a11ySheets, 30)).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 function labelOf(p) {
   const main = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || p.city || 'Unnamed place';
   const street = p.name && p.street ? [p.housenumber, p.street].filter(Boolean).join(' ') : null;
@@ -1615,6 +1652,9 @@ mapReady = (async () => {
   // for no visible gain on a map), quicker label fades, and a bigger tile cache so panning back does not refetch
   map = new maplibregl.Map({ container: 'map', style, center: v ? [v.c[1], v.c[0]] : [-98.35, 39.5], zoom: v ? v.z : 3.5, maxPitch: 60, attributionControl: false,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 2), fadeDuration: 120, maxTileCacheSize: 400, refreshExpiredTiles: false });
+  if (REDUCE_MOTION) ['flyTo', 'easeTo', 'fitBounds'].forEach(f => { const orig = map[f].bind(map); map[f] = (a, o) => {   // reduced motion: short moves, no long flights
+    const opt = f === 'fitBounds' ? o : a; if (opt && typeof opt === 'object' && !nav) opt.duration = Math.min(opt.duration == null ? 300 : opt.duration, 300);
+    return f === 'fitBounds' ? orig(a, opt) : orig(opt, o); }; });
   map.touchPitch.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();   // no accidental tilting or spinning
   map.on('moveend', () => { clearTimeout(map._fireT); map._fireT = setTimeout(() => { if (prefs.fires && map.getZoom() >= 4.5) { const b = map.getBounds(); loadFires([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).catch(() => {}); } }, 800); });
   map.on('moveend', () => { nameIdx = null; if (camOwn) return; const c = map.getCenter(); store('map.view', { c: [c.lat, c.lng], z: map.getZoom() }); });
