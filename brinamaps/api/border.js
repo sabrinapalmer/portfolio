@@ -14,8 +14,8 @@ export default async function handler(req) {
   let data;
   const tries = [];   // what the agency's site answered, for /api/border?debug=1 and the server log
   try {
-    // The agency's site turned away requests with no User-Agent (502s on 27 Oct); with one it answers in about 0.2 s.
-    // Asked twice before giving up; the app then asks it directly
+    // The agency's site sits behind Akamai, which answers some of Vercel's servers with 403 "Access Denied" (seen
+    // 27 Oct). Asked twice from here, then through BrinaMaps' own server; the app itself asks the agency first.
     const ask = async () => {
       const t0 = Date.now();
       try {
@@ -30,7 +30,13 @@ export default async function handler(req) {
         throw e;
       }
     };
-    data = await ask().catch(() => ask());
+    data = await ask().catch(() => ask()).catch(async e => {
+      const base = (process.env.VALHALLA_URL || '').replace(/\/$/, ''), t0 = Date.now();
+      const r = await fetch(base + '/places/border', { headers: { 'X-Router-Key': process.env.VALHALLA_KEY || '' }, signal: AbortSignal.timeout(9000) });
+      tries.push({ t0, via: 'own server', status: r.status, ms: Date.now() - t0 });
+      if (!r.ok) throw e;
+      return r.json();
+    });
   } catch (e) {
     console.log('[border] agency site failed', JSON.stringify(tries));
     return new Response(JSON.stringify(Object.assign({ error: 'border wait times unavailable' }, new URL(req.url).searchParams.get('debug') ? { tries } : {})), { status: 502, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, cors) });
