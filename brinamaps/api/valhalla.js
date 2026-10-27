@@ -3,7 +3,7 @@
 //   /api/valhalla/sources_to_targets?json={...}
 //   POST /api/valhalla/trace_attributes
 //   /api/valhalla/status
-// The server runs one router per region (west = California + Mexico, texas, illinois); each request goes to a region
+// The server runs one router for the whole US + Mexico (us) and older regional ones (west = California + Mexico, texas, illinois); each request goes to a region
 // whose area holds every point of the trip. Where areas overlap (northern Mexico sits inside the Texas box) the next
 // candidate is tried if the first has no road there. A trip no region holds gets 400, and the app asks Geoapify.
 // VALHALLA_URL and VALHALLA_KEY are set in the Vercel project. Routes are kept at the edge for an hour.
@@ -14,6 +14,8 @@ const ORIGINS = [/^https:\/\/(www\.)?(sabrinapalmer|brinamaps)\.com$/, /^https:\
 const EPS = { route: 3600, sources_to_targets: 3600, trace_attributes: 0, locate: 3600 };
 // [west, south, east, north] boxes per region, most specific first
 const AREAS = [
+  // The whole US and Mexico in one router, so any trip in them is one route; the regional routers stay as backup
+  ['us', [[-179.9, 18.5, -66.8, 71.6], [-118.5, 14.4, -86.6, 32.8]]],
   ['illinois', [[-91.6, 36.9, -87.0, 42.6]]],
   ['texas', [[-106.7, 25.8, -93.5, 36.6]]],
   ['west', [[-124.6, 32.5, -114.1, 42.1], [-118.5, 14.4, -86.6, 32.8]]],
