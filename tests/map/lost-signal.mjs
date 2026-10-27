@@ -50,6 +50,16 @@ await p.waitForTimeout(1200);
 await p.click('#go'); await p.waitForTimeout(800);
 await p.evaluate(([a, o]) => window.__move(a, o), shape[3]); await p.waitForTimeout(1500);
 globalThis.__offline = true;
+// A traffic re-check that fails while you are ON the route: no "head back" message
+const n0 = said.length;
+await p.evaluate(async () => { await renav('', true); });
+await p.waitForTimeout(300);
+const onRoute = await p.evaluate(() => ({ lost: nav.lost }));
+const check0 = !onRoute.lost && !said.slice(n0).some(t => /No signal/.test(t));
+console.log((check0 ? 'ok   ' : 'FAIL ') + 'a failed re-check while on the route does not say to head back'); if (!check0) errs.push('false no-signal on route');
+// Two reroutes at once run one after the other
+const order = await p.evaluate(async () => { const log = []; const a = renav('', true).then(() => log.push('a')), b2 = renav('', true).then(() => log.push('b')); await Promise.all([a, b2]); return log.join('') + (nav.busy ? ' busy' : ''); });
+console.log((order === 'ab' ? 'ok   ' : 'FAIL ') + 'overlapping reroutes queue (' + order + ')'); if (order !== 'ab') errs.push('reroute queue');
 // Wrong turn: 300 m north of the route, no signal
 for (let k = 1; k <= 4; k++) { await p.evaluate(([a, o]) => window.__move(a, o), [shape[4][0] + 0.0007 * k, shape[4][1]]); await p.waitForTimeout(1500); }
 await p.waitForFunction(() => nav && nav.lost, null, { timeout: 20000 }).catch(() => {});
