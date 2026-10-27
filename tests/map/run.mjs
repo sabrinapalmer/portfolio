@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 const dir = new URL('.', import.meta.url).pathname;
 let failed = 0;
-for (const f of readdirSync(dir).filter(f => f.endsWith('.mjs') && f !== 'run.mjs').sort()) {
+for (const f of readdirSync(dir).filter(f => f.endsWith('.mjs') && f !== 'run.mjs' && !f.startsWith('_')).sort()) {
   const r = spawnSync(process.execPath, [dir + f], { encoding: 'utf8', timeout: 180000 });
   const ok = r.status === 0 && /^errors \[\]\s*$/m.test(r.stdout);
   console.log((ok ? 'pass  ' : 'FAIL  ') + f);

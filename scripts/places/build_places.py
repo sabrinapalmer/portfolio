@@ -355,6 +355,11 @@ def finish(db, summary):
       INSERT INTO names(rowid, norm, cell) SELECT rid, norm, cell FROM places;
       INSERT INTO names(names) VALUES ('optimize');
     """)
+    log('counting chain names')   # names many places share, for spelling correction in search (places_server.correct)
+    db.executescript("""
+      CREATE TABLE chains (norm TEXT PRIMARY KEY, n INTEGER);
+      INSERT INTO chains SELECT norm, count(*) n FROM places GROUP BY norm HAVING n >= 8 ORDER BY n DESC LIMIT 80000;
+    """)
     log('building the location index')
     db.executescript("""
       CREATE VIRTUAL TABLE pos USING rtree(rid, minlat, maxlat, minlon, maxlon);

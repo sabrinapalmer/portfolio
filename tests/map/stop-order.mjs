@@ -62,6 +62,20 @@ const xt = await p.evaluate(() => {
 console.log('crossings:', JSON.stringify(xt));
 check(xt && xt.some(r => /San Ysidro.*1 h 25 min.*this route.*\[on\]/.test(r)), 'the selected route keeps its own time in the table');
 check(xt && xt.some(r => /Calexico West/.test(r)) && xt.some(r => /Calexico East/.test(r)), 'Calexico east and west are separate rows');
+// Otay Mesa from a route ('passenger' crossing) and from the list of nearby ports is one row; a crossing far slower waits behind "Show more"
+const xt2 = await p.evaluate(() => {
+  const B = (port, crossing, wait, others) => ({ port, crossing, north: true, lane: 'SENTRI', wait, others: others || [] });
+  const sy = { time: 6780, border: B('San Ysidro', '', 15, [{ port: 'Otay Mesa', lane: 'SENTRI', minutes: 10 }, { port: 'Tecate', lane: 'Regular lane', minutes: 5 }]) };
+  const om = { time: 6600, via: 'Otay Mesa', border: B('Otay Mesa', 'passenger', 10, [{ port: 'San Ysidro', lane: 'SENTRI', minutes: 15 }, { port: 'Tecate', lane: 'Regular lane', minutes: 5 }]) };
+  routes = [sy, om]; selected = 0; crossFor = crossKey(); crossAlts = { 'Otay Mesa': om, 'Tecate': { time: 6780 + 3600 } }; crossMore = '';
+  const rows = t => [...t.querySelectorAll('.xrow')].map(r => r.querySelector('b').textContent);
+  const a = rows(crossTable(sy)); selected = 1; const b = rows(crossTable(om));
+  const more = crossTable(om).querySelector('.xmore'); crossMore = crossKey(); const c = rows(crossTable(om)); crossMore = '';
+  return { a, b, more: more && more.textContent, c };
+});
+console.log('crossings 2:', JSON.stringify(xt2));
+check(xt2.a.length === 2 && xt2.b.length === 2 && xt2.b.filter(n => n === 'Otay Mesa').length === 1, 'picking the Otay route does not add a second Otay row; Tecate (an hour slower) is hidden');
+check(/Show 1 more crossing/.test(xt2.more || '') && xt2.c.length === 3, '"Show 1 more crossing" brings it back');
 await p.evaluate(async () => { selected = 0; await route(); });
 // Chips: only the latest one looks busy
 const busy = await p.evaluate(async () => {

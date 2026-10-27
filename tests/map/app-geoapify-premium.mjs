@@ -197,7 +197,7 @@ const bline = await p.evaluate(async () => {
   await checkBorder([rt]); return borderRows(rt).map(r => r.join(': ')).join(' | ');
 });
 console.log('border:', bline);
-check(/San Ysidro/.test(bline) && /Ready Lane wait: 45 min/.test(bline) && /Time to border: 20 min/.test(bline), 'border line names the port, your lane, its wait and when you reach it');
+check(/San Ysidro/.test(bline) && /In line \(Ready Lane\): about 45 min/.test(bline) && /Time to the line: 20 min/.test(bline) && /Across: about/.test(bline), 'border rows: the port, time to the line, time in line for your lane, when you are across');
 // SENTRI: the router's own 10-minute guess for the line is swapped for the SENTRI wait, and the step names the lane
 const sen = await p.evaluate(async () => {
   prefs.lane = 'sentri';
@@ -207,7 +207,7 @@ const sen = await p.evaluate(async () => {
   prefs.lane = 'standard'; await checkBorder([rt]); a.std = rt.time; return a;
 });
 console.log('sentri:', JSON.stringify(sen));
-check(Math.abs(sen.time - (2400 - (640 - 160.9 / 8) + 15 * 60)) < 5 && /SENTRI line/.test(sen.step) && /SENTRI wait: 15 min/.test(sen.line), 'SENTRI wait replaces the router guess in the trip time and the step names the SENTRI line');
+check(Math.abs(sen.time - (2400 - (640 - 160.9 / 8) + 15 * 60)) < 5 && /SENTRI line/.test(sen.step) && /In line \(SENTRI\): about 15 min/.test(sen.line), 'SENTRI wait replaces the router guess in the trip time and the step names the SENTRI line');
 check(Math.abs(sen.std - (2400 - (640 - 160.9 / 8) + 75 * 60)) < 5, 'switching to the regular lane recomputes from the original time (75 min wait)');
 
 // The weekly toll list: booths in a cell come from it without asking the server
