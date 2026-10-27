@@ -13,9 +13,10 @@ export default async function handler(req) {
   else if (origin) return new Response('{"error":"origin not allowed"}', { status: 403, headers: { 'Content-Type': 'application/json' } });
   let data;
   try {
-    const r = await fetch('https://bwt.cbp.gov/api/bwtnew', { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } });
-    if (!r.ok) throw new Error('status ' + r.status);
-    data = await r.json();
+    // asked twice before giving up (the agency's site turns some requests away); the app then asks it directly
+    const ask = () => fetch('https://bwt.cbp.gov/api/bwtnew', { signal: AbortSignal.timeout(8000), headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; BrinaMaps/1.0; +https://brinamaps.com)' } })
+      .then(r => { if (!r.ok) throw new Error('status ' + r.status); return r.json(); });
+    data = await ask().catch(() => ask());
   } catch (e) {
     return new Response(JSON.stringify({ error: 'border wait times unavailable' }), { status: 502, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, cors) });
   }
