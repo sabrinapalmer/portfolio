@@ -13,7 +13,13 @@ source /etc/brinamaps-router.env          # ROUTER_KEY, REPO, HOST
 exec >>/var/log/router-update.log 2>&1
 echo "== $(date -u) router manager"
 
-REGIONS="us:8005 west:8002 texas:8003 illinois:8004"
+REGIONS="us:8005"   # the whole US + Mexico in one router; the older regional ones (west, texas, illinois) are retired
+
+# Routers no longer in the list are stopped and their data removed
+for c in $(docker ps -a --format '{{.Names}}' | grep '^valhalla-' || true); do
+  r=${c#valhalla-}
+  if ! echo " $REGIONS " | grep -q " $r:"; then docker rm -f "$c" >/dev/null 2>&1 || true; rm -rf "/srv/router/$r" "/srv/router/$r.new" "/srv/router/$r.tag"; echo "$r: retired"; fi
+done
 
 # HTTPS front: key required; /<region>/... goes to that region's router (anything else to west)
 caddy_conf() {
