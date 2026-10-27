@@ -3919,12 +3919,13 @@ const LANES = { standard: 'Regular lane', ready: 'Ready Lane', sentri: 'SENTRI' 
 let borderData = null, borderAt = 0;
 async function borderWaits() {
   if (borderData && Date.now() - borderAt < 90000) return borderData;   // the agency updates through the hour: asked again after 90 s
-  try { const r = await fetch(API + '/border'); if (r.ok) { borderData = (await r.json()).ports; borderAt = Date.now(); return borderData; } } catch (e) {}
-  // The border agency sometimes turns away the app's server; it answers phones directly, so ask it from here
+  // The border agency's site (behind Akamai) refuses many cloud servers, ours included, with "Access Denied", but
+  // answers phones and home connections: ask it directly first, then through the app's server
   try {
-    const r = await fetch('https://bwt.cbp.gov/api/bwtnew', { signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined });
-    if (r.ok) { const ports = borderTrim(await r.json()); if (ports.length) { borderData = ports; borderAt = Date.now(); } }
+    const r = await fetch('https://bwt.cbp.gov/api/bwtnew', { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+    if (r.ok) { const ports = borderTrim(await r.json()); if (ports.length) { borderData = ports; borderAt = Date.now(); return borderData; } }
   } catch (e) {}
+  try { const r = await fetch(API + '/border'); if (r.ok) { borderData = (await r.json()).ports; borderAt = Date.now(); } } catch (e) {}
   return borderData;
 }
 // The same trimming as /api/border: crossings into the US from Mexico, cars only, each lane's wait

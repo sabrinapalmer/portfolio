@@ -12,6 +12,8 @@ behind the same X-Router-Key as the routers, and the website reaches it through 
   GET  /health                                 is the place file loaded, how big, when built
   POST /report {place_id,name,lat,lon,hours,note,sender}  -> {id}    (at most 10 an hour per sender)
   POST /report-note {id, sender, osm}          the OpenStreetMap note made for a report
+  GET  /border                                 the US border agency's wait-time list, fetched from here, kept a minute
+  POST /problem, GET /problems?days=7          problem reports from the app, kept 30 days
 """
 import json, math, os, re, sqlite3, threading, time, unicodedata
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -461,6 +463,29 @@ def list_problems(days):
     return 200, {'days': days, 'problems': out}
 
 
+border_cache = {'at': 0, 'body': None}
+border_lock = threading.Lock()
+
+
+def border():
+    """The US border agency's wait-time list, fetched from here (its site refuses many cloud servers, Vercel's among
+    them) and kept a minute"""
+    import urllib.request
+    with border_lock:
+        if border_cache['body'] and time.time() - border_cache['at'] < 60:
+            return 200, border_cache['body']
+        try:
+            req = urllib.request.Request('https://bwt.cbp.gov/api/bwtnew', headers={'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; BrinaMaps/1.0; +https://brinamaps.com)'})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                body = json.loads(r.read().decode('utf-8'))
+            border_cache.update(at=time.time(), body=body)
+            return 200, body
+        except Exception as e:
+            if border_cache['body'] and time.time() - border_cache['at'] < 1800:
+                return 200, border_cache['body']   # a recent copy beats nothing
+            return 502, {'error': 'border agency unreachable: ' + str(e)[:120]}
+
+
 def health():
     c = db()
     if not c:
@@ -503,6 +528,8 @@ class H(BaseHTTPRequestHandler):
         try:
             if u.path == '/health':
                 return self.send(*health())
+            if u.path == '/border':
+                return self.send(*border())
             if u.path == '/problems':
                 return self.send(*list_problems(f('days', 0.1, 30, 7)))
             if not db():

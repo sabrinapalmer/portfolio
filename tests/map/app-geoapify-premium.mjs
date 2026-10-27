@@ -95,6 +95,7 @@ await p.route('**/*', async r => {
   }
   if (/fonts\.(googleapis|gstatic)\.com/.test(u)) return r.fulfill({ contentType: 'text/css', body: '' });
   if (u.includes('wildfire') || u.includes('arcgis') || u.includes('nifc')) return J({ features: [] });
+  if (u.startsWith('https://bwt.cbp.gov/')) { calls.push('cbp direct'); return r.abort(); }   // the app asks the border agency first; here it falls back to /api/border
   calls.push('OTHER ' + u); return r.abort();
 });
 await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
