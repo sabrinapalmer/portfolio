@@ -321,10 +321,23 @@ def cell(lat, lon):
     return 'c%03d%03d' % (min(359, int((lat + 90) * 2)), min(719, int((lon + 180) * 2)))
 
 
+# Some source records lost the backslash of escaped accents ("Vxeda Rxe1pida" for "Vía Rápida"). Only strings with a
+# code that has a digit (xe1 á, xe9 é, xf3 ó, xf1 ñ) are repaired, so English words like "fixed" stay as they are.
+SURE = re.compile(r'(?<=[A-Za-z])x(?:e[19]|f[13]|c[19]|d[13])')
+ANY = re.compile(r'(?<=[A-Za-z])x(e1|e9|ed|f3|fa|f1|fc|c1|c9|cd|d3|da|d1|dc)')
+
+
+def fix_text(v):
+    if isinstance(v, str) and SURE.search(v):
+        return ANY.sub(lambda m: chr(int(m.group(1), 16)), v)
+    return v
+
+
 def write(db, rows):
     """Adds one region's places; returns how many"""
     out = []
     for r in rows:
+        r = {k: fix_text(v) for k, v in r.items()}
         name = r.get('name')
         if not name or r.get('lat') is None or r.get('lon') is None:
             continue
