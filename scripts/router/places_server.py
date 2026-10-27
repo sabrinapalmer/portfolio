@@ -147,6 +147,129 @@ def search(q, lat, lon, km, lim):
     return [row(h[3][:-1], h[2]) for h in out]
 
 
+# ---------- Typos and spelling variants ("wallmart", "cosco", "in and out", "inn n out") ----------
+# Names that many places share (chains) are kept in memory with a 3-letter-piece index. A search that finds fewer than
+# 3 places is tried again with the chain name closest to what was typed, when it is close enough.
+CHAIN_MIN = 8
+chains = {'key': None, 'names': [], 'counts': [], 'canon': [], 'tri': {}, 'busy': False}
+chain_lock = threading.Lock()
+SKIP_WORDS = {'and', 'n', 'the', 'el', 'la', 'los', 'las', 'de', 'y'}
+
+
+def canon(t):
+    """What a name sounds like when typed quickly: no little words, no spaces, no doubled letters"""
+    w = [x for x in fold(t).split(' ') if x and x not in SKIP_WORDS]
+    return re.sub(r'(.)\1+', r'\1', ''.join(w))
+
+
+def tris(t):
+    return {t[i:i + 3] for i in range(max(1, len(t) - 2))}
+
+
+def load_chains():
+    """Chain names from the place file: its own 'chains' table when the monthly build made one, otherwise counted
+    once here (a few minutes, in the background) and kept beside the file"""
+    try:
+        key = os.stat(DATA).st_ino
+    except OSError:
+        return
+    cache = os.path.join(os.path.dirname(REPORTS), 'chains-%d.json' % key)
+    try:
+        rows = None
+        if os.path.exists(cache):
+            with open(cache) as f:
+                rows = json.load(f)
+        if rows is None:
+            c = sqlite3.connect('file:' + os.path.realpath(DATA) + '?mode=ro&immutable=1', uri=True, check_same_thread=False)
+            try:
+                if c.execute("SELECT 1 FROM sqlite_master WHERE name = 'chains'").fetchone():
+                    rows = c.execute('SELECT norm, n FROM chains').fetchall()
+                else:
+                    rows = c.execute('SELECT norm, count(*) n FROM places GROUP BY norm HAVING n >= ? ORDER BY n DESC LIMIT 80000', (CHAIN_MIN,)).fetchall()
+            finally:
+                c.close()
+            tmp = cache + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(rows, f)
+            os.replace(tmp, cache)
+            for old in os.listdir(os.path.dirname(REPORTS)):
+                if old.startswith('chains-') and old.endswith('.json') and os.path.join(os.path.dirname(REPORTS), old) != cache:
+                    try:
+                        os.remove(os.path.join(os.path.dirname(REPORTS), old))
+                    except OSError:
+                        pass
+        names = [r[0] for r in rows]
+        cn = [canon(n) for n in names]
+        tri = {}
+        for i, t in enumerate(cn):
+            for g in tris(t):
+                tri.setdefault(g, []).append(i)
+        with chain_lock:
+            chains.update(key=key, names=names, counts=[r[1] for r in rows], canon=cn, tri=tri)
+    finally:
+        chains['busy'] = False
+
+
+def chains_ready():
+    try:
+        key = os.stat(DATA).st_ino
+    except OSError:
+        return False
+    if chains['key'] == key:
+        return True
+    with chain_lock:
+        if not chains['busy']:
+            chains['busy'] = True
+            threading.Thread(target=load_chains, daemon=True).start()
+    return chains['key'] is not None   # an older list still helps while the new one loads
+
+
+def ratio(a, b):
+    """Similarity of two strings, 0 to 1 (twice the longest common pieces over both lengths)"""
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def correct(q):
+    """The chain name nearest to what was typed, or None. Compared without little words, spaces or doubled letters,
+    against the whole name and against its start (so "in n out" matches "in n out burger")."""
+    cq = canon(q)
+    if len(cq) < 4 or not chains_ready():
+        return None
+    with chain_lock:
+        names, counts, cn, tri = chains['names'], chains['counts'], chains['canon'], chains['tri']
+    qt = tris(cq)
+    hits = {}
+    for g in qt:
+        for i in tri.get(g, ())[:20000]:
+            hits[i] = hits.get(i, 0) + 1
+    need = max(1, int(len(qt) * 0.3))
+    best, best_key = None, None
+    top = sorted((i for i, n in hits.items() if n >= need), key=lambda i: (-hits[i], -counts[i]))[:300]   # the most shared pieces first
+    for i in top:
+        c = cn[i]
+        sc = max(ratio(cq, c), ratio(cq, c[:len(cq) + 1]) if len(c) > len(cq) else 0)
+        if sc < 0.8:
+            continue
+        k = (round(sc, 2), counts[i])
+        if best_key is None or k > best_key:
+            best, best_key = names[i], k
+    return best
+
+
+def search_or_correct(q, lat, lon, km, lim):
+    """search(), and when it finds fewer than 3, the same search for the nearest chain name, after the real matches"""
+    out = search(q, lat, lon, km, lim)
+    if len(out) >= 3:
+        return out
+    c = correct(q)
+    if not c or c == fold(q):
+        return out
+    seen = {o.get('id') for o in out}
+    more = [dict(o, fixed=c) for o in search(c, lat, lon, km, lim) if o.get('id') not in seen]
+    return out + more[:max(0, lim - len(out))]
+
+
 def cat_sql(cats):
     full = [c for c in cats if ':' in c]
     tops = [c for c in cats if ':' not in c]
@@ -334,7 +457,7 @@ class H(BaseHTTPRequestHandler):
             if not db():
                 return self.send(503, {'error': 'no place file'})
             if u.path == '/search':
-                return self.send(200, search(q.get('q', '')[:80], f('lat', -90, 90), f('lon', -180, 180), f('r', 1, 300, 150), int(f('lim', 1, 30, 15))))
+                return self.send(200, search_or_correct(q.get('q', '')[:80], f('lat', -90, 90), f('lon', -180, 180), f('r', 1, 300, 150), int(f('lim', 1, 30, 15))))
             if u.path == '/near':
                 cats = [c for c in q.get('cats', '').split(',') if re.fullmatch(r'[a-z_]+(:[a-z0-9_]+)?', c)][:8]
                 if not cats:
