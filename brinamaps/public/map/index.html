@@ -290,6 +290,10 @@
   #tripList em { font-style:normal; font-size:12px; color:var(--muted); text-align:right; }
   #tripList i { flex:0 0 26px; height:26px; border-radius:50%; display:grid; place-items:center; font-style:normal; font-weight:800; font-size:13px; background:var(--warn); color:#fff; }
   #tripList li.start i { background:var(--start); } #tripList li.end i { background:var(--accent); }
+  #tripList .mv { display:flex; flex-direction:column; gap:2px; }
+  #tripList .mv button { width:30px; height:20px; border-radius:8px; background:var(--soft); color:var(--fg); font-size:10px; line-height:1; padding:0; }
+  #tripList .mv button:disabled { opacity:.3; }
+  #tripMsg button.reorder { display:block; margin-top:8px; padding:7px 14px; border-radius:14px; border:1.5px solid var(--line); background:var(--bg); color:inherit; font:inherit; font-weight:700; }
   #tripList button.x { flex:0 0 32px; height:32px; border-radius:50%; background:var(--soft); color:var(--fg); font-size:18px; line-height:1; padding:0; }
   #navEta { cursor:pointer; }
   .chips button.on { background:var(--accent); color:var(--accent-ink); }
@@ -3846,7 +3850,8 @@ function borderRows(rt, short) {   // [label, value] rows for the border on this
   const waitOf = m => m == null ? tr('No time reported') : m ? fmtTime(m * 60) : tr('No wait');
   const laneWait = lane => LANG === 'es' ? 'Espera ' + tr(lane) : lane + ' wait';
   const rows = [[b.north ? 'Crossing' : 'Into Mexico', name], ['Time to border', fmtTime(b.eta) + ' \u00b7 ' + clock(b.eta)]];
-  if (!b.north || short) return rows;   // short: the comparison below shows each port's lane and line
+  if (short) return rows.slice(1);   // the comparison below names each port with its lane and line
+  if (!b.north) return rows;
   const lane = b.lane || 'Regular';
   rows.push([laneWait(lane), b.closed ? tr('Closed now') : waitOf(b.wait)]);
   if (b.yours) rows.push([laneWait(b.yours.lane), waitOf(b.yours.wait)]);
@@ -4797,14 +4802,31 @@ function openTrip() {
     li.append(b, text, el('em', '', right || ''));
     if (onRemove) { const x = el('button', 'x', '\u00d7'); x.title = 'Remove this stop'; x.setAttribute('aria-label', 'Remove this stop'); x.onclick = e => { e.stopPropagation(); onRemove(); openTrip(); }; li.appendChild(x); }
     li.onclick = () => { closeSheets(); if (nav) { nav.follow = false; document.body.classList.add('free'); } map.easeTo({ duration: 900, center: [p.lon, p.lat], zoom: 16, padding: viewPad() }); };
-    ol.appendChild(li);
+    ol.appendChild(li); return li;
   };
   const start = nav && here ? { lat: here[0], lon: here[1], name: 'You are here' } : pts.from || (here ? { lat: here[0], lon: here[1], name: 'My location' } : null);
   if (start) row('', 'start', start, nav ? 'now' : '');
-  pts.stops.forEach((p, i) => { const tt = times.find(x => x.kind === 'stop' && x.ref === p); row(String(i + 1), 'stop', p, tt ? clock(tt.t) + ' \u00b7 ' + fmtTime(tt.t) : '', () => removeStop(p)); });
+  pts.stops.forEach((p, i) => {
+    const tt = times.find(x => x.kind === 'stop' && x.ref === p), li = row(String(i + 1), 'stop', p, tt ? clock(tt.t) + ' \u00b7 ' + fmtTime(tt.t) : '', () => removeStop(p));
+    if (pts.stops.length > 1) {   // move a stop earlier or later in the trip
+      const mv = el('span', 'mv');
+      [['\u25b2', -1, 'Earlier'], ['\u25bc', 1, 'Later']].forEach(([t, by, lbl]) => {
+        const b = el('button', '', t); b.title = lbl; b.setAttribute('aria-label', 'Move ' + stopName(i) + ' ' + lbl.toLowerCase());
+        b.disabled = i + by < 0 || i + by >= pts.stops.length;
+        b.onclick = e => { e.stopPropagation(); moveStop(i, by); openTrip(); };
+        mv.appendChild(b);
+      });
+      li.insertBefore(mv, li.querySelector('button.x'));
+    }
+  });
   const end = times.find(x => x.kind === 'arrive');
   row('', 'end', pts.to, end ? clock(end.t) + ' \u00b7 ' + fmtTime(end.t) : '');
-  $('tripMsg').textContent = pts.stops.length ? 'Tap a place to see it on the map. \u00d7 removes a stop.' : 'No stops yet.';
+  $('tripMsg').textContent = pts.stops.length ? (pts.stops.length > 1 ? (stopsByHand ? 'Your order. ' : 'Fastest order. ') + '\u25b2\u25bc moves a stop, \u00d7 removes it.' : 'Tap a place to see it on the map. \u00d7 removes a stop.') : 'No stops yet.';
+  if (stopsByHand && pts.stops.length > 1) {
+    const b = el('button', 'reorder', 'Use fastest order');
+    b.onclick = async () => { b.disabled = true; b.textContent = 'Sorting...'; await resetStopOrder(); openTrip(); };
+    $('tripMsg').appendChild(b);
+  }
 }
 // Stop search: a kind of place ("gas") looks along the route; anything else is a name or address lookup
 let stopTimer = 0, stopId = 0;
@@ -4848,6 +4870,13 @@ async function searchStop() {
 // How much time a stop adds: (you -> stop) + (stop -> where you go next) - (you -> where you go next), from the router
 async function matrixTimes(srcs, tgts, mode) {   // seconds [source][target], or null
   const m = mode === 'rig' ? 'auto' : mode;
+  if (Date.now() > ownDownUntil) try {   // own route server first (free)
+    const body = { sources: srcs.map(p => ({ lat: p.lat, lon: p.lon })), targets: tgts.map(p => ({ lat: p.lat, lon: p.lon })), costing: COST[mode], units: 'miles' };
+    const r = await fetch(`${OWN_ROUTER}/sources_to_targets?json=${encodeURIComponent(JSON.stringify(body))}`);
+    if (r.status >= 500) ownDownUntil = Date.now() + 600000;
+    const d = r.ok ? await r.json() : {};
+    if (d.sources_to_targets) return d.sources_to_targets.map(r => r.map(x => x && x.time != null ? x.time : null));
+  } catch (e) {}
   if (useGeo() || !FREE_OK) {
     try {
       const d = await geoFetch('matrix', {}, null, Object.assign(matrixOpts(mode), { sources: srcs.map(p => ({ location: [p.lon, p.lat] })), targets: tgts.map(p => ({ location: [p.lon, p.lat] })) }));
@@ -4929,9 +4958,8 @@ async function findStops(word, label) {
   out.innerHTML = '';
   if (!rt) return;
   const chip = [...document.querySelectorAll('#stopKinds button')].find(b => b.dataset.word === word);
-  document.querySelectorAll('#stopKinds button').forEach(b => b.classList.toggle('on', b === chip));
-  if (chip) chip.classList.add('busy');
-  try { await findStopsIn(rt, word, label, out, msg, id); } finally { if (chip) chip.classList.remove('busy'); }
+  document.querySelectorAll('#stopKinds button').forEach(b => { b.classList.toggle('on', b === chip); b.classList.toggle('busy', b === chip); });   // only the latest one is looking
+  try { await findStopsIn(rt, word, label, out, msg, id); } finally { if (chip && id === stopsAsk) chip.classList.remove('busy'); }
 }
 async function findStopsIn(rt, word, label, out, msg, id) {
   msg('Looking for ' + label.toLowerCase() + ' along your route...');
@@ -4978,8 +5006,51 @@ function drawStopPins() {
   markers.stops.forEach(m => m.remove());
   markers.stops = pts.stops.map((p, i) => { const m = marker('pin via', [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); m.getElement().textContent = i + 1; return m; });
 }
+// Stops go in the fastest order (drive times from the router, straight lines if it cannot answer) until you move one
+// yourself; after that a new stop is slotted in where it adds least and your order is kept.
+let stopsByHand = false;
+async function fastestOrder() {
+  const n = pts.stops.length; if (n < 2 || !pts.to) return false;
+  const first = nav && here ? { lat: here[0], lon: here[1] } : tripPts()[0];
+  const all = [first, ...pts.stops, pts.to];
+  let T = await Promise.race([matrixTimes(all, all, prefs.mode).catch(() => null), new Promise(r => setTimeout(() => r(null), 4000))]);
+  const ok = Array.isArray(T) && T.length === all.length && T.every((row, i) => Array.isArray(row) && row.length === all.length && row.every((x, j) => i === j || x != null));
+  const cost = (i, j) => ok ? T[i][j] : roughTime(all[i], all[j], prefs.mode);
+  let best = null, bestT = Infinity;
+  const idx = pts.stops.map((_, i) => i + 1);
+  if (n <= 7) {   // every order (at most 5040)
+    const perm = (rest, seq, t) => {
+      if (t >= bestT) return;
+      if (!rest.length) { t += cost(seq[seq.length - 1], all.length - 1); if (t < bestT) { bestT = t; best = seq.slice(1); } return; }
+      rest.forEach((k, i) => perm(rest.filter((_, j) => j !== i), seq.concat(k), t + cost(seq[seq.length - 1], k)));
+    };
+    perm(idx, [0], 0);
+  } else {   // many stops: nearest next, then swap pairs while it helps
+    let seq = [], left = idx.slice(), at = 0;
+    while (left.length) { left.sort((a, b) => cost(at, a) - cost(at, b)); at = left.shift(); seq.push(at); }
+    const total = q => [0, ...q, all.length - 1].reduce((t, k, i, a) => i ? t + cost(a[i - 1], k) : 0, 0);
+    for (let again = true; again;) { again = false; for (let i = 0; i < seq.length - 1; i++) for (let j = i + 1; j < seq.length; j++) { const q = seq.slice(); q.splice(i, j - i + 1, ...seq.slice(i, j + 1).reverse()); if (total(q) < total(seq) - 1) { seq = q; again = true; } } }
+    best = seq;
+  }
+  if (!best) return false;
+  const next = best.map(k => all[k]), changed = next.some((p, i) => p !== pts.stops[i]);
+  pts.stops = next;
+  return changed;
+}
+function moveStop(i, by) {
+  const j = i + by; if (j < 0 || j >= pts.stops.length) return;
+  [pts.stops[i], pts.stops[j]] = [pts.stops[j], pts.stops[i]]; stopsByHand = true; drawStopPins();
+  if (nav) renav('Stops reordered.'); else route();
+}
+async function resetStopOrder() {
+  stopsByHand = false;
+  await fastestOrder(); drawStopPins();
+  if (nav) await renav('Stops in the fastest order.'); else await route();
+}
 async function addStop(p) {
-  pts.stops.splice(bestSlot(p), 0, p); drawStopPins();
+  pts.stops.splice(bestSlot(p), 0, p);
+  if (!stopsByHand) await fastestOrder();
+  drawStopPins();
   if (nav) await renav('Adding stop ' + (pts.stops.indexOf(p) + 1) + ', ' + p.name + '.'); else route();
 }
 function removeStop(p, quiet) {
@@ -5159,7 +5230,7 @@ $('save').onclick = () => {
   else saved.push({ lat: p.lat, lon: p.lon, label: p.label, name: p.name || p.label.split(',')[0] });
   store('map.saved', saved); syncSave(); drawQuick();
 };
-function dropVia() { pts.stops = []; drawStopPins(); tempAvoid = null; }
+function dropVia() { pts.stops = []; stopsByHand = false; drawStopPins(); tempAvoid = null; }
 function clearPoints() { dropVia(); ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
   clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
