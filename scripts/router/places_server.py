@@ -244,30 +244,38 @@ def correct(q):
         for i in tri.get(g, ())[:20000]:
             hits[i] = hits.get(i, 0) + 1
     need = max(1, int(len(qt) * 0.3))
-    best, best_key = None, None
+    best, best_key, best_whole = None, None, False
     top = sorted((i for i, n in hits.items() if n >= need), key=lambda i: (-hits[i], -counts[i]))[:300]   # the most shared pieces first
     for i in top:
         c = cn[i]
-        sc = max(ratio(cq, c), ratio(cq, c[:len(cq) + 1]) if len(c) > len(cq) else 0)
+        whole = ratio(cq, c)
+        sc = max(whole, ratio(cq, c[:len(cq) + 1]) if len(c) > len(cq) else 0)
         if sc < 0.8:
             continue
         k = (round(sc, 2), counts[i])
         if best_key is None or k > best_key:
-            best, best_key = names[i], k
-    return best
+            best, best_key, best_whole = names[i], k, whole >= 0.8
+    return (best, best_key[0], best_key[1], best_whole) if best else None
 
 
 def search_or_correct(q, lat, lon, km, lim):
-    """search(), and when it finds fewer than 3, the same search for the nearest chain name, after the real matches"""
+    """search(), plus the same search for the chain name nearest to what was typed when that is a different name
+    ("wallmart" -> walmart, "in and out" -> in n out burger, "home depot" -> the home depot). The chain's places come
+    first when what was typed found few places whose name starts with it, or the match is near certain and common."""
     out = search(q, lat, lon, km, lim)
-    if len(out) >= 3:
+    hit = correct(q)
+    nq = fold(q)
+    if not hit or hit[0] == nq:
         return out
-    c = correct(q)
-    if not c or c == fold(q):
-        return out
+    c, score, count, whole = hit   # whole: the typed name matches the chain's whole name, not just its start
     seen = {o.get('id') for o in out}
     more = [dict(o, fixed=c) for o in search(c, lat, lon, km, lim) if o.get('id') not in seen]
-    return out + more[:max(0, lim - len(out))]
+    if not more:
+        return out
+    starts = sum(1 for o in out if fold(o.get('name', '')).startswith(nq))
+    if starts < 3 or (whole and score >= 0.9 and count >= 50):
+        return (more + out)[:lim]
+    return (out + more)[:lim]
 
 
 def cat_sql(cats):
