@@ -338,20 +338,25 @@
   @keyframes peekPulse { 50% { box-shadow:0 0 0 10px rgba(124,92,255,.25), 0 2px 10px rgba(0,0,0,.35); } }
   #nav { touch-action:pan-y; user-select:none; -webkit-user-select:none; }
   body.nav #nav { display:flex; gap:14px; align-items:center; overflow:hidden; top:calc(36px + env(safe-area-inset-top)); padding:14px 18px; background:var(--accent); color:var(--accent-ink); }
-  #navArrow svg { width:54px; height:54px; stroke-width:3.4; }
-  #navDist { font-size:30px; font-weight:700; line-height:1.08; }
-  #navDist .road { font-size:27px; overflow-wrap:anywhere; }   /* "0.3 miles · Pine Avenue": what to look for, big */
-  #navDist .sep { opacity:.6; margin:0 .18em; }
-  #navText { font-size:18px; font-weight:600; }
-  #navDist.withRoad + #navText { font-size:16px; font-weight:600; opacity:.92; margin-top:2px; }
-  #navThen, #navMore { font-size:13px; opacity:.88; margin-top:4px; }
+  #navArrow svg { width:62px; height:62px; stroke-width:3.4; }
+  /* The banner, most important first: how far (big), the road to look for, how close (a bar that fills in the last
+     half mile), which lanes (big boxes), then a short line of words. Long exit wording never pushes these out. */
+  #navDist { font-size:38px; font-weight:800; line-height:1.05; letter-spacing:-.5px; }
+  #navDist .road { display:block; font-size:23px; font-weight:700; letter-spacing:0; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  #navDist .sep { display:none; }
+  #navSoon { height:6px; border-radius:3px; background:color-mix(in srgb, var(--accent-ink) 25%, transparent); margin:8px 0 2px; overflow:hidden; display:none; }
+  #navSoon.on { display:block; } #navSoon i { display:block; height:100%; width:0; background:var(--accent-ink); border-radius:3px; transition:width .9s linear; }
+  #navText { font-size:15px; font-weight:600; opacity:.9; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #navDist:not(.withRoad) + #navSoon + #navLanes + #navText, #navDist:not(.withRoad) + #navSoon + #navText { font-size:20px; opacity:1; white-space:normal; }
+  #navThen, #navMore { font-size:13px; opacity:.85; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #navMore:empty, #navThen:empty, #navLanes:empty { display:none; }
-  #navLanes { display:flex; gap:4px; margin-top:6px; }
-  #navLanes span { min-width:26px; padding:1px 5px; text-align:center; border-radius:7px; font-size:16px; line-height:22px; border:1.500px solid currentColor; opacity:.4; }
+  #navLanes { display:flex; gap:5px; margin-top:8px; flex-wrap:nowrap; }
+  #navLanes span { flex:0 1 46px; min-width:30px; height:38px; display:grid; place-items:center; border-radius:9px; font-size:22px; font-weight:800; border:2px solid currentColor; opacity:.35; }
   #navLanes span.ok { opacity:1; background:var(--accent-ink); color:var(--accent); border-color:var(--accent-ink); }
   #navProg { position:absolute; left:0; bottom:0; height:4px; width:0; background:var(--accent-ink); opacity:.55; transition:width .8s linear; }
   body.nav #navbar { display:flex; bottom:calc(14px + env(safe-area-inset-bottom)); padding:0; align-items:stretch; }
   #navbar #openMenu { flex:1; display:flex; align-items:center; gap:10px; padding:12px 14px 12px 20px; background:none; border:0; border-radius:inherit; color:inherit; font:inherit; text-align:left; }
+  #navbar button.navEnd { flex:0 0 auto; align-self:center; margin-left:12px; padding:12px 18px; border-radius:16px; background:#e5484d; color:#fff; font-size:16px; font-weight:800; }
   #navbar .chev { width:40px; height:40px; border-radius:20px; background:var(--soft); display:grid; place-items:center; flex:0 0 auto; }
   #navbar .chev svg { width:22px; height:22px; fill:none; stroke:var(--accent); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
   #navMenu button.endRoute { display:block; width:100%; margin:12px 0 4px; padding:14px; border-radius:16px; border:0; background:#e5484d; color:#fff; font:inherit; font-size:17px; font-weight:700; }
@@ -637,7 +642,7 @@ if (/[?&]car=1\b/.test(location.search)) {
 
 <div id="nav" class="panel">
   <div id="navArrow"></div>
-  <div style="min-width:0"><div id="peekTag"></div><div id="navDist"></div><div id="navText">Finding your location...</div><div id="navLanes"></div><div id="navMore"></div><div id="navThen"></div></div>
+  <div style="min-width:0;flex:1"><div id="peekTag"></div><div id="navDist"></div><div id="navSoon"><i></i></div><div id="navLanes"></div><div id="navText">Finding your location...</div><div id="navMore"></div><div id="navThen"></div></div>
   <i id="navProg"></i>
   <button id="navBack" type="button">Back to now</button>
 </div>
@@ -645,6 +650,7 @@ if (/[?&]car=1\b/.test(location.search)) {
 <div id="cityHere" class="panel"><b id="cityName"></b><p>Keep going to the center, or pick somewhere in town.</p><div class="row"><button id="cityOn">Continue to center</button><button id="cityPick" class="go">Choose a place</button></div></div>
 <div id="speedo"><b id="spdNow"></b><small id="spdUnit">mph</small><i id="spdLim"></i></div>
 <div id="navbar" class="panel">
+  <button id="navEnd" class="navEnd" aria-label="End route">End</button>
   <button id="openMenu"><span class="sr">Trip options. </span><span id="navEta"><b id="navArrive">--</b><span id="navLeft"></span></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></span></button>
 </div>
 <div id="navSteps" class="panel sheet">
@@ -662,7 +668,6 @@ if (/[?&]car=1\b/.test(location.search)) {
     <button id="openSteps"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>All turns</button>
     <button id="mOverview"><svg viewBox="0 0 24 24"><path d="M4 18c3-8 13-4 16-12"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></svg>Whole route</button>
     <button id="mOther"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>Avoid road ahead</button>
-    <button id="mRepeat"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/></svg>Repeat direction</button>
     <button id="mTrip" hidden><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><path d="M6 8v8M11 6h9M11 12h9M11 18h9"/></svg>Stops and times</button>
     <button id="mSettings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Direction settings</button>
   </div>
@@ -3321,7 +3326,10 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
     : { use_ferry: veh.use_ferry, shortest: !!prefs.shortest };
   const body = {
     // A port to cross at is a pass-through point (no stop), only matched to roads heading north into the US
-    locations: viaPts(via).map(q => q.via ? { lat: q.lat, lon: q.lon, type: 'through', heading: Math.round(q.heading || 0), heading_tolerance: q.tol || 50 } : { lat: q.lat, lon: q.lon }),
+    // While driving, the start is matched to the road you are on, going your way (not a frontage road or the other
+    // side of a divided highway, which made it tell you to get on the highway you were already on)
+    locations: viaPts(via).map((q, i) => q.via ? { lat: q.lat, lon: q.lon, type: 'through', heading: Math.round(q.heading || 0), heading_tolerance: q.tol || 50 }
+      : i === 0 && nav && q.auto && nav.head != null && nav.head >= 0 && (nav.spd || 0) > 4 ? { lat: q.lat, lon: q.lon, heading: Math.round(nav.head), heading_tolerance: 45 } : { lat: q.lat, lon: q.lon }),
     costing, costing_options: { [costing]: opt }, alternates: quiet || pts.stops.length ? 0 : 2, units: 'miles', language: ROUTE_LANG
   };
   // Avoided spots are sent as small circles (60 m radius). A single point only blocks the nearest road segment, which
@@ -4467,7 +4475,13 @@ function spokenDist(m) {
   return (mi < 10 ? Math.round(mi * 2) / 2 : Math.round(mi)) + ' miles';
 }
 async function keepAwake() { if (AWAKE) { try { if (nav) await AWAKE.keepAwake(); } catch (e) {} return; } try { if (navigator.wakeLock && nav) wake = await navigator.wakeLock.request('screen'); } catch (e) {} }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+// Back in the app during directions: follow you again (leaving the app mid-touch, or the map moving while it was
+// away, left the map parked so it needed Recenter)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  keepAwake();
+  if (nav) { touchDown = false; nav.touching = false; setTimeout(() => { if (nav) $('recenter').onclick(); }, 300); }
+});
 
 // Speed limits for the route being driven, from the open router's map matching (one request per route). Limits exist only where OpenStreetMap has them.
 async function loadLimits(rt) {
@@ -4632,6 +4646,7 @@ function endNav(arrivedAt) {
     $('arrived').querySelectorAll('i').forEach(i => i.remove());
     ['#ff6f91', '#ffc857', '#4fc9a4', '#5aa9ff', '#c58bf2'].forEach((c, k) => { for (let j = 0; j < 4; j++) { const i = el('i'); i.style.cssText = `left:${(k * 4 + j) * 5 + 2}%;background:${c};animation-delay:${-((k * 7 + j * 3) % 24) / 10}s`; $('arrived').appendChild(i); } });
     document.body.classList.add('arrived');
+    clearTimeout(endNav.t); endNav.t = setTimeout(() => { if (document.body.classList.contains('arrived') && !nav) $('arrivedOk').click(); }, 9000);   // goes away by itself
   } else { if (window.speechSynthesis) speechSynthesis.cancel(); if (routes.length) setTimeout(() => { if (!nav) draw(true); }, 350); }   // ended early: show the whole route again
   drawStrip(); drawTiming();
 }
@@ -4757,6 +4772,20 @@ function onFix(p) {
   if (nav.busy) return;
   if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
   if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
+  // Arrived without reaching the end of the line: turned into the parking lot or a driveway near the place, or parked
+  // close by. Near the destination, leaving the route or stopping for 15 seconds ends the route instead of rerouting.
+  if (pts.to && !nav.city && !pts.stops.length) {
+    const toDest = meters(ll, [pts.to.lat, pts.to.lon]), drivingNow = prefs.mode === 'auto' || prefs.mode === 'rig';
+    const close = drivingNow ? 160 : 40, left0 = nav.cum[nav.cum.length - 1] - (nav.along || 0);
+    if (toDest < close && left0 < (drivingNow ? 500 : 120)) {
+      if (spd < 1.5) nav.stillAt = nav.stillAt || Date.now(); else nav.stillAt = 0;
+      if (!onRoute || toDest < (drivingNow ? 50 : 15) || (nav.stillAt && Date.now() - nav.stillAt > 15000)) {
+        say('You have arrived.', 'brief');
+        endNav('Welcome to ' + (pts.to.name || pts.to.label.split(',')[0]) + '.');
+        return;
+      }
+    }
+  }
   if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting
     if (nav.lost) lostGuide(ll, s, head);
     // No signal: keep pointing back to the route, and try a new route every 30 seconds in case the signal returns
@@ -4814,6 +4843,10 @@ function onFix(p) {
   $('navMore').textContent = level === 'detailed' && next ? [next.sign, next.road && next.kind !== 'arrive' && !next.instruction.includes(next.road) ? 'onto ' + next.road : '', next.length ? 'then ' + fmtDist(next.length) + ' on it' : ''].filter(Boolean).join('  \u00b7  ') : '';
   $('navThen').textContent = level !== 'brief' && after ? 'Then: ' + (level === 'detailed' ? after.instruction : after.short) : '';
   }
+  // How close the turn is: the bar fills over the last half mile (300 m on foot)
+  const soonR = prefs.mode === 'pedestrian' || prefs.mode === 'bicycle' ? 300 : 800, soon = $('navSoon');
+  soon.classList.toggle('on', !!next && nav.peek == null && toNext < soonR);
+  soon.firstChild.style.width = next ? Math.max(0, Math.min(100, 100 * (1 - toNext / soonR))).toFixed(0) + '%' : '0';
   $('navArrive').textContent = arrive;
   nav.sym = turnSymbol(next);
   const bd = rt.border && rt.border.idx > s.i ? rt.border : null;
@@ -4841,17 +4874,28 @@ function onFix(p) {
     if (toNext > Math.max(early, far) * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', 'detailed'); return; }
   }
   if (!next) return;
+  // Just through a turn: nothing about the next one until you are out of it (two turns close together were heard
+  // before the first was done; the first prompt already said "then ..." for a close second turn)
+  const sincePrev = along - cum[steps[cur].begin];
+  if (cur > 0 && sincePrev < Math.min(35, curLen * 0.5)) return;
+  // A prompt already heard for this same turn (same place, same words) is not said again after a reroute or a traffic
+  // re-check builds a new route (it kept saying to get on the highway you were on)
+  const heardKey = stage => { const P = rt.coords[next.begin]; return stage + ':' + P[0].toFixed(4) + ',' + P[1].toFixed(4) + ':' + (next.short || ''); };
+  nav.heard = nav.heard || {};
+  const heard = stage => nav.heard[heardKey(stage)] && Date.now() - nav.heard[heardKey(stage)] < 900000;
+  const hear = (...stages) => stages.forEach(st => { nav.heard[heardKey(st)] = Date.now(); });
+  ['b', 'a', 'f'].forEach(st => { if (heard(st)) nav.said[cur + st] = 1; });
   const full = withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '');
   const lower = t => t.charAt(0).toLowerCase() + t.slice(1);
   if (ahead <= near) {
     if (!nav.said[cur + 'b']) {
-      nav.said[cur + 'b'] = nav.said[cur + 'a'] = nav.said[cur + 'f'] = 1;
-      const then = prefs.voice === 'detailed' && after && (next.multi || next.length * 1609.34 < 250) ? ' Then ' + lower(after.short) : '';
+      nav.said[cur + 'b'] = nav.said[cur + 'a'] = nav.said[cur + 'f'] = 1; hear('b', 'a', 'f');
+      const then = prefs.voice !== 'brief' && after && after.kind !== 'arrive' && (next.multi || next.length * 1609.34 < 250) ? ' Then ' + lower(after.short) : '';
       const lead = toNext >= (driving ? 150 : 60) && next.kind !== 'arrive' ? 'In ' + spokenDist(toNext) + ', ' : '';
       say(prefs.voice === 'brief' ? (lead ? lead + lower(next.short) : next.short) : (lead ? lead + lower(full) : full) + then, 'brief');
     }
-  } else if (ahead <= early && ahead > near * 1.4 && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = nav.said[cur + 'f'] = 1; say('In ' + spokenDist(toNext) + ', ' + lower(full), 'standard'); }
-  else if (far && ahead <= far && ahead > early * 1.3 && !nav.said[cur + 'f']) { nav.said[cur + 'f'] = 1; say('In ' + spokenDist(toNext) + ', ' + lower(full), 'standard'); }
+  } else if (ahead <= early && ahead > near * 1.4 && !nav.said[cur + 'a']) { nav.said[cur + 'a'] = nav.said[cur + 'f'] = 1; hear('a', 'f'); say('In ' + spokenDist(toNext) + ', ' + lower(full), 'standard'); }
+  else if (far && ahead <= far && ahead > early * 1.3 && !nav.said[cur + 'f']) { nav.said[cur + 'f'] = 1; hear('f'); say('In ' + spokenDist(toNext) + ', ' + lower(full), 'standard'); }
 }
 
 // ---------- Lanes and landmarks for the coming turn ----------
@@ -4993,8 +5037,8 @@ function drawNavSteps() {
 }
 $('openSteps').onclick = () => { closeSheets(); drawNavSteps(); document.body.classList.add('steps'); };
 $('openMenu').onclick = () => { $('menuMsg').textContent = ''; $('mTrip').hidden = !pts.stops.length; syncPrefs(); drawMute(); document.body.classList.add('menu'); };
-$('nav').onclick = () => { if (nav && nav.nextSay) say(nav.nextSay, 'brief'); };   // tapping the banner repeats the instruction
-$('mRepeat').onclick = () => { if (nav && nav.nextSay) { const v = prefs.voice; prefs.voice = 'detailed'; say(nav.nextSay); prefs.voice = v; } closeSheets(); };
+// Tapping the banner says the next direction again (even with the voice muted: you asked for it)
+$('nav').onclick = () => { if (nav && nav.nextSay) { const v = prefs.voice; prefs.voice = 'detailed'; say(nav.nextSay); prefs.voice = v; } };
 $('mOverview').onclick = () => {
   if (!nav) return;
   closeSheets(); nav.follow = false; document.body.classList.add('free');
@@ -5321,6 +5365,7 @@ function removeStop(p, quiet) {
 // ---------- Controls ----------
 $('go').onclick = startNav;
 $('endNav').onclick = () => { closeSheets(); endNav(); };
+$('navEnd').onclick = () => { closeSheets(); endNav(); };
 $('cityOn').onclick = () => { if (nav && nav.city) clearTimeout(nav.city.t); document.body.classList.remove('inCity'); };
 $('cityPick').onclick = () => {   // stop directions and open search, so you can pick a place in town (nearby results come first)
   endNav(); clearAll();
