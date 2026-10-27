@@ -262,6 +262,16 @@
   #why .kv dd { margin:0; font-weight:700; }
   #why .vs { font-size:13px; color:var(--muted); font-weight:600; }
   #why .fine { margin-top:4px; font-size:11px; color:var(--muted); }
+  #why .xtab { margin-top:8px; border:1.5px solid var(--line); border-radius:14px; overflow:hidden; }
+  #why .xhead { font-size:12px; font-weight:700; color:var(--muted); padding:6px 10px 4px; text-transform:uppercase; letter-spacing:.04em; }
+  #why .xrow { display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; padding:7px 10px; border:0; border-top:1px solid var(--line); background:none; color:inherit; font:inherit; text-align:left; }
+  #why button.xrow { cursor:pointer; }
+  #why .xrow.on { background:var(--bg); box-shadow:inset 3px 0 0 var(--accent, #2f6fed); }
+  #why .xrow b { display:block; font-size:14px; }
+  #why .xrow small { display:block; font-size:12px; color:var(--muted); font-weight:600; }
+  #why .xrow small.good { color:var(--good, #1a8a4a); }
+  #why .xtrip { text-align:right; white-space:nowrap; }
+  #why .xtab .fine { padding:4px 10px 7px; margin:0; border-top:1px solid var(--line); }
   #why button.cross { margin:6px 6px 0 0; padding:6px 12px; border-radius:14px; border:1px solid var(--line); background:var(--bg); color:inherit; font-size:13px; }
   #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
   #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
@@ -775,7 +785,7 @@ const ES = {
   ' wait now: ': ' espera ahora: ', ', included in the trip time (US border agency).': ', incluida en el tiempo del viaje (agencia fronteriza de EE. UU.).', ': no wait time reported.': ': sin tiempo de espera reportado.',
   ' Nearby crossings now: ': ' Otros cruces cercanos ahora: ', 'Regular lane': 'Carril regular', 'Ready Lane': 'Ready Lane', 'SENTRI': 'SENTRI', 'no wait': 'sin espera', 'none': 'ninguna',
   ' has no time reported': ' no tiene tiempo reportado', '; your pass lets you use the ': '; su pase le permite usar ', ' is closed now. ': ' está cerrado ahora. ', 'your lane': 'su carril',
-  'Get in the ': 'Fórmese en la fila ', ' line for the ': ' para el cruce de ', ' border crossing.': '.', ' line': ' fila', 'Cross at ': 'Cruzar por ', ' instead': ' mejor', ' longer total': ' más en total', 'same time': 'mismo tiempo',
+  'Get in the ': 'Fórmese en la fila ', ' line for the ': ' para el cruce de ', ' border crossing.': '.', ' line': ' fila', 'Compare crossings': 'Comparar cruces', 'this route': 'esta ruta', 'No route': 'Sin ruta', 'Whole trip, with each line counted. Waits from the US border agency.': 'Viaje completo, con cada fila incluida. Tiempos de la agencia fronteriza de EE. UU.', 'Cross at ': 'Cruzar por ', ' instead': ' mejor', ' longer total': ' más en total', 'same time': 'mismo tiempo',
   'Finding a way through ': 'Buscando ruta por ', 'Could not find a good way through ': 'No se encontró una buena ruta por ', 'Through ': 'Por ', 'Quicker through ': 'Más rápido por ',
   ' right now: ': ' ahora: ', ' sooner with the border line counted.': ' antes contando la fila de la frontera.', ' overall, border line counted.': ' en total, contando la fila de la frontera.',
   'Border lane (US-Mexico)': 'Carril en la frontera (EE. UU.-México)', 'Used for wait times when crossing into the US.': 'Para los tiempos de espera al cruzar a EE. UU.', 'Regular': 'Regular',
@@ -3829,18 +3839,18 @@ async function checkBorder(list) {
     }
   });
 }
-function borderRows(rt) {   // [label, value] rows for the border on this route: short, one fact per line
+function borderRows(rt, short) {   // [label, value] rows for the border on this route: short, one fact per line
   const b = rt && rt.border; if (!b) return [];
   const clock = sec => new Date(Date.now() + sec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const name = b.port + (b.crossing && !/^passenger$/.test(b.crossing) ? ' (' + b.crossing.replace(/\b\w/g, m => m.toUpperCase()) + ')' : '');
   const waitOf = m => m == null ? tr('No time reported') : m ? fmtTime(m * 60) : tr('No wait');
   const laneWait = lane => LANG === 'es' ? 'Espera ' + tr(lane) : lane + ' wait';
   const rows = [[b.north ? 'Crossing' : 'Into Mexico', name], ['Time to border', fmtTime(b.eta) + ' \u00b7 ' + clock(b.eta)]];
-  if (!b.north) return rows;
+  if (!b.north || short) return rows;   // short: the comparison below shows each port's lane and line
   const lane = b.lane || 'Regular';
   rows.push([laneWait(lane), b.closed ? tr('Closed now') : waitOf(b.wait)]);
   if (b.yours) rows.push([laneWait(b.yours.lane), waitOf(b.yours.wait)]);
-  return rows;   // quicker crossings are offered as "Cross at ... instead" buttons under these rows
+  return rows;
 }
 
 // Where each line starts, for ports where the way into a lane is not the obvious one. Points along each lane's
@@ -3960,34 +3970,76 @@ async function viaPortRoute(rt, portName) {
   alt.via = portName;
   return alt;
 }
-// After the routes are up: work out the way through each nearby port with a shorter line in any lane your pass lets
-// you use there (SENTRI, then Ready Lane, then regular), so the button can compare door to door with the line counted.
-// If one is 10+ minutes shorter in line and gets you there sooner overall, put it first.
+// After the routes are up: work out the trip through each nearby port (within about 60 km), using the shortest line your
+// pass lets you use there (SENTRI, then Ready Lane, then regular), so the crossings can be compared door to door with
+// the line counted. If one is 10+ minutes shorter in line and gets you there sooner overall, put it first.
+let crossAlts = {}, crossFor = 0;
 async function quickerCrossing(id) {
   const top = routes[0], b = top && top.border;
-  if (!b || !b.north || b.wait == null || !(b.others || []).length) return;
-  const cand = b.others.filter(o => o.minutes < b.wait && !routes.some(r => r.border && r.border.port === o.port)).sort((x, y) => x.minutes - y.minutes).slice(0, 3);
-  if (!cand.length) return;
-  top.crossAlts = top.crossAlts || {};
+  if (crossFor !== id) { crossFor = id; crossAlts = {}; }
+  if (!b || !b.north || !(b.others || []).length) return;
+  const cand = b.others.filter(o => !routes.some(r => r.border && r.border.port === o.port)).sort((x, y) => x.minutes - y.minutes).slice(0, 3);
   for (const o of cand) {
-    if (!(o.port in top.crossAlts)) top.crossAlts[o.port] = await viaPortRoute(top, o.port).catch(() => null);
+    if (!(o.port in crossAlts)) { crossAlts[o.port] = undefined; if (routes.includes(top)) draw(false); crossAlts[o.port] = await viaPortRoute(top, o.port).catch(() => null); }
     if (id !== reqId || nav) return;
   }
-  const best = cand.filter(o => top.crossAlts[o.port]).sort((x, y) => top.crossAlts[x.port].time - top.crossAlts[y.port].time)[0];
-  const alt = best && top.crossAlts[best.port];
-  if (alt && best.minutes <= b.wait - 10 && alt.time < top.time - 120) {   // must save at least 2 minutes door to door
+  const best = cand.filter(o => crossAlts[o.port]).sort((x, y) => crossAlts[x.port].time - crossAlts[y.port].time)[0];
+  const alt = best && crossAlts[best.port];
+  if (alt && b.wait != null && best.minutes <= b.wait - 10 && alt.time < top.time - 120) {   // must save at least 2 minutes door to door
     const keep = selected === 0;
     routes = [alt].concat(routes); selected = keep ? 0 : selected + 1;
     draw(false);
     status('Quicker through ' + best.port + ' right now: ' + fmtTime(top.time - alt.time) + ' sooner with the border line counted.');
     return;
   }
-  if (routes.includes(top)) draw(false);   // the button now shows the best port by total trip time
+  if (routes.includes(top)) draw(false);
 }
-// "Cross at X instead": the way through a port you pick, shown even if it is slower overall
+// The crossings near this trip side by side: lane, line and whole trip time for each, the one you are on marked
+function crossTable(rt) {
+  const b = rt && rt.border; if (!b || !b.north || nav) return null;
+  const ports = [];
+  const add = (port, lane, wait, closed, trip, route) => {
+    const have = ports.find(x => x.port === port);
+    if (have) { if (trip != null && (have.trip == null || trip < have.trip)) Object.assign(have, { trip, route }); return; }
+    ports.push({ port, lane, wait, closed, trip, route });
+  };
+  add(b.port, b.lane || LANES.standard, b.wait, b.closed, rt.time, rt);
+  routes.forEach(r => r.border && r.border.north && add(r.border.port, r.border.lane || LANES.standard, r.border.wait, r.border.closed, r.time, r));
+  (b.others || []).forEach(o => {
+    const a = crossFor === reqId ? crossAlts[o.port] : undefined;
+    add(o.port, o.lane, o.minutes, false, a ? a.time : a === null ? -1 : null, a || null);
+  });
+  if (ports.length < 2) return null;
+  ports.sort((x, y) => (x.trip > 0 ? x.trip : Infinity) - (y.trip > 0 ? y.trip : Infinity));
+  const t = el('div', 'xtab');
+  t.appendChild(el('div', 'xhead', tr('Compare crossings')));
+  ports.forEach(x => {
+    const on = x.port === b.port, row = el(on ? 'div' : 'button', 'xrow' + (on ? ' on' : ''));
+    const wait = x.closed ? tr('Closed now') : x.wait == null ? tr('No time reported') : x.wait ? fmtTime(x.wait * 60) : tr('No wait');
+    let trip, diff = '';
+    if (x.trip === -1) trip = tr('No route');
+    else if (x.trip == null) trip = '\u2026';
+    else {
+      trip = fmtTime(x.trip);
+      const d = x.trip - rt.time;
+      diff = on ? tr('this route') : Math.abs(d) < 60 ? tr('same time') : (d < 0 ? '\u2212' : '+') + fmtTime(Math.abs(d));
+    }
+    const name = el('span', 'xport'); name.append(el('b', '', x.port), el('small', '', tr(x.lane) + ' \u00b7 ' + wait));
+    const tt = el('span', 'xtrip'); tt.append(el('b', '', trip), el('small', diff && diff[0] === '\u2212' ? 'good' : '', diff));
+    row.append(name, tt); row.dataset.raw = '';
+    if (!on && x.trip !== -1) row.onclick = () => {
+      const i = routes.indexOf(x.route);
+      if (i >= 0) { selected = i; draw(true); } else crossAt(rt, x.port);
+    };
+    t.appendChild(row);
+  });
+  t.appendChild(el('div', 'fine', tr('Whole trip, with each line counted. Waits from the US border agency.')));
+  return t;
+}
+// Route through a port you pick from the comparison, shown even if it is slower overall
 async function crossAt(rt, portName) {
   const id = reqId; status('Finding a way through ' + portName + '...');
-  const alt = (rt.crossAlts && rt.crossAlts[portName]) || await viaPortRoute(rt, portName).catch(() => null);
+  const alt = (crossFor === id && crossAlts[portName]) || await viaPortRoute(rt, portName).catch(() => null);
   if (id !== reqId) return;
   if (!alt) { status('Could not find a good way through ' + portName + '.'); return; }
   routes = routes.filter(r => r.via !== portName).concat([alt]); selected = routes.length - 1;
@@ -4011,25 +4063,15 @@ function draw(fit) {
   });
   const w = $('why'); w.innerHTML = '';
   const text = why(rt); if (text) w.appendChild(el('div', 'vs', text));
-  const br = borderRows(rt);
+  const xt = crossTable(rt);
+  const br = borderRows(rt, !!xt);
   if (br.length) {   // "Time to border: 45 min" rows, easy to scan while deciding
     const dl = el('dl', 'kv');
     br.forEach(([k, v]) => { const dd = el('dd', '', v); dd.dataset.raw = ''; dl.append(el('dt', '', k + ':'), dd); });
     w.appendChild(dl);
-    if (rt.border.north && rt.border.wait != null) w.appendChild(el('div', 'fine', 'Waits from the US border agency, included in the trip time.'));
+    if (!xt && rt.border.north && rt.border.wait != null) w.appendChild(el('div', 'fine', 'Waits from the US border agency, included in the trip time.'));
   }
-  const bd0 = rt.border;   // one button: the nearby port that gets you there soonest with its line counted, in any lane
-  if (bd0 && bd0.north && bd0.wait != null && !nav) {   // your pass allows there; before those trips are worked out, the shortest line
-    const alts = rt.crossAlts || {};
-    const opts = (bd0.others || []).filter(o => o.minutes < bd0.wait && alts[o.port] !== null && !routes.some(r => r.border && r.border.port === o.port));
-    const o = opts.sort((x, y) => (alts[x.port] ? alts[x.port].time : Infinity) - (alts[y.port] ? alts[y.port].time : Infinity) || x.minutes - y.minutes)[0];
-    if (o) {
-      const a = alts[o.port], d = a ? a.time - rt.time : null;
-      const diff = d == null ? '' : ', ' + (Math.abs(d) < 60 ? tr('same time') : fmtTime(Math.abs(d)) + (d < 0 ? tr(' sooner') : tr(' longer total')));
-      const cb = el('button', 'cross', tr('Cross at ') + o.port + tr(' instead') + ' (' + tr(o.lane || 'Regular lane') + ': ' + (o.minutes ? fmtTime(o.minutes * 60) : tr('No wait')) + diff + ')');
-      cb.dataset.raw = ''; cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
-    }
-  }
+  if (xt) w.appendChild(xt);
   const flags = el('div', 'flags');
   flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? (rt.lefts ? ', ' + rt.lefts + (rt.lefts === 1 ? ' left turn' : ' left turns') : ', no left turns') : '')));
   if (!rt.basic && rt.hwy >= 0.5) flags.appendChild(el('span', '', fmtDist(rt.hwy) + ' highway'));
