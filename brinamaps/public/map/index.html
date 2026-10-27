@@ -3120,6 +3120,9 @@ function tripBox() {
   const q = tripPts();
   return [Math.min(...q.map(x => x.lon)), Math.min(...q.map(x => x.lat)), Math.max(...q.map(x => x.lon)), Math.max(...q.map(x => x.lat))];
 }
+// Inside a port's approach lanes: access limits off (the lanes are closed to general traffic in the map data), and no
+// service-road setting at all (the router read any service_penalty, even 0, as a reason to weave through the booth lanes)
+function laneOpts(opt) { const o = Object.assign({}, opt, { ignore_access: true }); delete o.service_penalty; return o; }
 async function valhallaRoutes(quiet, base = ROUTER, via = null) {
   const veh = { use_highways: prefs.noHwy ? 0 : 1, use_tolls: prefs.noToll ? 0 : 0.5, use_ferry: prefs.noFerry ? 0 : 0.5, exclude_unpaved: !!prefs.noUnpaved, maneuver_penalty: prefs.simple ? 40 : 5,
     service_penalty: prefs.noAlleys ? 120 : 15, country_crossing_penalty: prefs.noBorders ? 3600 : 0, shortest: !!prefs.shortest };
@@ -3150,7 +3153,7 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
       const L = body.locations, k = L.findIndex(q => q.type === 'through' && q.lat === via.split.lat && q.lon === via.split.lon);
       const entry = Object.assign({}, L[k], { type: 'break' });
       const bodyA = Object.assign({}, body, { alternates: 0, locations: L.slice(0, k).concat([entry]) });
-      const bodyB = Object.assign({}, body, { alternates: 0, locations: [entry].concat(L.slice(k + 1)), costing_options: { [costing]: Object.assign({}, opt, { ignore_access: !!via.split.lane }) } });   // only the SENTRI lane itself is closed to general traffic in the map data
+      const bodyB = Object.assign({}, body, { alternates: 0, locations: [entry].concat(L.slice(k + 1)), costing_options: { [costing]: via.split.lane ? laneOpts(opt) : opt } });   // only the SENTRI lane itself is closed to general traffic in the map data
       const [ra, rb] = await Promise.all([bodyA, bodyB].map(b2 => fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(b2))}`)));
       const [da, db] = await Promise.all([ra.json(), rb.json()]);
       if (!da.trip || !db.trip) return [da.trip ? rb : ra, da.trip ? db : da];
@@ -3831,8 +3834,10 @@ const LANE_APPROACH = {
     standard: { path: [[32.66676, -115.47], [32.66603, -115.48], [32.66507, -115.49301], [32.66417, -115.49644]], via: [2, 3], start: 'Avenida Cristóbal Colón' }
   },
   'Calexico east': {
-    sentri: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' },
-    ready: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' }
+    // SENTRI and Ready Lane: the far-left entrance (turn left into the port); the last path point is the regular lanes'
+    // right turn, so the route is pinned to the two points before it (checked on the whole-US route server)
+    sentri: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [9, 11], start: 'Av. República de Argentina' },
+    ready: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [9, 11], start: 'Av. República de Argentina' }
     // all traffic needs no approach: the plain route goes north on Calle Novena and turns right into the port before the
     // SENTRI and Ready lanes, as the signs say (checked on the route server)
   }
