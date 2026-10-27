@@ -11,11 +11,9 @@ on:
         description: 'Region to build'
         type: choice
         options: [west, texas, illinois, us]
-        default: west
+        default: us
   schedule:
     - cron: '41 6 5 * *'
-    - cron: '41 6 12 * *'
-    - cron: '41 6 19 * *'
 permissions:
   contents: write
 concurrency:
@@ -29,8 +27,8 @@ jobs:
       - name: Pick the region
         run: |
           region="${{ inputs.region }}"
-          case "${{ github.event.schedule }}" in '41 6 5 * *') region=west;; '41 6 12 * *') region=texas;; '41 6 19 * *') region=illinois;; esac
-          region=${region:-west}
+          case "${{ github.event.schedule }}" in '41 6 5 * *') region=us;; esac
+          region=${region:-us}
           case "$region" in
             west) urls='https://download.geofabrik.de/north-america/us/california-latest.osm.pbf https://download.geofabrik.de/north-america/mexico-latest.osm.pbf';;
             texas) urls='https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf';;
