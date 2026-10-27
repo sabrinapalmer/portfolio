@@ -794,7 +794,7 @@ const ES = {
   'size not reported': 'tamaño no reportado', '. Outline mapped ': '. Contorno trazado ', ' hours ago': ' horas', ' days ago': ' días', 'under an hour ago': 'hace menos de una hora',
   // ---- Navigation and voice
   'Starting directions.': 'Iniciando indicaciones.', 'You have arrived.': 'Ha llegado.', 'You have arrived at your destination.': 'Ha llegado a su destino.', 'You have arrived in ': 'Ha llegado a ',
-  'You made it!': '¡Llegó!', 'Arrive at stop ': 'Llegada a la parada ', 'Arrive at your stop.': 'Llegada a su parada.', 'Rerouting.': 'Recalculando.', 'Rerouting...': 'Recalculando...',
+  'You made it!': '¡Llegó!', 'Arrive at stop ': 'Llegada a la parada ', 'Arrive at your stop.': 'Llegada a su parada.', 'Rerouting.': 'Recalculando.', 'Head back to your route': 'Regrese a su ruta', 'No signal to reroute. Head back to your route.': 'Sin señal para recalcular. Regrese a su ruta.', 'Back on your route.': 'De vuelta en su ruta.', 'Rerouting...': 'Recalculando...',
   'Traffic has changed. Taking a faster route.': 'El tráfico cambió. Tomando una ruta más rápida.', 'Continue for ': 'Continúe por ', 'Continue': 'Continúe', 'Continue.': 'Continúe.',
   'Continue straight': 'Siga derecho', 'In ': 'En ', 'Then ': 'Luego ', ' Then ': ' Luego ', 'Then: ': 'Luego: ', 'then ': 'luego ', 'Next: ': 'Siguiente: ', 'Your next turn': 'Su próxima vuelta',
   'Turn left': 'Gire a la izquierda', 'Turn right': 'Gire a la derecha', 'Sharp left': 'Vuelta cerrada a la izquierda', 'Sharp right': 'Vuelta cerrada a la derecha',
@@ -3550,7 +3550,7 @@ async function route(quiet, afterFires) {
     status('Updated wildfire data: finding a way around ' + (hit.title ? 'the ' + hit.title.replace(/^Fire/, 'fire') : 'a fire area') + '...');
     route(true, true);
   });
-  return true;
+  return fromSaved ? 'saved' : true;   // 'saved': the last route kept on the phone, not a new one
 }
 
 // The router now and then names the wrong turn (a "left U-turn" where the road turns right onto an on-ramp). Each real
@@ -3823,13 +3823,18 @@ const LANE_APPROACH = {
     sentri: { path: [[32.54778, -116.9638], [32.54818, -116.95925], [32.54857, -116.95459], [32.54886, -116.95125], [32.54824, -116.94939], [32.54691, -116.94844], [32.54509, -116.94794], [32.54378, -116.94776], [32.54343, -116.94691], [32.54312, -116.94399], [32.54318, -116.94169], [32.54332, -116.9399], [32.54356, -116.93746], [32.54394, -116.93718]], via: [13], start: 'Vía de la Juventud Oriente' }
   },
   'Calexico west': {
-    sentri: { path: [[32.63926, -115.48189], [32.64181, -115.48136], [32.64419, -115.48089], [32.64597, -115.48055], [32.64718, -115.4807], [32.64821, -115.48125], [32.64912, -115.48221], [32.65057, -115.48527], [32.6521, -115.48731], [32.65391, -115.4886], [32.65525, -115.48982], [32.65682, -115.49143], [32.65764, -115.4922], [32.66044, -115.49469], [32.6612, -115.49531]], via: [7, 14], start: 'Calzada de los Presidentes' }
-    // Ready Lane / all traffic (Cristobal Colon westbound) left out: the route passed the line and U-turned at the port
+    sentri: { path: [[32.63926, -115.48189], [32.64181, -115.48136], [32.64419, -115.48089], [32.64597, -115.48055], [32.64718, -115.4807], [32.64821, -115.48125], [32.64912, -115.48221], [32.65057, -115.48527], [32.6521, -115.48731], [32.65391, -115.4886], [32.65525, -115.48982], [32.65682, -115.49143], [32.65764, -115.4922], [32.66044, -115.49469], [32.6612, -115.49531]], via: [7, 14], start: 'Calzada de los Presidentes' },
+    // Ready Lane and all traffic share one line: from Calz. Manuel Gómez Morín / Av. República de Argentina, west on
+    // Av. Cristóbal Colón along the fence, in the right lane, into the port (Baja Bound). Checked from the south, east
+    // and west of Mexicali: no U-turn or loop.
+    ready: { path: [[32.66676, -115.47], [32.66603, -115.48], [32.66507, -115.49301], [32.66417, -115.49644]], via: [2, 3], start: 'Avenida Cristóbal Colón' },
+    standard: { path: [[32.66676, -115.47], [32.66603, -115.48], [32.66507, -115.49301], [32.66417, -115.49644]], via: [2, 3], start: 'Avenida Cristóbal Colón' }
   },
   'Calexico east': {
     sentri: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' },
     ready: { path: [[32.66994, -115.41558], [32.6701, -115.41339], [32.67029, -115.41146], [32.67088, -115.4099], [32.67131, -115.40379], [32.67176, -115.3974], [32.67157, -115.39534], [32.67083, -115.39407], [32.66966, -115.39319], [32.66781, -115.392], [32.66672, -115.39002], [32.66665, -115.38942], [32.66671, -115.38766]], via: [12], start: 'Av. República de Argentina' }
-    // all traffic (past the port to the turnaround and back) left out: the route looped at Calle Bernardo Reyes
+    // all traffic needs no approach: the plain route goes north on Calle Novena and turns right into the port before the
+    // SENTRI and Ready lanes, as the signs say (checked on the route server)
   }
 };
 function laneVia(b) {   // where to pass for your lane at this port: the start of the approach, then its key points
@@ -4339,12 +4344,23 @@ async function renav(sayIt, silent) {
   pts.from = { lat: here[0], lon: here[1], label: 'My location', auto: true };
   $('from').value = 'My location';
   if (markers.from) { markers.from.remove(); markers.from = null; }
-  const ok = await route(true);
+  const ok = (await route(true)) === true;   // a route saved on the phone is not a new way from here
   if (!nav) return false;
-  if (ok) loadNavRoute();
+  if (ok) { loadNavRoute(); nav.lost = false; }
+  else if (!nav.lost) {   // no new route (usually no signal): the saved route stays, and the screen points back to it
+    nav.lost = true; say('No signal to reroute. Head back to your route.');
+  }
   nav.busy = false;
   refix();
   return ok;
+}
+// Lost the route with no way to get a new one: an arrow toward the nearest part of the route, and how far it is
+function lostGuide(ll, s, head) {
+  const c = nav.rt.coords, target = c[Math.min(c.length - 1, s.i + 1)], d = meters(ll, target);
+  const rel = Math.round(bearing(ll, target) - (prefs.northUp ? 0 : head || 0));
+  $('navArrow').innerHTML = `<svg viewBox="0 0 40 40" style="transform:rotate(${rel}deg)"><path d="M20 3l13 17h-8v17h-10v-17h-8z" fill="currentColor"/></svg>`;
+  $('navDist').textContent = fmtDist(d / 1609.34); $('navText').textContent = tr('Head back to your route'); $('navThen').textContent = '';
+  liveSend();
 }
 let lastFixAt = 0, locFirstFollow = true;
 function refix() { if (here) onFix({ coords: { latitude: here[0], longitude: here[1], accuracy: 0 }, again: true }); }   // same place, fresh screen
@@ -4377,9 +4393,12 @@ function onFix(p) {
   if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
   if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
   if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting
-    if (++nav.off >= 3 && Date.now() - nav.lastReroute > 8000) renav('Rerouting.');
+    if (nav.lost) lostGuide(ll, s, head);
+    // No signal: keep pointing back to the route, and try a new route every 30 seconds in case the signal returns
+    if (++nav.off >= 3 && Date.now() - nav.lastReroute > (nav.lost ? 30000 : 8000)) renav(nav.lost ? '' : 'Rerouting.', nav.lost);
     return;
   }
+  if (nav.lost) { nav.lost = false; say('Back on your route.'); }
   nav.off = 0; nav.seg = s.i;
   trackTo(s.i, s.t);
   const rt = nav.rt, cum = nav.cum, steps = rt.steps, total = cum[cum.length - 1];
@@ -4479,10 +4498,14 @@ function enrich(step, rt, cum) {
   step._rich = true;
   const P = rt.coords[step.begin], t = cum[step.begin], at = d => rt.coords[Math.max(0, Math.min(rt.coords.length - 1, cum.findIndex(x => x >= d)))];
   const driving = prefs.mode === 'auto' || prefs.mode === 'rig';
-  if (prefs.lanes && driving && !step.lanes && FREE_OK) (async () => {
+  const own = Date.now() >= ownDownUntil;   // the app's own route server has lane data for the US and Mexico
+  if (prefs.lanes && driving && !step.lanes && (own || FREE_OK)) (async () => {
     try {
       const A = at(Math.max(0, t - 180)), B = at(Math.min(cum[cum.length - 1], t + 90));
-      const o = await (await fetch(`${ROUTER2}/routed-car/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?steps=true&overview=false`)).json();
+      // A short route through the turn, in the OSRM shape (its intersections list each lane and whether it leads on)
+      const o = own
+        ? await (await fetch(`${OWN_ROUTER}/route?json=` + encodeURIComponent(JSON.stringify({ locations: [{ lat: +A[0].toFixed(6), lon: +A[1].toFixed(6) }, { lat: +B[0].toFixed(6), lon: +B[1].toFixed(6) }], costing: 'auto', format: 'osrm' })))).json()
+        : await (await fetch(`${ROUTER2}/routed-car/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?steps=true&overview=false`)).json();
       if (o.code !== 'Ok') return;
       let best = 60, lanes = null;
       o.routes[0].legs[0].steps.forEach(st => st.intersections.forEach(x => { const d = meters([x.location[1], x.location[0]], P); if (x.lanes && x.lanes.length > 1 && d < best) { best = d; lanes = x.lanes; } }));
@@ -4492,8 +4515,18 @@ function enrich(step, rt, cum) {
   if (prefs.landmarks && (step.kind === 'turn' || step.kind === 'other') && Math.abs(step.angle) >= 30) (async () => {
     try {
       const tags = Object.keys(MARK_RANK).map(k => '&osm_tag=' + (k === 'supermarket' || k === 'convenience' ? 'shop:' : 'amenity:') + k).join('');
-      const d = await photon(`/reverse?lat=${P[0].toFixed(6)}&lon=${P[1].toFixed(6)}&radius=0.1&limit=10&lang=en${tags}`);
-      const near = (d.features || []).filter(f => f.properties.name).map(f => ({ name: f.properties.name, kind: f.properties.osm_value, ll: [f.geometry.coordinates[1], f.geometry.coordinates[0]] }))
+      let found;
+      if (FREE_OK) {
+        const d = await photon(`/reverse?lat=${P[0].toFixed(6)}&lon=${P[1].toFixed(6)}&radius=0.1&limit=10&lang=en${tags}`);
+        found = (d.features || []).filter(f => f.properties.name).map(f => ({ name: f.properties.name, kind: f.properties.osm_value, ll: [f.geometry.coordinates[1], f.geometry.coordinates[0]] }));
+      } else {   // the iPhone app: the app's own place list (free) instead of the community search service
+        if (Date.now() < dbDownUntil) return;
+        const cats = Object.keys(MARK_RANK).map(k => (k === 'supermarket' || k === 'convenience' ? 'shop:' : 'amenity:') + k).join(',');
+        const r = await fetch(API + '/places?v=2&cats=' + encodeURIComponent(cats) + '&lat=' + P[0].toFixed(4) + '&lon=' + P[1].toFixed(4) + '&r=0.5');
+        if (!r.ok) return;
+        found = ((await r.json()).places || []).map(x => ({ name: x.name, kind: (x.cat || '').split(':')[1], ll: [x.lat, x.lon] }));
+      }
+      const near = found
         .map(m => Object.assign(m, { d: meters(m.ll, P) })).filter(m => m.d <= 40).sort((x, y) => (x.d + (MARK_RANK[x.kind] || 9) * 4) - (y.d + (MARK_RANK[y.kind] || 9) * 4))[0];
       if (!near) return;
       // Is it before the corner as you approach (turn "just after" it) or at the corner itself?
