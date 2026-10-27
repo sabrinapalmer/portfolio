@@ -92,8 +92,20 @@ def box(lat, lon, km):
     return lat - dlat, lat + dlat, lon - dlon, lon + dlon
 
 
+# Some source records lost the backslash of escaped accents ("Vxeda Rxe1pida" for "Vía Rápida"). Only strings that
+# have a code with a digit (xe1 á, xe9 é, xf3 ó, xf1 ñ, ...) are repaired, so English words like "fixed" stay as they are.
+SURE = re.compile(r'(?<=[A-Za-z])x(?:e[19]|f[13]|c[19]|d[13])')
+ANY = re.compile(r'(?<=[A-Za-z])x(e1|e9|ed|f3|fa|f1|fc|c1|c9|cd|d3|da|d1|dc)')   # the accented letters of Spanish
+
+
+def fix_text(v):
+    if isinstance(v, str) and SURE.search(v):
+        return ANY.sub(lambda m: chr(int(m.group(1), 16)), v)
+    return v
+
+
 def row(r, d=None):
-    o = {k: v for k, v in zip(COLS, r) if v is not None}
+    o = {k: fix_text(v) for k, v in zip(COLS, r) if v is not None}
     if d is not None:
         o['d'] = round(d)
     return o
