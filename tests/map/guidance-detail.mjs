@@ -49,7 +49,7 @@ await p.click('#openMenu'); await p.click('#mSettings'); await p.click('#prefs [
 console.log('BRIEF banner:', JSON.stringify(await banner()));
 await p.click('#openMenu'); await p.click('#mSettings'); await p.click('#prefs [data-set=banner] [data-v=standard]'); await p.evaluate(() => closeSheets()); await p.waitForTimeout(400);
 console.log('STANDARD banner, lanes off:', JSON.stringify(await banner()));
-await p.click('#endNav'); await p.waitForTimeout(300);
+await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#endNav'); await p.waitForTimeout(300);
 // brief voice run
 await p.evaluate(()=>{window.__said.length=0; prefs.voice='brief'});
 await at(shape[0],800); await p.click('#go'); await p.waitForTimeout(500); await at(shape[6]); await at([corner[0],corner[1]-0.0003]);

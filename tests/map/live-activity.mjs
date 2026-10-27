@@ -54,7 +54,12 @@ const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!o
 check(live[0] && live[0][0] === 'start' && live[0][1].dest === 'Museum', 'directions start a Live Activity named for the destination');
 check(live.some(([k, o]) => k === 'update' && o.sym === 'arrow.turn.up.right' && o.road === 'Pine Avenue' && /Turn right/.test(o.text)), 'updates carry the distance, the street to turn onto (big) and a right-turn arrow');
 check(live.filter(([k]) => k === 'update').length >= 2, 'it updates as you drive');
-await p.click('#endNav'); await p.waitForTimeout(300);
+const withShape = live.find(([k, o]) => o && Array.isArray(o.shape) && o.shape.length >= 6);
+const sh = withShape && withShape[1].shape;
+console.log('turn shape:', JSON.stringify(sh));
+// heading east, then a right turn: drawn going up the screen, then off to the right; every value within -1..1
+check(sh && sh.every(v => v >= -1.01 && v <= 1.01) && sh[sh.length - 2] > sh[0] + 0.3 && sh[sh.length - 1] > sh[1], 'the lock screen gets the road around the turn: up the screen, then right');
+await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#endNav'); await p.waitForTimeout(300);
 const last = await p.evaluate(() => window.__live.at(-1));
 check(last[0] === 'end' && last[1].arrived === false, 'ending early takes it away');
 console.log('errors', errs); await b.close(); if (errs.length) process.exit(1);

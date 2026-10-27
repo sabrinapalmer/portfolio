@@ -15,6 +15,7 @@ public struct NavAttributes: ActivityAttributes {
         public var arrive: String    // arrival clock time, e.g. "3:42 PM"
         public var left: String      // time and distance left, e.g. "25 min - 12 miles"
         public var progress: Double  // 0...1 along the route
+        public var shape: [Double]?  // the road around the next turn, [x0, y0, x1, y1, ...] in -1...1, heading up (nil: show the arrow symbol)
     }
     public var dest: String          // destination name
 }

@@ -43,7 +43,7 @@ console.log('dest hours:', await p.textContent('#destHours'), '| warn', await p.
 await p.click('#go'); await p.waitForTimeout(1200);
 await p.evaluate(()=>onFix({coords:{latitude:nav.rt.coords[1][0],longitude:nav.rt.coords[1][1],accuracy:5,speed:20,heading:0}})); await p.waitForTimeout(400);
 console.log('speedo:', (await p.innerText('#speedo')).replace(/\n/g,' '), '| over', await p.$eval('#speedo',e=>e.classList.contains('over')), '|', reqs.filter(x=>/limits/.test(x)));
-await p.click('#endNav'); await p.waitForTimeout(400); await p.evaluate(()=>clearAll());
+await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#endNav'); await p.waitForTimeout(400); await p.evaluate(()=>clearAll());
 await p.click('#openPrefs'); await p.fill('#geoKey','GEOKEY'); await p.click('#geoSave'); console.log('geoMsg:', await p.textContent('#geoMsg')); await p.click('#closePrefs');
 await p.fill('#to','geo caf'); await p.waitForTimeout(1500);
 console.log('geo search:', await p.$$eval('#suggest li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), reqs.filter(x=>/geoapify/.test(x)).slice(0,2));

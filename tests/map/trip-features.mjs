@@ -47,7 +47,7 @@ await p.click('#openMenu'); await p.waitForTimeout(200); await p.click('#mOther'
 await p.mouse.click(200, 520, {button:'right'}); await p.waitForTimeout(400); console.log('nav map tap popup:', await p.$$eval('.pop button',e=>e.map(x=>x.textContent)));
 await p.waitForTimeout(2500); await p.click('.pop button'); await p.waitForTimeout(1200); console.log('avoid in nav ->', reqs.at(-1), '| markers', await p.$$eval('.avoid',e=>e.length), '| still nav', await p.evaluate(()=>!!nav));
 await p.click('#openMenu'); await p.click('#mOverview'); await p.waitForTimeout(900); console.log('overview: free', await p.evaluate(()=>document.body.classList.contains('free')), 'recenter visible', await p.isVisible('#recenter'));
-await p.click('#recenter'); await p.click('#endNav'); await p.waitForTimeout(600);
+await p.click('#recenter'); await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#endNav'); await p.waitForTimeout(600);
 await p.$eval('.avoid',e=>e.click()); await p.waitForTimeout(400); console.log('avoid marker popup:', await p.$$eval('.pop button',e=>e.map(x=>x.textContent)));
 await p.$eval('.pop button',e=>e.click()); await p.waitForTimeout(900); console.log('after removing: markers', await p.$$eval('.avoid',e=>e.length), reqs.at(-1));
 await p.click('#toClear'); await p.waitForTimeout(400); console.log('cleared: dest', await p.evaluate(()=>document.body.classList.contains('dest')), '| strip', await p.textContent('#strip'), '| chips', await p.$$eval('#quick button',e=>e.map(x=>x.textContent+' '+Math.round(x.getBoundingClientRect().height)+'px')));

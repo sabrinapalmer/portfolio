@@ -38,9 +38,9 @@ console.log('stop category:', await p.$$eval('#stopList li',e=>e.map(x=>x.innerT
 await p.fill('#stopQ','Target'); await p.waitForTimeout(2500); await p.click('#stopList li'); await p.waitForTimeout(1200);
 console.log(reqs.at(-1));
 await p.click('#go'); await p.waitForTimeout(1000);
-console.log('fab in nav:', await p.isVisible('#fabStop'), 'locate hidden:', !(await p.isVisible('#locate')));
-await p.click('#fabStop'); console.log('sheet open in nav:', await p.isVisible('#stopQ')); await p.click('#stops [data-close]');
-await p.click('#endNav'); await p.waitForTimeout(500);
+console.log('fab in nav (now in trip options):', await p.isVisible('#fabStop'), 'locate hidden:', !(await p.isVisible('#locate')));
+await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#mStop'); console.log('sheet open in nav:', await p.isVisible('#stopQ')); await p.click('#stops [data-close]');
+await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#endNav'); await p.waitForTimeout(500);
 await p.evaluate(()=>{clearAll(); document.body.classList.add('meet'); meetPick({lat:41.94,lon:-87.66,label:'Friend spot'});});
 await p.waitForTimeout(300); await p.click('#meetGo'); await p.waitForTimeout(6000); console.log('meet simple:', await p.$$eval('#meetResults li',e=>e.length), await p.textContent('#meetMsg')); await p.click('#meetMore'); await p.fill('#meetName','Starbucks'); await p.press('#meetName','Enter'); await p.waitForTimeout(6000);
 console.log('meet by name:', await p.$$eval('#meetResults li',e=>e.map(x=>x.innerText.replace(/\n/g,' / '))), '|', await p.textContent('#meetMsg'));

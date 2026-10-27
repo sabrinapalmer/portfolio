@@ -157,11 +157,20 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     #if canImport(ActivityKit)
+    // The road around the next turn from the page (pairs of numbers in -1...1); nil when missing or malformed
+    private static func shape(_ call: CAPPluginCall) -> [Double]? {
+        guard let raw = call.getArray("shape") else { return nil }
+        let v = raw.compactMap { ($0 as? NSNumber)?.doubleValue }
+        guard v.count >= 4, v.count == raw.count, v.count % 2 == 0, v.count <= 40 else { return nil }
+        return v.map { min(1, max(-1, $0)) }
+    }
+
     @available(iOS 16.1, *)
     private func state(_ call: CAPPluginCall) -> NavAttributes.ContentState {
         NavAttributes.ContentState(dist: call.getString("dist") ?? "", road: call.getString("road") ?? "", text: call.getString("text") ?? "",
                                    sym: call.getString("sym") ?? "arrow.up", arrive: call.getString("arrive") ?? "",
-                                   left: call.getString("left") ?? "", progress: min(1, max(0, call.getDouble("progress") ?? 0)))
+                                   left: call.getString("left") ?? "", progress: min(1, max(0, call.getDouble("progress") ?? 0)),
+                                   shape: Self.shape(call))
     }
     #endif
 

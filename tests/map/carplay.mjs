@@ -55,7 +55,7 @@ console.log(JSON.stringify(car.map(([k, o]) => [k, k === 'start' ? o.dest + ' ' 
 const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) errs.push(msg); };
 check(car[0] && car[0][0] === 'start' && car[0][1].dest === 'Museum' && car[0][1].route.length > 5 && Math.abs(car[0][1].destLat - 41.8946) < 1e-6, 'directions start a car trip with the route line');
 check(car.some(([k, o]) => k === 'update' && /Pine Avenue/.test(o.text) && o.sym === 'arrow.turn.up.right' && o.dist > 0 && o.leftDist > 0 && o.lat), 'updates carry the next turn, distances and position');
-await p.click('#endNav'); await p.waitForTimeout(300);
+await p.click('#openMenu'); await p.waitForTimeout(250); await p.click('#endNav'); await p.waitForTimeout(300);
 check((await p.evaluate(() => window.__car.at(-1)))[0] === 'end', 'ending directions ends the car trip');
 // The car page itself
 const cp = await ctx.newPage(); cp.on('pageerror', e => errs.push('CAR PAGE ' + e));
