@@ -993,7 +993,7 @@ const STYLE    = 'https://tiles.openfreemap.org/styles/bright';   // OpenFreeMap
 const GEOCODER = 'https://photon.komoot.io';             // Photon search
 const ROUTER   = 'https://valhalla1.openstreetmap.de';   // Valhalla routing (FOSSGIS)
 const ROUTER2  = 'https://routing.openstreetmap.de';     // OSRM backup routing (FOSSGIS)
-let ownDownUntil = Date.now() + 60000;   // BrinaMaps' own route server (Valhalla, California and Mexico); not used until the start-up check below says it is up
+let ownDownUntil = Date.now() + 60000;   // BrinaMaps' own route server (Valhalla, the US and Mexico); not used until the start-up check below says it is up
 
 // ---------- State ----------
 const $ = id => document.getElementById(id);
@@ -1014,7 +1014,7 @@ if (KEYS && KEYS.addListener) {
 // backup on the website only.
 document.body.classList.toggle('native', NATIVE);
 const FREE_OK = !NATIVE, API = NATIVE ? 'https://brinamaps.com/api' : '/api', OWN_ROUTER = API + '/valhalla';
-fetch(OWN_ROUTER + '/status').then(r => r.json()).then(d => { ownDownUntil = d.ok ? 0 : Date.now() + 1800000; }).catch(() => { ownDownUntil = Date.now() + 600000; });   // www: the bare domain redirects, and the app's requests cannot follow a redirect
+const ownChecked = fetch(OWN_ROUTER + '/status').then(r => r.json()).then(d => { ownDownUntil = d.ok ? 0 : Date.now() + 1800000; }).catch(() => { ownDownUntil = Date.now() + 600000; });   // www: the bare domain redirects, and the app's requests cannot follow a redirect
 const SHARE_BASE = NATIVE ? 'https://brinamaps.com/map' : location.origin + location.pathname;
 if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/map/sw.js', { scope: '/map' }).catch(() => {});
 
@@ -3598,6 +3598,10 @@ async function route(quiet, afterFires) {
   if (!quiet) status('Finding routes...');
   const id = ++reqId;
   let found = null;
+  // Right after opening: wait (up to 3 s) for the check on BrinaMaps' own route server, so the first route comes from
+  // it rather than from the paid backup
+  if (ownDownUntil > Date.now() && ownDownUntil - Date.now() <= 60000) await Promise.race([ownChecked, new Promise(r => setTimeout(r, 3000))]);
+  if (id !== reqId) return false;
   // Fire data never holds up a route: the route uses fires already known, and new fire data is checked once the route is up
   const fireCheck = prefs.fires && !afterFires ? loadFires(tripBox()).catch(() => {}) : null;
   if (useBackup && Date.now() - useBackup > 300000) useBackup = false;   // try the main router again after 5 minutes
