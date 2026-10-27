@@ -272,6 +272,7 @@
   #why .xrow small.good { color:var(--good, #1a8a4a); }
   #why .xtrip { text-align:right; white-space:nowrap; }
   #why .xtab .fine { padding:4px 10px 7px; margin:0; border-top:1px solid var(--line); }
+  #when button.remind { display:block; margin-top:6px; padding:6px 12px; border-radius:14px; border:1.5px solid var(--line); background:var(--bg); color:inherit; font:inherit; font-size:13px; font-weight:700; }
   #why button.cross { margin:6px 6px 0 0; padding:6px 12px; border-radius:14px; border:1px solid var(--line); background:var(--bg); color:inherit; font-size:13px; }
   #stops { max-height:min(46vh, calc(86vh - var(--kb, 0px))); box-shadow:0 -6px 24px rgba(0,0,0,.18); }
   #pickBar { display:none; position:fixed; left:10px; right:10px; top:calc(36px + env(safe-area-inset-top)); z-index:21; padding:12px 14px; align-items:center; gap:10px; font-weight:600; }
@@ -1001,7 +1002,7 @@ const $ = id => document.getElementById(id);
 // plugins so directions keep working with the screen locked. In a browser these are all null and the web versions are used.
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const plugin = n => { try { return NATIVE ? (Capacitor.registerPlugin ? Capacitor.registerPlugin(n) : Capacitor.Plugins[n]) : null; } catch (e) { return null; } };
-const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), LOOK = plugin('Look'), LIVE = plugin('LiveNav'), CAR = plugin('CarNav'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard');
+const BG = plugin('BackgroundGeolocation'), TTS = plugin('Voice'), LOOK = plugin('Look'), LIVE = plugin('LiveNav'), CAR = plugin('CarNav'), AWAKE = plugin('KeepAwake'), KEYS = plugin('Keyboard'), REMIND = plugin('Remind');
 // In the app the keyboard slides over the page instead of shrinking it (resizing the page redraws the whole map, which
 // made the search box slow to respond). The search list is kept above the keyboard instead.
 if (KEYS && KEYS.addListener) {
@@ -4208,12 +4209,36 @@ function drawTiming() {
     let target = d.getTime(); const tomorrow = target < now; if (tomorrow) target += 86400000;   // a time already past means tomorrow
     const leave = target - total * 1000;
     if (leave < now) { w.append(el('b', 'late', 'Leave now'), el('span', '', 'You would arrive about ' + clock(now + total * 1000) + ', ' + fmtTime((now - leave) / 1000) + ' late. ' + sum + '.')); }
-    else w.append(el('b', '', 'Leave by ' + clock(leave) + (tomorrow ? ' tomorrow' : '')), el('span', '', (leave - now < 12 * 3600000 ? 'In ' + fmtTime((leave - now) / 1000) + '. ' : '') + sum + ' to arrive by ' + clock(target) + '.'));
+    else {
+      w.append(el('b', '', 'Leave by ' + clock(leave) + (tomorrow ? ' tomorrow' : '')), el('span', '', (leave - now < 12 * 3600000 ? 'In ' + fmtTime((leave - now) / 1000) + '. ' : '') + sum + ' to arrive by ' + clock(target) + '.'));
+      if (REMIND) w.appendChild(remindBtn(leave, target, sum));
+    }
   } else w.append(el('b', '', 'Arrive about ' + clock(now + total * 1000)), el('span', '', sum + '.'));
   stripRoute = (pts.to.name || pts.to.label.split(',')[0]) + '  \u00b7  ' + fmtTime(rt.time) + '  \u00b7  ' + fmtDist(rt.dist) + '  \u00b7  ' + w.querySelector('b').textContent.toLowerCase();
   drawTripBtn(); drawOptsSum();
   drawHours();
   drawStrip(); layout();
+}
+// Leave-by reminder (in the app): a notification 10 minutes before you need to leave, or at that time if it is close
+let reminder = null;   // { at, dest }
+function remindBtn(leave, target, sum) {
+  const clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const dest = pts.to.name || pts.to.label.split(',')[0], at = leave - 600000 > Date.now() + 60000 ? leave - 600000 : leave;
+  const set = reminder && reminder.dest === dest && Math.abs(reminder.leave - leave) < 120000;
+  const b = el('button', 'remind', set ? 'Reminder set for ' + clock(reminder.at) + ' \u00b7 Cancel' : 'Remind me at ' + clock(at));
+  b.onclick = async e => {
+    e.stopPropagation(); b.disabled = true;
+    try {
+      if (set) { await REMIND.cancel({ id: 'leave' }); reminder = null; status('Reminder cancelled.'); }
+      else {
+        const r = await REMIND.schedule({ id: 'leave', at, title: 'Leave by ' + clock(leave) + ' for ' + dest, body: 'To arrive by ' + clock(target) + ': ' + sum + '. Open BrinaMaps for the latest traffic and border waits.' });
+        if (r && r.ok) { reminder = { at, leave, dest }; status('Reminder set for ' + clock(at) + '.'); }
+        else status(r && r.error === 'denied' ? 'Notifications are off for BrinaMaps. Turn them on in Settings > Notifications.' : 'Could not set the reminder.');
+      }
+    } catch (err) { status('Reminders need the latest BrinaMaps update.'); }
+    drawTiming();
+  };
+  return b;
 }
 setInterval(() => { if ($('bottom').style.display === 'block' && !nav) drawTiming(); }, 30000);
 document.querySelectorAll('#tmode button').forEach(b => b.onclick = () => {
@@ -4394,6 +4419,7 @@ function loadNavRoute() {   // (re)build the progress tables for the current rou
   if (CAR && nav.carOn) CAR.route({ route: carRoutePts(rt) }).catch(() => {});   // rerouted: the new line on the car screen
 }
 function startNav() {
+  if (reminder && REMIND) { REMIND.cancel({ id: 'leave' }).catch(() => {}); reminder = null; }   // on your way: no reminder needed
   if (!routes.length) return;
   if (!navigator.geolocation && !BG) { status('Location is not available in this browser.'); return; }
   nav = { follow: true, lastReroute: 0, lastTraffic: Date.now(), busy: false, zoom: 16.5 };

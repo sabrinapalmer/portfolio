@@ -3,6 +3,7 @@ import Capacitor
 import AVFoundation
 #if canImport(ActivityKit)
 import ActivityKit   // lock screen / Dynamic Island (LiveNavPlugin below)
+import UserNotifications   // leave-by reminders (RemindPlugin below)
 #endif
 
 @UIApplicationMain
@@ -264,6 +265,43 @@ public class LookPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+// Leave-by reminders: one local notification at the time the page asks for ("Leave now to arrive by 6:30")
+public class RemindPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "RemindPlugin"
+    public let jsName = "Remind"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "schedule", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func schedule(_ call: CAPPluginCall) {
+        let id = call.getString("id") ?? "leave"
+        let at = call.getDouble("at") ?? 0
+        let title = call.getString("title") ?? "Time to leave"
+        let body = call.getString("body") ?? ""
+        let wait = Date(timeIntervalSince1970: at / 1000).timeIntervalSinceNow
+        guard wait > 5 else { call.resolve(["ok": false, "error": "past"]); return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { call.resolve(["ok": false, "error": "denied"]); return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: wait, repeats: false)
+            center.removePendingNotificationRequests(withIdentifiers: [id])
+            center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger)) { err in
+                if let err = err { call.resolve(["ok": false, "error": err.localizedDescription]) } else { call.resolve(["ok": true]) }
+            }
+        }
+    }
+
+    @objc func cancel(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [call.getString("id") ?? "leave"])
+        call.resolve()
+    }
+}
+
 // The app's web view, with BrinaMaps' own native pieces registered
 class BrinaViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
@@ -277,5 +315,6 @@ class BrinaViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(VoicePlugin())
         bridge?.registerPluginInstance(LiveNavPlugin())
         bridge?.registerPluginInstance(CarNavPlugin())
+        bridge?.registerPluginInstance(RemindPlugin())
     }
 }
