@@ -3840,9 +3840,7 @@ function borderRows(rt) {   // [label, value] rows for the border on this route:
   const lane = b.lane || 'Regular';
   rows.push([laneWait(lane), b.closed ? tr('Closed now') : waitOf(b.wait)]);
   if (b.yours) rows.push([laneWait(b.yours.lane), waitOf(b.yours.wait)]);
-  const alts = (b.others || []).map(o => o.port + ' ' + (o.minutes ? fmtTime(o.minutes * 60) : tr('No wait')) + (o.lane !== b.lane ? ' (' + tr(o.lane) + ')' : ''));
-  if (alts.length) rows.push(['Other crossings', alts.join(' \u00b7 ')]);
-  return rows;
+  return rows;   // quicker crossings are offered as "Cross at ... instead" buttons under these rows
 }
 
 // Where each line starts, for ports where the way into a lane is not the obvious one. Points along each lane's
@@ -3937,14 +3935,22 @@ function drawQueue() {
 
 // The same trip through another border port: the route passes through the port (heading north, no stop there).
 // Kept only if the router really crossed there and did not turn around at it.
+const PORT_PASS = { 'Tecate': [32.5776, -116.6276] };   // checked on the route server: Av. Juárez onto Calle Cárdenas, north into the US
 async function viaPortRoute(rt, portName) {
   const p = PORTS.find(([n]) => n === portName), b = rt && rt.border; if (!p || !b) return null;
   const q = tripPts(), near = pt => { let best = Infinity, bi = 0; rt.coords.forEach((c, i) => { const d = meters(c, [pt.lat, pt.lon]); if (d < best) { best = d; bi = i; } }); return bi; };
   let at = q.findIndex((pt, i) => i > 0 && near(pt) > b.idx); if (at < 1) at = q.length - 1;   // the first trip point after the crossing
-  const via = { lat: p[2], lon: p[3], at };
+  // Where to pass: a point just inside the US on the passenger lanes where the port's own point does not work with the
+  // route server (Tecate's sits on the lanes' merge, which the router cannot route through), then the port's point,
+  // then a little north of it
+  const tries = [PORT_PASS[portName], [p[2], p[3]], [p[2] + 0.003, p[3]]].filter(Boolean);
   let list = null;
-  if (Date.now() > ownDownUntil) list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
-  if (!list && geoRouting()) list = await geoapifyRoutes(true, via).catch(() => null);
+  for (const [lat, lon] of tries) {
+    const via = { lat, lon, at };
+    if (Date.now() > ownDownUntil) list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
+    if (!list && geoRouting()) list = await geoapifyRoutes(true, via).catch(() => null);
+    if (list && list[0]) break;
+  }
   const alt = list && list[0]; if (!alt) return null;
   checkTurns(alt); describe(alt);
   await Promise.all([checkTolls([alt]).catch(() => {}), checkBorder([alt]).catch(() => {})]);
@@ -4007,7 +4013,8 @@ function draw(fit) {
   }
   const bd0 = rt.border;   // a button for each nearby port with a shorter line that has no route shown yet
   if (bd0 && bd0.north && bd0.wait != null && !nav) (bd0.others || []).filter(o => o.minutes < bd0.wait && !routes.some(r => r.border && r.border.port === o.port)).slice(0, 2).forEach(o => {
-    const cb = el('button', 'cross', 'Cross at ' + o.port + ' instead'); cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
+    const cb = el('button', 'cross', tr('Cross at ') + o.port + tr(' instead') + ' (' + tr(o.lane || 'Regular') + ': ' + (o.minutes ? fmtTime(o.minutes * 60) : tr('No wait')) + ')');
+    cb.dataset.raw = ''; cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
   });
   const flags = el('div', 'flags');
   flags.appendChild(el('span', '', rt.turns + (rt.turns === 1 ? ' turn' : ' turns') + (prefs.mode === 'auto' || prefs.mode === 'rig' ? (rt.lefts ? ', ' + rt.lefts + (rt.lefts === 1 ? ' left turn' : ' left turns') : ', no left turns') : '')));
