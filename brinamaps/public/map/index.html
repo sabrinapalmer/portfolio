@@ -808,7 +808,7 @@ const ES = {
   ' lanes': ' carriles', 'Which lane to be in': 'En qué carril ir', 'Landmarks at turns': 'Referencias en las vueltas', 'Speed and speed limit': 'Velocidad y límite',
   'Recenter': 'Centrar', 'Whole route': 'Ruta completa', 'Repeat direction': 'Repetir indicación', 'Mute voice': 'Silenciar voz', 'Voice muted': 'Voz silenciada', 'End': 'Terminar',
   'Directions are running': 'Indicaciones en curso', 'On-screen directions': 'Indicaciones en pantalla', 'Voice directions': 'Indicaciones de voz', 'Voice': 'Voz',
-  'Best available': 'La mejor disponible', 'In 500 feet, turn right.': 'En 150 metros, gire a la derecha.', 'Premium': 'Premium', 'Enhanced': 'Mejorada', 'Hear it': 'Escuchar',
+  'Best available': 'La mejor disponible', 'iPhone default': 'La del iPhone', 'In 500 feet, turn right.': 'En 150 metros, gire a la derecha.', 'Premium': 'Premium', 'Enhanced': 'Mejorada', 'Hear it': 'Escuchar',
   'For a more natural voice, download one on your iPhone: Settings > Accessibility > Spoken Content > Voices, then pick a voice marked Enhanced or Premium. It shows up here. (iOS does not let apps use Siri\'s voice.)': 'Para una voz más natural, descárguela en su iPhone: Configuración > Accesibilidad > Contenido leído > Voces, y elija una voz Mejorada o Premium. Aparecerá aquí. (iOS no permite que las apps usen la voz de Siri).',
   'Brief': 'Breve', 'Standard': 'Normal', 'Detailed': 'Detallada', 'All turns': 'Todas las vueltas', 'Off': 'Apagado', 'While driving, show': 'Al manejar, mostrar',
   'Map faces my direction': 'El mapa gira con mi dirección', 'North up': 'Norte arriba', 'You’re in ': 'Está en ', 'Welcome to ': 'Bienvenido a ',
@@ -4093,9 +4093,10 @@ async function fillVoices() {
   let list = [];
   try { list = ((await TTS.voices({ lang: VOICE_LANG })) || {}).voices || []; } catch (e) { return; }
   const sel = $('voicePick'), key = 'voiceId_' + LANG; sel.innerHTML = '';
-  sel.appendChild(new Option(tr('Best available') + (list[0] ? ' (' + list[0].name + ')' : ''), ''));
+  sel.appendChild(new Option(tr('iPhone default'), ''));
+  if (list[0]) sel.appendChild(new Option(tr('Best available') + ' (' + list[0].name + ')', 'best'));
   list.forEach(v => sel.appendChild(new Option(v.name + ' \u00b7 ' + tr(v.quality) + ' \u00b7 ' + v.lang, v.id)));
-  sel.value = list.some(v => v.id === prefs[key]) ? prefs[key] : '';
+  sel.value = prefs[key] === 'best' || list.some(v => v.id === prefs[key]) ? prefs[key] : '';
   sel.onchange = () => { prefs[key] = sel.value; savePrefs(); TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {}); };
   $('voiceTry').onclick = () => TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {});
   $('voicePickBox').hidden = false;

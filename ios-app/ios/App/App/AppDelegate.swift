@@ -65,7 +65,7 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "voices", returnType: CAPPluginReturnPromise)
     ]
-    private let synth = AVSpeechSynthesizer()
+    private nonisolated(unsafe) let synth = AVSpeechSynthesizer()   // used only on the main queue
 
     // The best voice on this iPhone for a language: Premium, then Enhanced (both downloaded in Settings > Accessibility >
     // Spoken Content > Voices), then the built-in one; the exact region (en-US, es-MX) first. Novelty voices are left out.
@@ -99,7 +99,9 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
     @objc func speak(_ call: CAPPluginCall) {
         let text = call.getString("text") ?? ""
         let lang = call.getString("lang") ?? "en-US"
-        let chosen = call.getString("voice").flatMap { $0.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: $0) }
+        // "" = the iPhone's own default voice for the language, "best" = the best installed voice, else a chosen voice
+        let pick = call.getString("voice") ?? ""
+        let chosen: AVSpeechSynthesisVoice? = pick == "best" ? VoicePlugin.ranked(lang).first : pick.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: pick)
         DispatchQueue.main.async {
             if self.synth.isSpeaking { self.synth.stopSpeaking(at: .immediate) }
             self.waiting?.resolve(); self.waiting = call
@@ -108,7 +110,7 @@ public class VoicePlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
             try? session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
             try? session.setActive(true)
             let u = AVSpeechUtterance(string: text)
-            u.voice = chosen ?? VoicePlugin.ranked(lang).first ?? AVSpeechSynthesisVoice(language: lang)
+            u.voice = chosen ?? AVSpeechSynthesisVoice(language: lang)
             u.rate = AVSpeechUtteranceDefaultSpeechRate
             self.synth.speak(u)
         }
