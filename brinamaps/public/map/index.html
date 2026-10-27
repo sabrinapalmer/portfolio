@@ -2636,11 +2636,12 @@ async function search(which, q, now) {
         .then(d => { far = d.map(nomiPlace); }, () => {}).then(() => { pending--; paint(); });
     }
     // Order: exact matches near you, other places near you (nearest first), then anything further away
-    const items = [], byDist = (x, y) => dist(x) - dist(y);
+    const items = [], byDist = (x, y) => (dist(x) || 0) - (dist(y) || 0);
     const low = x => String(x || '').toLowerCase();
     const same = (o, p) => { const d = meters([o.lat, o.lon], [p.lat, p.lon]); return d < 60 || (d < 300 && (low(p.main).startsWith(low(o.main)) || low(o.main).startsWith(low(p.main)))); };   // "Walmart Pharmacy" inside the Walmart
     // The same place found twice keeps the first copy, filled in with what only the other copy knows (hours, type, phone)
     const add = arr => (arr || []).forEach(p => {
+      if (!p || !isFinite(p.lat) || !isFinite(p.lon)) return;   // a result with no position cannot be ranked or routed to
       const o = items.find(o2 => same(o2, p));
       if (!o) { items.push(p); return; }
       ['kind', 'hours', 'ranges', 'phone', 'url', 'pid', 'extra', 'wikidata', 'wiki'].forEach(k => { if ((o[k] == null || o[k] === '' || (Array.isArray(o[k]) && !o[k].length)) && p[k] != null && p[k] !== '') o[k] = p[k]; });
@@ -2651,7 +2652,8 @@ async function search(which, q, now) {
     if (isAddress || cat) { add(exactNear); add((db || []).concat(close || [], near || [], far || []).sort(byDist)); add(exact.filter(p => dist(p) > NEARBY).sort(byDist)); }
     else {   // your places first, then places whose name has every word you typed, then everything else; each nearest first
       const all = (db || []).concat(exact, close || [], near || [], far || [], tt || []), full = p => p.named && words.length && words.every(w => fold(p.main).includes(w));
-      const lead = p => fold(p.main).startsWith(fold(ql));   // "Costco" before "Saldos Costco"
+      const bare = t => fold(t).replace(/^(the|el|la|los|las) /, '');   // "The Home Depot" leads with "home depot" too
+      const lead = p => bare(p.main).startsWith(bare(ql));   // "Costco" before "Saldos Costco"
       add(own);
       // A town or city named exactly what you typed ("Rosarito", "Tijuana") comes before shops and buildings that share the name
       const town = p => /^(City|Town|Village)$/.test(p.kind || kindOf(p) || '') && fold(p.main) === fold(ql) && dist(p) <= 400000;
