@@ -1492,7 +1492,7 @@ function drawTurnArrow(step) {
   if (nav && nav.turnShown === key) return;
   if (nav) nav.turnShown = key;
   const empty = { type: 'FeatureCollection', features: [] };
-  if (!step || !nav || step.kind === 'arrive' || step.begin <= 0) { map.getSource('turn').setData(empty); return; }
+  if (!step || !nav || step.kind === 'arrive' || step.begin <= 0) { setSrc('turn', empty); return; }
   const c = nav.rt.coords, cum = nav.cum, at = cum[step.begin], steps = nav.rt.steps, i = steps.indexOf(step);
   const prevEnd = i > 0 ? cum[steps[i - 1].begin] : 0, nextAt = steps[i + 1] ? cum[steps[i + 1].begin] : cum[cum.length - 1];
   const from = Math.max(at - 90, prevEnd + (at - prevEnd) * 0.5), to = Math.min(at + 35, at + (nextAt - at) * 0.6);
@@ -1500,14 +1500,22 @@ function drawTurnArrow(step) {
   const line = [pt(from)];
   for (let k = 0; k < c.length; k++) if (cum[k] > from && cum[k] < to) line.push(c[k]);
   line.push(pt(to));
-  if (line.length < 2 || to - from < 15) { map.getSource('turn').setData(empty); return; }
+  if (line.length < 2 || to - from < 15) { setSrc('turn', empty); return; }
   const end = line[line.length - 1], before = pt(Math.max(from, to - 8));
-  map.getSource('turn').setData({ type: 'FeatureCollection', features: [
+  setSrc('turn', { type: 'FeatureCollection', features: [
     { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line.slice(0, -1).concat([pt(to - 3)]).map(q => [q[1], q[0]]) } },
     { type: 'Feature', properties: { rot: bearing(before, end) }, geometry: { type: 'Point', coordinates: [end[1], end[0]] } }] });
 }
+// Route, line, turn and zone data go through here: when the map style has not loaded yet (slow or failed map server),
+// the data waits and is drawn once the layers exist, instead of the page stopping on an error
+const srcWait = {};
+function setSrc(id, data) {
+  const s = map && map.getSource && map.getSource(id);
+  if (s) { s.setData(data); delete srcWait[id]; } else srcWait[id] = data;
+}
+function flushSrc() { Object.keys(srcWait).forEach(id => { const s = map.getSource(id); if (s) { s.setData(srcWait[id]); delete srcWait[id]; } }); }
 function addRouteLayers() {
-  if (map.getSource('routes')) { addTraffic(); return; }
+  if (map.getSource('routes')) { addTraffic(); flushSrc(); return; }
   const first = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;   // keep labels above the route
   map.addSource('routes', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } });   // lineMetrics: the driven part is greyed along the line
   const line = (id, sel, paint) => map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'sel'], sel], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint }, first);
@@ -1544,6 +1552,7 @@ function addRouteLayers() {
   if (map.getStyle().glyphs) map.addLayer({ id: 'zone-label', type: 'symbol', source: 'zones', filter: ['all', ['==', ['get', 'kind'], 'fire'], ['==', ['geometry-type'], 'Polygon']], layout: { 'text-field': ['get', 'title'], 'text-size': 12, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#8e1b10', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
   drawZones();
   addTraffic();
+  flushSrc();
 }
 let shownTheme = '';
 async function refreshStyle() {   // rebuild the map style from the current theme and map preferences
@@ -1595,7 +1604,7 @@ function drawThemes() {
 maplibregl.addProtocol('omt', async (params, ac) => ({ data: await offFetch(params.url.slice(6), ac.signal) }));
 // The CarPlay screen loads this page with ?car=1 and moves it from the phone (see CarPlay.swift)
 let carLast = null;
-window.carRoute = pts => mapReady.then(() => map.getSource('routes').setData({ type: 'FeatureCollection', features: pts.length > 1 ? [{ type: 'Feature', properties: { i: 0, sel: true }, geometry: { type: 'LineString', coordinates: pts.map(q => [q[1], q[0]]) } }] : [] }));
+window.carRoute = pts => mapReady.then(() => setSrc('routes', { type: 'FeatureCollection', features: pts.length > 1 ? [{ type: 'Feature', properties: { i: 0, sel: true }, geometry: { type: 'LineString', coordinates: pts.map(q => [q[1], q[0]]) } }] : [] }));
 window.carPos = (lat, lon, h) => { carLast = [lat, lon, h]; mapReady.then(() => { showMe([lat, lon], h); map.easeTo({ center: [lon, lat], zoom: 16, bearing: h, pitch: 45, duration: 900 }); }); };
 window.carRecenter = () => { if (carLast) window.carPos(...carLast); };
 mapReady = (async () => {
@@ -1638,7 +1647,16 @@ mapReady = (async () => {
   map.getCanvasContainer().addEventListener('touchcancel', touching(false), { passive: true });
   map.on('click', onMapClick); watchHolds();
   if (NATIVE) { const splash = plugin('SplashScreen'), hide = () => { if (splash && splash.hide) splash.hide({ fadeOutDuration: 200 }).catch(() => {}); }; map.once('idle', hide); setTimeout(hide, 4000); }
-  await new Promise(r => map.once('load', r));
+  // The map server can be slow or answer with an error now and then: if the map has not loaded, ask again
+  // (every 12 s, up to 10 times) rather than leaving a blank map
+  let tries = 0;
+  const retry = setInterval(async () => {
+    if (map.isStyleLoaded() || ++tries > 10) { clearInterval(retry); return; }
+    let st = style; try { st = await themedStyle(); } catch (e) {}
+    try { map.setStyle(st, { diff: false }); } catch (e) {}
+  }, 12000);
+  await new Promise(r => { map.once('load', r); map.once('style.load', r); });
+  clearInterval(retry);
   addRouteLayers();
   drawAvoid();
   setTimeout(tipOnce, 7500);
@@ -3165,7 +3183,7 @@ function drawZones() {
     if (f.active) feats.push({ type: 'Feature', properties: { kind: 'firept', active: true, title: f.title || f.name + ' Fire', info: f.info, lat: mid[0], lon: mid[1], reach }, geometry: { type: 'Point', coordinates: c } });
   });
   avoid.forEach(a => { if ((a.r || 120) > 300) feats.push({ type: 'Feature', properties: { kind: 'spot', active: true }, geometry: { type: 'Polygon', coordinates: [circleRing([a.lat, a.lon], a.r)] } }); });
-  map.getSource('zones').setData({ type: 'FeatureCollection', features: feats });
+  setSrc('zones', { type: 'FeatureCollection', features: feats });
 }
 function tripBox() {
   const q = tripPts();
@@ -3940,9 +3958,9 @@ function drawQueue() {
   if (!map || !map.getSource('queue')) return;
   const rt = routes[selected], a = rt && rt.approach, b = rt && rt.border;
   if (queueMark) { queueMark.remove(); queueMark = null; }
-  if (!a || !b || !b.north || b.idx <= a.idx) { map.getSource('queue').setData({ type: 'FeatureCollection', features: [] }); return; }
+  if (!a || !b || !b.north || b.idx <= a.idx) { setSrc('queue', { type: 'FeatureCollection', features: [] }); return; }
   const line = rt.coords.slice(a.idx, b.idx + 1).map(c => [c[1], c[0]]);
-  map.getSource('queue').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line } }] });
+  setSrc('queue', { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line } }] });
   const lane = a.lane === 'standard' ? 'Regular line' : (LANES[a.lane] || 'Lane') + ' line';
   const e = el('div', 'queueTag', lane + (b.wait != null ? ' \u00b7 ' + (b.wait ? fmtTime(b.wait * 60) + ' wait' : 'no wait') : ''));
   queueMark = new maplibregl.Marker({ element: e, anchor: 'bottom', offset: [0, -8] }).setLngLat(line[0]).addTo(map);
@@ -4055,7 +4073,7 @@ async function crossAt(rt, portName) {
 
 function draw(fit) {
   if (!routes.length) return;
-  map.getSource('routes').setData({ type: 'FeatureCollection', features: routes.map((rt, i) => ({ type: 'Feature', properties: { i, sel: i === selected }, nav: !!nav && i !== selected, geometry: { type: 'LineString', coordinates: rt.coords.map(c => [c[1], c[0]]) } })).filter(f => !f.nav) });   // during directions: only the route you drive
+  setSrc('routes', { type: 'FeatureCollection', features: routes.map((rt, i) => ({ type: 'Feature', properties: { i, sel: i === selected }, nav: !!nav && i !== selected, geometry: { type: 'LineString', coordinates: rt.coords.map(c => [c[1], c[0]]) } })).filter(f => !f.nav) });   // during directions: only the route you drive
   drawQueue();
   const rt = routes[selected], names = titles(), box = $('routes'); box.innerHTML = '';
   routes.forEach((r, i) => {
@@ -5234,7 +5252,7 @@ function dropVia() { pts.stops = []; stopsByHand = false; drawStopPins(); tempAv
 function clearPoints() { dropVia(); ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
   clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
-  if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] }); drawQueue();
+  if (map && map.getSource('routes')) setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();
   $('bottom').style.display = 'none'; $('suggest').style.display = 'none';
   document.body.classList.remove('dest'); layout();
   status(''); history.replaceState(null, '', location.pathname); syncClear(); drawStrip();
@@ -5248,7 +5266,7 @@ $('to').addEventListener('input', () => {   // a new search replaces the old des
   reqId++; routes = []; dropVia();
   if (markers.to) { markers.to.remove(); markers.to = null; }
   pts.to = null; if (!planning) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }
-  if (map && map.getSource('routes')) map.getSource('routes').setData({ type: 'FeatureCollection', features: [] }); drawQueue();
+  if (map && map.getSource('routes')) setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();
   $('bottom').style.display = 'none'; document.body.classList.remove('dest'); layout(); status(''); drawStrip();
   history.replaceState(null, '', location.pathname);
 });
