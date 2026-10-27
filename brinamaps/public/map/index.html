@@ -1217,6 +1217,7 @@ const viaList = via => !via ? [] : via.list || [{ lat: via.lat, lon: via.lon, he
 const viaPts = via => { const q = tripPts(); if (via) q.splice(via.at, 0, ...viaList(via).map(v => Object.assign({ via: true }, v))); return q; };
 const stopName = i => { const st = pts.stops[i]; return st ? st.name || (st.label || '').split(',')[0] : ''; };
 let tempAvoid = null;   // a point to route around for this trip only
+let noFitOnce = false;
 let routes = [], selected = 0, reqId = 0, searchId = 0, searchCtl = null, useBackup = false;
 let planning = false;   // false: every route starts from where you are now; true: you chose a starting point
 const timing = { mode: 'now', at: '', key: '', parkAuto: null, parkUser: null, note: '' };
@@ -2894,6 +2895,24 @@ function setPoint(which, p) {
   mapReady.then(() => map.easeTo({ duration: 900, center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 14) }));
   if (which === 'to' && !planning) startFromHere();
 }
+// A route from "My location" that you have since moved away from (you looked something else up while driving, or
+// the app sat in the background): worked out again from where you are, so the times are right. Quietly: the map is
+// not moved; at most every 45 seconds.
+let refreshAt = 0, hiddenAt = 0;
+function refreshFromHere(back) {
+  if (nav || planning || !here || !routes.length || !pts.to || !pts.from || !pts.from.auto) return;
+  if (document.body.classList.contains('searching') || Date.now() - refreshAt < 45000) return;
+  const moved = meters(here, [pts.from.lat, pts.from.lon]);
+  if (moved < (back ? 60 : 250)) return;
+  refreshAt = Date.now();
+  pts.from = { lat: here[0], lon: here[1], label: 'My location', auto: true };
+  noFitOnce = true;
+  route().then(ok => { noFitOnce = false; if (ok === true) status('Updated from where you are now.'); });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt > 30000) setTimeout(() => refreshFromHere(true), 1500);   // a fresh location first
+});
 // Outside planning mode the start is always your current location, read fresh each time
 function startFromHere() {
   const use = () => { if (pts.to && !pts.from && here && !planning) setPoint('from', { lat: here[0], lon: here[1], label: 'My location', auto: true }); };
@@ -4298,6 +4317,8 @@ function draw(fit) {
   $('bottom').style.display = 'block';
   drawTiming(); estimatePark(pts.to);
   layout();
+  if (fit && noFitOnce) fit = false;   // a quiet refresh from where you are: the map stays where you put it
+  noFitOnce = false;
   if (fit) fitRoutes(null);   // the whole trip, every route shown (the picked one in colour)
 }
 // Where the route on screen leaves another one: its points more than 150 m from every point of the other
@@ -4752,6 +4773,7 @@ function onFix(p) {
   if (!nav) {
     showMe(ll, null, gap); nameHere();
     if (followMe && locFirstFollow && !map.isMoving()) { locFirstFollow = false; goToMe(); }
+    refreshFromHere();
     return;
   }
   const s = snap(ll), acc = p.coords.accuracy || 0, c = nav.rt.coords;
