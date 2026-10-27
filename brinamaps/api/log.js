@@ -14,6 +14,12 @@ export default async function handler(req) {
   const text = (await req.text()).slice(0, 4000);
   let body; try { body = JSON.parse(text); } catch (e) { return new Response(null, { status: 400, headers: cors }); }
   const items = (Array.isArray(body.items) ? body.items : []).slice(0, 20).map(i => ({ k: String(i.k || '').slice(0, 20), m: String(i.m || '').slice(0, 300), t: +i.t || 0 }));
-  console.log('[brinamaps]', JSON.stringify({ app: origin.startsWith('capacitor') ? 'ios' : 'web', v: String(body.v || '').slice(0, 20), ua: String(body.ua || '').slice(0, 60), items }));
+  const rec = { app: origin.startsWith('capacitor') ? 'ios' : 'web', v: String(body.v || '').slice(0, 20), ua: String(body.ua || '').slice(0, 60), items };
+  console.log('[brinamaps]', JSON.stringify(rec));
+  // Kept 30 days on the route server too (Vercel keeps logs only a day), readable as counts at /api/problems
+  const base = (process.env.VALHALLA_URL || '').replace(/\/$/, '');
+  if (base && items.length) try {
+    await fetch(base + '/places/problem', { method: 'POST', headers: { 'X-Router-Key': process.env.VALHALLA_KEY || '', 'Content-Type': 'application/json' }, body: JSON.stringify(rec), signal: AbortSignal.timeout(3000) });
+  } catch (e) {}
   return new Response(null, { status: 204, headers: cors });
 }

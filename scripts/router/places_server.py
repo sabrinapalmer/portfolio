@@ -244,6 +244,37 @@ def set_note(b):
     return 200, {'ok': True}
 
 
+def problems_db():
+    c = sqlite3.connect(REPORTS, timeout=10)
+    c.execute('CREATE TABLE IF NOT EXISTS problems (at REAL, app TEXT, v TEXT, k TEXT, m TEXT)')
+    return c
+
+
+def add_problems(b):
+    """Problem reports from the app (script errors, failed searches or routes): kept 30 days so bugs on phones can be
+    found and fixed. No location, search text or anything about the person is in them."""
+    clean = lambda v, n: re.sub(r'\s+', ' ', re.sub(r'[\x00-\x1f\x7f]', ' ', str(v or ''))).strip()[:n]
+    app, v = clean(b.get('app'), 8), clean(b.get('v'), 20)
+    rows = [(time.time(), app, v, clean(i.get('k'), 20), clean(i.get('m'), 300)) for i in (b.get('items') or [])[:20] if isinstance(i, dict)]
+    if not rows:
+        return 400, {'error': 'no items'}
+    with report_lock:
+        c = problems_db()
+        c.executemany('INSERT INTO problems VALUES (?,?,?,?,?)', rows)
+        c.execute('DELETE FROM problems WHERE at < ?', (time.time() - 30 * 86400,))
+        c.commit()
+        c.close()
+    return 200, {'ok': True}
+
+
+def list_problems(days):
+    c = problems_db()
+    out = [{'k': k, 'm': m, 'app': a, 'v': v, 'n': n, 'last': round(last)} for k, m, a, v, n, last in c.execute(
+        'SELECT k, m, app, v, count(*), max(at) FROM problems WHERE at > ? GROUP BY k, m, app, v ORDER BY count(*) DESC LIMIT 200', (time.time() - days * 86400,))]
+    c.close()
+    return 200, {'days': days, 'problems': out}
+
+
 def health():
     c = db()
     if not c:
@@ -286,6 +317,8 @@ class H(BaseHTTPRequestHandler):
         try:
             if u.path == '/health':
                 return self.send(*health())
+            if u.path == '/problems':
+                return self.send(*list_problems(f('days', 0.1, 30, 7)))
             if not db():
                 return self.send(503, {'error': 'no place file'})
             if u.path == '/search':
@@ -320,6 +353,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(*add_report(b))
             if u.path == '/report-note':
                 return self.send(*set_note(b))
+            if u.path == '/problem':
+                return self.send(*add_problems(b))
             self.send(404, {'error': 'unknown endpoint'})
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             self.send(400, {'error': 'bad request'})
