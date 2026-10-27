@@ -239,9 +239,41 @@ public class LiveNavPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+// MARK: - Background behind the page
+// When the phone turns, iOS shows the web view's own background for a moment while the page resizes. The page tells
+// this plugin its theme colour, so that moment is the same colour as the map instead of a white flash in dark mode.
+@objc(LookPlugin)
+public class LookPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "LookPlugin"
+    public let jsName = "Look"
+    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "setBackground", returnType: CAPPluginReturnPromise)]
+
+    @objc func setBackground(_ call: CAPPluginCall) {
+        let hex = (call.getString("color") ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard hex.count == 6, let v = UInt32(hex, radix: 16) else { call.resolve(); return }
+        let c = UIColor(red: CGFloat((v >> 16) & 255) / 255, green: CGFloat((v >> 8) & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1)
+        DispatchQueue.main.async {
+            guard let web = self.bridge?.webView else { call.resolve(); return }
+            web.isOpaque = false
+            web.backgroundColor = c
+            web.scrollView.backgroundColor = c
+            self.bridge?.viewController?.view.backgroundColor = c
+            self.bridge?.viewController?.view.window?.backgroundColor = c
+            call.resolve()
+        }
+    }
+}
+
 // The app's web view, with BrinaMaps' own native pieces registered
 class BrinaViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
+        // Until the page says its theme: follow the phone's light or dark setting
+        let first = UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.106, green: 0.094, blue: 0.220, alpha: 1) : UIColor(red: 0.969, green: 0.957, blue: 1, alpha: 1) }
+        webView?.isOpaque = false
+        webView?.backgroundColor = first
+        webView?.scrollView.backgroundColor = first
+        view.backgroundColor = first
+        bridge?.registerPluginInstance(LookPlugin())
         bridge?.registerPluginInstance(VoicePlugin())
         bridge?.registerPluginInstance(LiveNavPlugin())
         bridge?.registerPluginInstance(CarNavPlugin())
