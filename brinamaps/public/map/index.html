@@ -3904,7 +3904,7 @@ const PORTS = [
 const LANES = { standard: 'Regular lane', ready: 'Ready Lane', sentri: 'SENTRI' };
 let borderData = null, borderAt = 0;
 async function borderWaits() {
-  if (borderData && Date.now() - borderAt < 300000) return borderData;
+  if (borderData && Date.now() - borderAt < 90000) return borderData;   // the agency updates through the hour: asked again after 90 s
   try { const r = await fetch(API + '/border'); if (r.ok) { borderData = (await r.json()).ports; borderAt = Date.now(); return borderData; } } catch (e) {}
   // The border agency sometimes turns away the app's server; it answers phones directly, so ask it from here
   try {
