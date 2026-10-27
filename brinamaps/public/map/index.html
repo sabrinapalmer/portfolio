@@ -96,6 +96,9 @@
   body.searching #searchScrim { display:block; animation:fadeIn .15s ease-out; }
   @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
   #suggest { list-style:none; margin:8px 0 0; padding:4px; border-radius:18px; background:var(--bg); display:none; max-height:min(52vh, calc(100vh - var(--kb, 0px) - 150px)); overflow:auto; }
+  body.results #suggest { position:fixed; left:10px; right:10px; top:auto; bottom:calc(10px + env(safe-area-inset-bottom)); max-width:440px; max-height:44vh; margin:0; background:var(--card); box-shadow:var(--shadow); border-radius:24px; z-index:12; }
+  @media (min-width:700px) { body.results #suggest { left:16px; right:auto; width:400px; } }
+  body.results #fabs { display:none; }
   #suggest li { padding:10px 12px; border-radius:14px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:center; }
   #suggest li:active { background:var(--soft); }
   #suggest li.cats { display:flex; gap:6px; overflow-x:auto; padding:4px 4px 8px; cursor:default; scrollbar-width:none; }
@@ -1554,15 +1557,24 @@ function addMyPlaces() {
   ['my-poi', 'my-poi-label', 'fav-poi', 'fav-poi-label'].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
   const t = theme(), dark = t.ui === 'dark', font = ['Noto Sans Bold'], glyphs = !!map.getStyle().glyphs;
   map.addLayer({ id: 'my-poi', type: 'circle', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 11, filter: myPlacesFilter(),
-    paint: { 'circle-color': t.accent || '#8b5cf6', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 16, 7], 'circle-stroke-color': dark ? '#1b1838' : '#ffffff', 'circle-stroke-width': 2 } });
-  map.addLayer({ id: 'fav-poi', type: 'circle', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 9, filter: favFilter(),
-    paint: { 'circle-color': '#ffb020', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4.5, 16, 9], 'circle-stroke-color': dark ? '#1b1838' : '#ffffff', 'circle-stroke-width': 2.5 } });
+    paint: { 'circle-color': t.accent || '#8b5cf6', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 5, 16, 9], 'circle-stroke-color': dark ? '#1b1838' : '#ffffff', 'circle-stroke-width': 2.5 } });
+  // Favourite names (a chain you like): a big orange pin with a white star, easy to spot at any zoom
+  if (!map.hasImage('favPin')) {
+    const n = 96, cv = document.createElement('canvas'); cv.width = cv.height = n; const g = cv.getContext('2d');
+    g.beginPath(); g.arc(n / 2, n / 2, n / 2 - 6, 0, Math.PI * 2); g.fillStyle = '#ff9f1a'; g.fill(); g.lineWidth = 7; g.strokeStyle = '#ffffff'; g.stroke();
+    g.beginPath();
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? n * 0.13 : n * 0.3, a = -Math.PI / 2 + i * Math.PI / 5; g.lineTo(n / 2 + r * Math.cos(a), n / 2 + r * Math.sin(a)); }
+    g.closePath(); g.fillStyle = '#ffffff'; g.fill();
+    map.addImage('favPin', g.getImageData(0, 0, n, n), { pixelRatio: 2 });
+  }
+  map.addLayer({ id: 'fav-poi', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 9, filter: favFilter(),
+    layout: { 'icon-image': 'favPin', 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.55, 13, 0.8, 16, 1], 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
   if (glyphs) {
     map.addLayer({ id: 'my-poi-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 13, filter: myPlacesFilter(),
       layout: { 'text-field': ['coalesce', ['get', 'name:latin'], ['get', 'name']], 'text-font': font, 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-optional': true },
       paint: { 'text-color': t.accent || '#6d28d9', 'text-halo-color': dark ? '#0f0d24' : '#ffffff', 'text-halo-width': 1.6 } });
     map.addLayer({ id: 'fav-poi-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 10, filter: favFilter(),
-      layout: { 'text-field': ['coalesce', ['get', 'name:latin'], ['get', 'name']], 'text-font': font, 'text-size': 12, 'text-offset': [0, 1.2], 'text-anchor': 'top', 'text-allow-overlap': false },
+      layout: { 'text-field': ['coalesce', ['get', 'name:latin'], ['get', 'name']], 'text-font': font, 'text-size': 13, 'text-offset': [0, 1.6], 'text-anchor': 'top', 'text-allow-overlap': false },
       paint: { 'text-color': dark ? '#ffcf5c' : '#b26a00', 'text-halo-color': dark ? '#0f0d24' : '#ffffff', 'text-halo-width': 1.8 } });
   }
 }
@@ -2306,12 +2318,13 @@ function settleEnter() {   // after Return, once every source has answered: keep
   const list = listFor(s.which), say = s.which === 'friend' ? t => { $('meetMsg').textContent = t; } : status;
   if (!s.items.length) return;
   list.style.display = 'block';
-  if (s.which === 'to') showPois(s.items.filter(p => p.d <= NEARBY).slice(0, 10));
+  if (s.which === 'to') { document.body.classList.add('results'); showPois(s.items.filter(p => p.d <= NEARBY).slice(0, 10)); }   // the options on the map, their list below it
   say(s.items.some(p => p.d <= NEARBY) ? '' : 'Nothing nearby matches "' + s.q + '". These are further away.');
 }
 let debounce;
 // Search mode starts on the first touch of the box, so the screen changes at once even while the keyboard is on its way
 function enterSearch(which) {
+  document.body.classList.remove('results');
   if (nav || document.body.classList.contains('searching')) return;
   document.body.classList.add('searching'); drawStrip();
   if (!$(which).value.trim() || (which === 'to' && pts.to && $(which).value === pts.to.label)) shortcuts(which);
@@ -2349,7 +2362,7 @@ $('searchScrim').addEventListener('pointerdown', e => { e.preventDefault(); exit
     if (!q) return;
     e.preventDefault(); clearTimeout(debounce);
     enterFor = { which, q };
-    input.blur(); if (which !== 'friend') { document.body.classList.remove('searching'); drawStrip(); }
+    input.blur(); if (which !== 'friend') { document.body.classList.remove('searching'); if (which === 'to') document.body.classList.add('results'); drawStrip(); }
     if (!lastSearch || lastSearch.q !== q || lastSearch.which !== which) search(which, q, true); else settleEnter();
   });
 });
@@ -2401,7 +2414,7 @@ function shortcuts(which) {
     [['Gas', 'gas'], ['Coffee', 'coffee'], ['Food', 'food'], ['Groceries', 'groceries'], ['Parking', 'parking'], ['Restrooms', 'restrooms']].forEach(([t, q]) => {
       const b = el('button', '', t); b.type = 'button';
       b.onpointerdown = e => e.preventDefault();   // keep the keyboard and the search open
-      b.onclick = e => { e.stopPropagation(); const inp = $('to'); inp.value = q; inp.dispatchEvent(new Event('input', { bubbles: true })); };
+      b.onclick = e => { e.stopPropagation(); const inp = $('to'); inp.value = q; syncClear(); inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); };   // like Return: the options on the map
       row.appendChild(b);
     });
     list.appendChild(row);
@@ -2479,7 +2492,8 @@ function showPois(list) {
     dot.onclick = e => { e.stopPropagation(); $('suggest').style.display = 'none'; $('to').blur(); setPoint('to', { lat: p.lat, lon: p.lon, label: p.sub ? p.main + ', ' + p.sub : p.main, name: p.main }); };
     poiMarkers.push(m); b.extend([p.lon, p.lat]);
   });
-  map.fitBounds(b, { padding: { top: Math.min(innerHeight * 0.55, $('top').offsetHeight + 30), bottom: 70, left: 40, right: 40 }, maxZoom: 15, duration: 1000 });
+  const below = document.body.classList.contains('results') ? $('suggest').offsetHeight + 30 : 70;
+  map.fitBounds(b, { padding: { top: Math.min(innerHeight * 0.4, $('top').offsetHeight + 30), bottom: Math.min(innerHeight * 0.5, below), left: 40, right: 40 }, maxZoom: 15, duration: 1000 });
 }
 
 // Exact street addresses. Photon is weak on US house numbers, so address-shaped queries also go to the
@@ -2863,7 +2877,7 @@ function setPoint(which, p) {
   if (which === 'from' && !p.auto && !planning) setPlanning(true, true);   // a hand-picked start means you are planning
   if (which === 'to' && !planning && pts.from) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }   // never reuse an old start
   pts[which] = p;
-  $(which).value = p.label; if (which === 'to') { syncClear(); document.body.classList.remove('cardMini'); }
+  $(which).value = p.label; if (which === 'to') { syncClear(); document.body.classList.remove('cardMini', 'results'); }
   if (markers[which]) { markers[which].remove(); markers[which] = null; }
   if (!p.auto) mapReady.then(() => { if (pts[which] !== p) return; if (markers[which]) markers[which].remove(); markers[which] = marker('pin ' + which, [p.lat, p.lon], { anchor: 'bottom', offset: [0, 4] }); });
   if (which === 'to') {
@@ -4115,7 +4129,9 @@ async function viaPortRoute(rt, portName) {
   const turnsBack = alt.steps.some(st => Math.abs(st.angle) >= 170 && alt.coords[st.begin] && meters(alt.coords[st.begin], [p[2], p[3]]) < 2000);
   if (turnsBack || (zoneHits(alt.coords).length && !zoneHits(rt.coords).length)) return null;
   alt.via = portName;
-  return alt;
+  const laned = await laneRoute(alt).catch(() => null);   // into your lane's line at that port too (SENTRI, Ready Lane), where the app knows the way in
+  if (laned) laned.via = portName;
+  return laned || alt;
 }
 // After the routes are up: work out the trip through each nearby port (within about 60 km), using the shortest line your
 // pass lets you use there (SENTRI, then Ready Lane, then regular), so the crossings can be compared door to door with
@@ -4269,10 +4285,7 @@ function draw(fit) {
   $('bottom').style.display = 'block';
   drawTiming(); estimatePark(pts.to);
   layout();
-  if (fit) {   // after picking another route: where the two differ, both sides of it
-    const a = fit.from && fit.from !== rt ? differs(rt, fit.from) : null, b2 = a ? differs(fit.from, rt) : null;
-    fitRoutes(a ? a.concat(b2 || []) : null);
-  }
+  if (fit) fitRoutes(null);   // the whole trip, every route shown (the picked one in colour)
 }
 // Where the route on screen leaves another one: its points more than 150 m from every point of the other
 function differs(rt, other) {
@@ -4422,7 +4435,7 @@ const VOICE_RANK = { off: 0, brief: 1, standard: 2, detailed: 3 };
 function say(text, level) {
   if ((VOICE_RANK[prefs.voice] || 0) < VOICE_RANK[level || 'standard'] || !text) return;
   text = tr(text);   // the app's own sentences in the chosen language; the routers' directions already are
-  if (TTS) { TTS.speak({ text, lang: VOICE_LANG, voice: prefs['voiceId_' + LANG] || '' }).catch(() => {}); return; }   // the app's own voice: lowers other audio only while speaking
+  if (TTS) { TTS.speak({ text, lang: VOICE_LANG, voice: prefs['voiceId_' + LANG] == null ? 'best' : prefs['voiceId_' + LANG] }).catch(() => {}); return; }   // unless you picked one: the best voice on the phone (Premium, then Enhanced)   // the app's own voice: lowers other audio only while speaking
   if (!window.speechSynthesis) return;
   try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = VOICE_LANG; speechSynthesis.speak(u); } catch (e) {}
 }
@@ -4435,7 +4448,7 @@ async function fillVoices() {
   sel.appendChild(new Option(tr('iPhone default'), ''));
   if (list[0]) sel.appendChild(new Option(tr('Best available') + ' (' + list[0].name + ')', 'best'));
   list.forEach(v => sel.appendChild(new Option(v.name + ' \u00b7 ' + tr(v.quality) + ' \u00b7 ' + v.lang, v.id)));
-  sel.value = prefs[key] === 'best' || list.some(v => v.id === prefs[key]) ? prefs[key] : '';
+  sel.value = prefs[key] == null ? (list[0] ? 'best' : '') : prefs[key] === 'best' || list.some(v => v.id === prefs[key]) ? prefs[key] : '';
   sel.onchange = () => { prefs[key] = sel.value; savePrefs(); TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {}); };
   $('voiceTry').onclick = () => TTS.speak({ text: tr('In 500 feet, turn right.'), lang: VOICE_LANG, voice: sel.value }).catch(() => {});
   $('voicePickBox').hidden = false;
@@ -5474,7 +5487,7 @@ $('save').onclick = () => {
 function dropVia() { pts.stops = []; stopsByHand = false; drawStopPins(); tempAvoid = null; }
 function clearPoints() { dropVia(); ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
-  document.body.classList.remove("cardMini"); lastFit = null;
+  document.body.classList.remove("cardMini", "results"); lastFit = null;
   clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
   setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();   // also replaces a route still waiting for the map to load
   $('bottom').style.display = 'none'; $('suggest').style.display = 'none';
@@ -5482,7 +5495,7 @@ function clearAll() {
   status(''); history.replaceState(null, '', location.pathname); syncClear(); drawStrip();
 }
 $('clear').onclick = clearAll;
-$('toClear').onclick = () => { if (routes.length || pts.to) clearAll(); $('to').value = ''; syncClear(); $('to').focus(); };
+$('toClear').onclick = () => { if (routes.length || pts.to) clearAll(); document.body.classList.remove('results'); clearPois(); $('to').value = ''; syncClear(); $('to').focus(); };
 const syncClear = () => $('to').parentElement.classList.toggle('has', !!$('to').value);
 $('to').addEventListener('input', syncClear);
 $('to').addEventListener('input', () => {   // a new search replaces the old destination straight away
@@ -5599,7 +5612,7 @@ function locHelp() {
 $('locRetry').onclick = () => { closeSheets(); status('Checking your location...'); startWatch(true); setTimeout(() => { if (here) status(''); else if (locState === 'blocked') status(NATIVE ? 'Location is still off for BrinaMaps.' : 'Location is still blocked for this site.'); }, 4000); };
 $('locPlan').onclick = () => { closeSheets(); setPlanning(true); };
 if (NATIVE) { $('locSettings').hidden = false; $('locSettings').onclick = () => { if (BG && BG.openSettings) BG.openSettings().catch(() => {}); }; }
-document.addEventListener('pointerdown', e => { if (!$('top').contains(e.target)) $('suggest').style.display = 'none'; });
+document.addEventListener('pointerdown', e => { if (!$('top').contains(e.target) && !document.body.classList.contains('results')) $('suggest').style.display = 'none'; });   // the results list stays while you look at the map
 ['from', 'to', 'friend'].forEach(w => $(w).addEventListener('input', () => { $(w)._exact = null; }));
 addEventListener('resize', layout);
 
