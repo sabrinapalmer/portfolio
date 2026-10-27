@@ -33,8 +33,8 @@ export default async function handler(req) {
   if (b.length !== 4 || b.some(n => !isFinite(n)) || b[2] <= b[0] || b[3] <= b[1] || b[2] - b[0] > 20 || b[3] - b[1] > 20) return json(400, { error: 'bad box' }, cors);
   const area = b.map(n => Math.round(n)).join(',');
   const noStore = Object.assign({ 'Cache-Control': 'no-store' }, cors);
-  const get = async (src, days, date, keepLow) => {
-    const r = await fetch(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/${src}/${area}/${days || 2}${date ? '/' + date : ''}`, { signal: AbortSignal.timeout(15000) });
+  const get = async (src, days, date, keepLow, ms = 9000) => {   // two rounds of at most 9 s each: the answer starts within Vercel's 25 s
+    const r = await fetch(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/${src}/${area}/${days || 2}${date ? '/' + date : ''}`, { signal: AbortSignal.timeout(ms) });
     const text = await r.text();
     if (!r.ok || /invalid|error/i.test(text.slice(0, 200)) && !/latitude/.test(text.slice(0, 200))) throw new Error((r.status || '') + ' ' + text.slice(0, 80).replace(key, ''));
     const rows = parse(text, keepLow); if (!rows) throw new Error('unexpected answer');
@@ -49,7 +49,7 @@ export default async function handler(req) {
   let history = false;
   if (spots.length) {
     const day = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
-    const past = await Promise.allSettled([7, 12, 22, 32, 47, 62, 77, 87].map(n => get('VIIRS_SNPP_NRT', 5, day(n), true)));   // 5-day windows (the most FIRMS allows) spread over 3 months
+    const past = await Promise.allSettled([7, 12, 22, 32, 47, 62, 77, 87].map(n => get('VIIRS_SNPP_NRT', 5, day(n), true, 7000)));   // 5-day windows (the most FIRMS allows) spread over 3 months
     const old = past.filter(g => g.status === 'fulfilled').flatMap(g => g.value);
     history = past.some(g => g.status === 'fulfilled');
     if (new URL(req.url).searchParams.get('debug')) why.push(...past.filter(g => g.status === 'rejected').map(g => String(g.reason && g.reason.message || g.reason)));

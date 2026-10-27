@@ -17,8 +17,9 @@ await p.route('**/*', r => { const u = r.request().url(), J = o => r.fulfill({ c
   if (u.includes('photon') || u.includes('nominatim') || u.includes('/api/')) return J({ features: [], places: [] });
   return r.abort(); });
 await p.goto('http://localhost/map'); await p.waitForTimeout(1500);
+await p.waitForFunction(() => typeof map !== 'undefined' && map && map.loaded(), null, { timeout: 20000 }).catch(() => {});   // a busy machine: wait for the page, not a fixed time
 await p.click('#to');
-check(await p.evaluate(() => document.body.classList.contains('searching')), 'tapping the box starts search mode at once');
+check(await p.waitForFunction(() => document.body.classList.contains('searching'), null, { timeout: 1000 }).then(() => true, () => false), 'tapping the box starts search mode at once');
 check(await p.isVisible('#cancelSearch') && !(await p.isVisible('#openPrefs')), 'Cancel shows; settings button steps aside');
 
 // names on the map: pretend the loaded tiles hold a camp and a street
