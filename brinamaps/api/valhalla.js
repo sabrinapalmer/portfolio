@@ -38,7 +38,8 @@ export default async function handler(req) {
   if (ep === 'status') {   // the app asks this once at start, so routes never wait on a server that is down
     const up = {};
     await Promise.all(AREAS.map(async ([r]) => { try { const x = await fetch(`${base}/${r}/status`, { headers: { 'X-Router-Key': key }, signal: AbortSignal.timeout(4000) }); up[r] = x.ok; } catch (e) { up[r] = false; } }));
-    return json(200, { ok: Object.values(up).some(Boolean), regions: up }, Object.assign({ 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=3600' }, cors));   // answered from the edge at once, checked again in the background
+    const ok = Object.values(up).some(Boolean);   // up: answered from the edge at once and checked again in the background; down: asked again soon
+    return json(200, { ok, regions: up }, Object.assign({ 'Cache-Control': ok ? 'public, s-maxage=60, stale-while-revalidate=3600' : 'public, s-maxage=30' }, cors));
   }
   if (!(ep in EPS)) return json(404, { error: 'unknown endpoint' }, cors);
 

@@ -3,8 +3,8 @@ import Capacitor
 import AVFoundation
 #if canImport(ActivityKit)
 import ActivityKit   // lock screen / Dynamic Island (LiveNavPlugin below)
-import UserNotifications   // leave-by reminders (RemindPlugin below)
 #endif
+import UserNotifications   // leave-by reminders (RemindPlugin below)
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -266,7 +266,7 @@ public class LookPlugin: CAPPlugin, CAPBridgedPlugin {
 }
 
 // Leave-by reminders: one local notification at the time the page asks for ("Leave now to arrive by 6:30")
-public class RemindPlugin: CAPPlugin, CAPBridgedPlugin {
+public class RemindPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotificationCenterDelegate {
     public let identifier = "RemindPlugin"
     public let jsName = "Remind"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -274,16 +274,31 @@ public class RemindPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise)
     ]
 
+    // The app shows the reminder as a banner even when BrinaMaps is open (otherwise iOS drops it silently)
+    override public func load() { UNUserNotificationCenter.current().delegate = self }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                       withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .list])
+    }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                       withCompletionHandler completionHandler: @escaping () -> Void) {
+        completionHandler()
+    }
+
     @objc func schedule(_ call: CAPPluginCall) {
         let id = call.getString("id") ?? "leave"
         let at = call.getDouble("at") ?? 0
         let title = call.getString("title") ?? "Time to leave"
         let body = call.getString("body") ?? ""
-        let wait = Date(timeIntervalSince1970: at / 1000).timeIntervalSinceNow
-        guard wait > 5 else { call.resolve(["ok": false, "error": "past"]); return }
+        let when = Date(timeIntervalSince1970: at / 1000)
+        guard when.timeIntervalSinceNow > 5 else { call.resolve(["ok": false, "error": "past"]); return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { call.resolve(["ok": false, "error": "denied"]); return }
+            let wait = when.timeIntervalSinceNow   // after the permission prompt, however long that took
+            guard wait > 1 else { call.resolve(["ok": false, "error": "past"]); return }
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body

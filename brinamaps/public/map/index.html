@@ -1234,7 +1234,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 const REDUCE_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function a11yRows() {
   document.querySelectorAll('li, div.xrow').forEach(e => {
-    if (typeof e.onclick === 'function' && !e.hasAttribute('role')) { e.setAttribute('role', 'button'); e.tabIndex = 0; }
+    // rows holding their own buttons (remove, move) stay plain rows: iOS hides what is inside a button from VoiceOver
+    if (typeof e.onclick === 'function' && !e.hasAttribute('role') && !e.querySelector('button, a, input, select')) { e.setAttribute('role', 'button'); e.tabIndex = 0; }
   });
 }
 let a11yQ = false;
@@ -1690,14 +1691,16 @@ mapReady = (async () => {
   if (NATIVE) { const splash = plugin('SplashScreen'), hide = () => { if (splash && splash.hide) splash.hide({ fadeOutDuration: 200 }).catch(() => {}); }; map.once('idle', hide); setTimeout(hide, 4000); }
   // The map server can be slow or answer with an error now and then: if the map has not loaded, ask again
   // (every 12 s, up to 10 times) rather than leaving a blank map
-  let tries = 0;
+  let tries = 0, up = false;
   const retry = setInterval(async () => {
-    if (map.isStyleLoaded() || ++tries > 10) { clearInterval(retry); return; }
+    if (up || map.isStyleLoaded() || ++tries > 10) { clearInterval(retry); return; }
     let st = style; try { st = await themedStyle(); } catch (e) {}
+    if (up || map.isStyleLoaded()) return;   // the first try came in while this one was fetching
     try { map.setStyle(st, { diff: false }); } catch (e) {}
   }, 12000);
   await new Promise(r => { map.once('load', r); map.once('style.load', r); });
-  clearInterval(retry);
+  up = true; clearInterval(retry);
+  map.on('style.load', () => { addRouteLayers(); if (routes.length) draw(false); });   // any new style (theme, retry) gets the route layers back
   addRouteLayers();
   drawAvoid();
   setTimeout(tipOnce, 7500);
@@ -3660,7 +3663,7 @@ async function route(quiet, afterFires) {
   loadTraffic();
   status(zoneNote(routes[selected]) || found.note || '');
   writeHash();
-  if (!quiet && !fromSaved) quickerCrossing(id).catch(() => {});
+  if (!fromSaved && !nav) quickerCrossing(id, quiet).catch(() => {});   // quiet re-checks reuse what is known for the same trip
   if (fireCheck) fireCheck.then(() => {   // fresh fire data came in after the route was drawn: if the route now runs into a fire, find another way
     if (id !== reqId || nav || !routes.length || !zoneHits(routes[selected].coords).length) return;
     const hit = zoneHits(routes[selected].coords)[0].z;
@@ -4023,10 +4026,10 @@ async function viaPortRoute(rt, portName) {
   // then a little north of it
   const tries = [PORT_PASS[portName], [p[2], p[3]], [p[2] + 0.003, p[3]]].filter(Boolean);
   let list = null;
-  for (const [lat, lon] of tries) {
+  for (const [k, [lat, lon]] of tries.entries()) {   // the paid backup only once, for the last point, if the own server found nothing
     const via = { lat, lon, at };
-    if (Date.now() > ownDownUntil) list = await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null);
-    if (!list && geoRouting()) list = await geoapifyRoutes(true, via).catch(() => null);
+    list = Date.now() > ownDownUntil ? await valhallaRoutes(true, OWN_ROUTER, via).catch(() => null) : null;
+    if (!(list && list[0]) && k === tries.length - 1 && geoRouting()) list = await geoapifyRoutes(true, via).catch(() => null);
     if (list && list[0]) break;
   }
   const alt = list && list[0]; if (!alt) return null;
@@ -4041,19 +4044,24 @@ async function viaPortRoute(rt, portName) {
 // After the routes are up: work out the trip through each nearby port (within about 60 km), using the shortest line your
 // pass lets you use there (SENTRI, then Ready Lane, then regular), so the crossings can be compared door to door with
 // the line counted. If one is 10+ minutes shorter in line and gets you there sooner overall, put it first.
-let crossAlts = {}, crossFor = 0;
-async function quickerCrossing(id) {
-  const top = routes[0], b = top && top.border;
-  if (crossFor !== id) { crossFor = id; crossAlts = {}; }
+// Kept per trip (same start, stops, end, mode and lane), so a quiet re-check of the same trip reuses them
+let crossAlts = {}, crossFor = '';
+const crossKey = () => JSON.stringify([tripPts().map(q => [+q.lat.toFixed(4), +q.lon.toFixed(4)]), prefs.mode, prefs.lane]);
+async function quickerCrossing(id, quiet) {
+  const top = routes[0], b = top && top.border, key = crossKey();
+  if (crossFor !== key) { crossFor = key; crossAlts = {}; }
   if (!b || !b.north || !(b.others || []).length) return;
   const cand = b.others.filter(o => !routes.some(r => r.border && r.border.port === o.port)).sort((x, y) => x.minutes - y.minutes).slice(0, 3);
   for (const o of cand) {
-    if (!(o.port in crossAlts)) { crossAlts[o.port] = undefined; if (routes.includes(top)) draw(false); crossAlts[o.port] = await viaPortRoute(top, o.port).catch(() => null); }
-    if (id !== reqId || nav) return;
+    if (crossAlts[o.port] !== undefined) continue;
+    if (routes.includes(top)) draw(false);   // shows "..." for this one while it is worked out
+    const alt = await viaPortRoute(top, o.port).catch(() => null);
+    if (id !== reqId || nav || crossFor !== key) return;   // a newer route: nothing kept from this one
+    crossAlts[o.port] = alt;
   }
   const best = cand.filter(o => crossAlts[o.port]).sort((x, y) => crossAlts[x.port].time - crossAlts[y.port].time)[0];
   const alt = best && crossAlts[best.port];
-  if (alt && b.wait != null && best.minutes <= b.wait - 10 && alt.time < top.time - 120) {   // must save at least 2 minutes door to door
+  if (!quiet && alt && !routes.includes(alt) && b.wait != null && best.minutes <= b.wait - 10 && alt.time < top.time - 120) {   // must save at least 2 minutes door to door
     const keep = selected === 0;
     routes = [alt].concat(routes); selected = keep ? 0 : selected + 1;
     draw(false);
@@ -4066,23 +4074,25 @@ async function quickerCrossing(id) {
 function crossTable(rt) {
   const b = rt && rt.border; if (!b || !b.north || nav) return null;
   const ports = [];
-  const add = (port, lane, wait, closed, trip, route) => {
-    const have = ports.find(x => x.port === port);
-    if (have) { if (trip != null && (have.trip == null || trip < have.trip)) Object.assign(have, { trip, route }); return; }
-    ports.push({ port, lane, wait, closed, trip, route });
+  // one row per crossing (Calexico east and west are two); the route on screen keeps its own row and time
+  const add = (port, crossing, lane, wait, closed, trip, route) => {
+    const key = port + '|' + (crossing || ''), have = ports.find(x => x.key === key);
+    if (have) { if (have.route !== rt && trip != null && (have.trip == null || trip < have.trip)) Object.assign(have, { trip, route }); return; }
+    ports.push({ key, port, crossing, lane, wait, closed, trip, route });
   };
-  add(b.port, b.lane || LANES.standard, b.wait, b.closed, rt.time, rt);
-  routes.forEach(r => r.border && r.border.north && add(r.border.port, r.border.lane || LANES.standard, r.border.wait, r.border.closed, r.time, r));
+  add(b.port, b.crossing, b.lane || LANES.standard, b.wait, b.closed, rt.time, rt);
+  routes.forEach(r => r.border && r.border.north && add(r.border.port, r.border.crossing, r.border.lane || LANES.standard, r.border.wait, r.border.closed, r.time, r));
   (b.others || []).forEach(o => {
-    const a = crossFor === reqId ? crossAlts[o.port] : undefined;
-    add(o.port, o.lane, o.minutes, false, a ? a.time : a === null ? -1 : null, a || null);
+    const a = crossFor === crossKey() ? crossAlts[o.port] : undefined;
+    add(o.port, '', o.lane, o.minutes, false, a ? a.time : a === null ? -1 : null, a || null);
   });
+  const twice = n => ports.filter(x => x.port === n).length > 1;
   if (ports.length < 2) return null;
   ports.sort((x, y) => (x.trip > 0 ? x.trip : Infinity) - (y.trip > 0 ? y.trip : Infinity));
   const t = el('div', 'xtab');
   t.appendChild(el('div', 'xhead', tr('Compare crossings')));
   ports.forEach(x => {
-    const on = x.port === b.port, row = el(on ? 'div' : 'button', 'xrow' + (on ? ' on' : ''));
+    const on = x.route === rt, row = el(on ? 'div' : 'button', 'xrow' + (on ? ' on' : ''));
     const wait = x.closed ? tr('Closed now') : x.wait == null ? tr('No time reported') : x.wait ? fmtTime(x.wait * 60) : tr('No wait');
     let trip, diff = '';
     if (x.trip === -1) trip = tr('No route');
@@ -4092,7 +4102,7 @@ function crossTable(rt) {
       const d = x.trip - rt.time;
       diff = on ? tr('this route') : Math.abs(d) < 60 ? tr('same time') : (d < 0 ? '\u2212' : '+') + fmtTime(Math.abs(d));
     }
-    const name = el('span', 'xport'); name.append(el('b', '', x.port), el('small', '', tr(x.lane) + ' \u00b7 ' + wait));
+    const name = el('span', 'xport'); name.append(el('b', '', x.port + (twice(x.port) && x.crossing && !/^passenger$/.test(x.crossing) ? ' ' + x.crossing.replace(/\b\w/g, m => m.toUpperCase()) : '')), el('small', '', tr(x.lane) + ' \u00b7 ' + wait));
     const tt = el('span', 'xtrip'); tt.append(el('b', '', trip), el('small', diff && diff[0] === '\u2212' ? 'good' : '', diff));
     row.append(name, tt); row.dataset.raw = '';
     if (!on && x.trip !== -1) row.onclick = () => {
@@ -4107,7 +4117,7 @@ function crossTable(rt) {
 // Route through a port you pick from the comparison, shown even if it is slower overall
 async function crossAt(rt, portName) {
   const id = reqId; status('Finding a way through ' + portName + '...');
-  const alt = (crossFor === id && crossAlts[portName]) || await viaPortRoute(rt, portName).catch(() => null);
+  const alt = (crossFor === crossKey() && crossAlts[portName]) || await viaPortRoute(rt, portName).catch(() => null);
   if (id !== reqId) return;
   if (!alt) { status('Could not find a good way through ' + portName + '.'); return; }
   routes = routes.filter(r => r.via !== portName).concat([alt]); selected = routes.length - 1;
@@ -4414,6 +4424,7 @@ function peekTo(i) {
   addEventListener('mouseup', e => { if (mx == null) return; const dx = e.clientX - mx; mx = null; if (Math.abs(dx) > 90 && nav && nav.live) { const at = nav.peek == null ? nav.live.next : nav.peek; peekTo(dx < 0 ? at + 1 : at - 1); } });
 })();
 function loadNavRoute() {   // (re)build the progress tables for the current route
+  if (nav) nav.turnShown = null;   // a new route: redraw the next-turn arrow even if its key looks the same
   const rt = routes[selected], cum = [0];
   for (let i = 1; i < rt.coords.length; i++) cum.push(cum[i - 1] + meters(rt.coords[i - 1], rt.coords[i]));
   Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null, peek: null, live: null });
@@ -4534,7 +4545,15 @@ async function trafficCheck() {
   const ok = await renav('', true);
   if (ok && nav && routes[0] && routes[0].live && sameRoads(routes[0], old) < 0.8) say('Traffic has changed. Taking a faster route.');
 }
-async function renav(sayIt, silent) {
+// Reroutes run one at a time (two taps in the trip sheet, or a stop added during a reroute, wait their turn).
+// offRoute: you left the route; only then does a failed reroute switch to "head back to your route".
+function renav(sayIt, silent, offRoute) {
+  if (!nav || !here) return Promise.resolve(false);
+  const n = nav, run = () => n === nav ? renavNow(sayIt, silent, offRoute) : false;
+  n.renavQ = (n.renavQ || Promise.resolve()).then(run, run);
+  return n.renavQ;
+}
+async function renavNow(sayIt, silent, offRoute) {
   if (!nav || !here) return false;
   nav.busy = true; nav.lastReroute = Date.now(); nav.lastTraffic = Date.now();
   if (!silent) { $('navArrow').innerHTML = ''; $('navText').textContent = 'Rerouting...'; $('navDist').textContent = ''; $('navThen').textContent = ''; }
@@ -4542,10 +4561,11 @@ async function renav(sayIt, silent) {
   pts.from = { lat: here[0], lon: here[1], label: 'My location', auto: true };
   $('from').value = 'My location';
   if (markers.from) { markers.from.remove(); markers.from = null; }
-  const ok = (await route(true)) === true;   // a route saved on the phone is not a new way from here
+  const myId = reqId + 1, res = await route(true), ok = res === true;   // a route saved on the phone is not a new way from here
   if (!nav) return false;
+  const stale = reqId !== myId;   // a newer route request took over: not a lost signal
   if (ok) { loadNavRoute(); nav.lost = false; }
-  else if (!nav.lost) {   // no new route (usually no signal): the saved route stays, and the screen points back to it
+  else if (offRoute && !stale && !nav.lost) {   // off the route with no new one (usually no signal): the saved route stays, and the screen points back to it
     nav.lost = true; say('No signal to reroute. Head back to your route.');
   }
   nav.busy = false;
@@ -4593,7 +4613,7 @@ function onFix(p) {
   if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting
     if (nav.lost) lostGuide(ll, s, head);
     // No signal: keep pointing back to the route, and try a new route every 30 seconds in case the signal returns
-    if (++nav.off >= 3 && Date.now() - nav.lastReroute > (nav.lost ? 30000 : 8000)) renav(nav.lost ? '' : 'Rerouting.', nav.lost);
+    if (++nav.off >= 3 && Date.now() - nav.lastReroute > (nav.lost ? 30000 : 8000)) renav(nav.lost ? '' : 'Rerouting.', nav.lost, true);
     return;
   }
   if (nav.lost) { nav.lost = false; say('Back on your route.'); }
@@ -5101,7 +5121,9 @@ async function fastestOrder() {
   const n = pts.stops.length; if (n < 2 || !pts.to) return false;
   const first = nav && here ? { lat: here[0], lon: here[1] } : tripPts()[0];
   const all = [first, ...pts.stops, pts.to];
+  const before = pts.stops.slice(), to = pts.to;
   let T = await Promise.race([matrixTimes(all, all, prefs.mode).catch(() => null), new Promise(r => setTimeout(() => r(null), 4000))]);
+  if (pts.to !== to || pts.stops.length !== before.length || pts.stops.some((p, i) => p !== before[i])) return false;   // the trip changed while waiting
   const ok = Array.isArray(T) && T.length === all.length && T.every((row, i) => Array.isArray(row) && row.length === all.length && row.every((x, j) => i === j || x != null));
   const cost = (i, j) => ok ? T[i][j] : roughTime(all[i], all[j], prefs.mode);
   let best = null, bestT = Infinity;
@@ -5138,6 +5160,7 @@ async function resetStopOrder() {
 async function addStop(p) {
   pts.stops.splice(bestSlot(p), 0, p);
   if (!stopsByHand) await fastestOrder();
+  if (!pts.stops.includes(p) || !pts.to) return;   // removed, or the trip cleared, while the order was worked out
   drawStopPins();
   if (nav) await renav('Adding stop ' + (pts.stops.indexOf(p) + 1) + ', ' + p.name + '.'); else route();
 }
@@ -5322,7 +5345,7 @@ function dropVia() { pts.stops = []; stopsByHand = false; drawStopPins(); tempAv
 function clearPoints() { dropVia(); ['from', 'to'].forEach(w => { if (markers[w]) { markers[w].remove(); markers[w] = null; } pts[w] = null; $(w).value = ''; }); }
 function clearAll() {
   clearPoints(); routes = []; reqId++; setPlanning(false, true); clearPois();
-  if (map && map.getSource('routes')) setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();
+  setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();   // also replaces a route still waiting for the map to load
   $('bottom').style.display = 'none'; $('suggest').style.display = 'none';
   document.body.classList.remove('dest'); layout();
   status(''); history.replaceState(null, '', location.pathname); syncClear(); drawStrip();
@@ -5336,7 +5359,7 @@ $('to').addEventListener('input', () => {   // a new search replaces the old des
   reqId++; routes = []; dropVia();
   if (markers.to) { markers.to.remove(); markers.to = null; }
   pts.to = null; if (!planning) { pts.from = null; if (markers.from) { markers.from.remove(); markers.from = null; } }
-  if (map && map.getSource('routes')) setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();
+  setSrc('routes', { type: 'FeatureCollection', features: [] }); drawQueue();   // also replaces a route still waiting for the map to load
   $('bottom').style.display = 'none'; document.body.classList.remove('dest'); layout(); status(''); drawStrip();
   history.replaceState(null, '', location.pathname);
 });

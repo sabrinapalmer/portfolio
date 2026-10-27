@@ -51,6 +51,18 @@ check(added === 'BACD', 'a new stop slots in without reshuffling your order (' +
 await p.evaluate(() => openTrip()); await p.click('#tripMsg button.reorder'); await p.waitForTimeout(800);
 const reset = await p.evaluate(() => pts.stops.map(s => s.name).join(''));
 check(reset === 'ABCD', 'Use fastest order sorts them again (' + reset + ')');
+// Crossing table: two routes through the same port, the slower one selected: its row shows its own time
+const xt = await p.evaluate(() => {
+  const B = (port, crossing, wait) => ({ port, crossing, north: true, lane: 'SENTRI', wait, others: [] });
+  const r1 = { time: 4200, border: B('San Ysidro', '', 15) }, r2 = { time: 5100, border: B('San Ysidro', '', 15) }, r3 = { time: 4800, border: B('Calexico', 'west', 5) }, r4 = { time: 4900, border: B('Calexico', 'east', 5) };
+  routes = [r1, r2, r3, r4]; selected = 1;
+  const t = crossTable(r2); if (!t) return null;
+  return [...t.querySelectorAll('.xrow')].map(r => r.innerText.replace(/\n/g, ' ') + (r.classList.contains('on') ? ' [on]' : ''));
+});
+console.log('crossings:', JSON.stringify(xt));
+check(xt && xt.some(r => /San Ysidro.*1 h 25 min.*this route.*\[on\]/.test(r)), 'the selected route keeps its own time in the table');
+check(xt && xt.some(r => /Calexico West/.test(r)) && xt.some(r => /Calexico East/.test(r)), 'Calexico east and west are separate rows');
+await p.evaluate(async () => { selected = 0; await route(); });
 // Chips: only the latest one looks busy
 const busy = await p.evaluate(async () => {
   closeSheets(); openStops();
