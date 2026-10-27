@@ -4011,8 +4011,8 @@ function draw(fit) {
     w.appendChild(dl);
     if (rt.border.north && rt.border.wait != null) w.appendChild(el('div', 'fine', 'Waits from the US border agency, included in the trip time.'));
   }
-  const bd0 = rt.border;   // a button for each nearby port with a shorter line that has no route shown yet
-  if (bd0 && bd0.north && bd0.wait != null && !nav) (bd0.others || []).filter(o => o.minutes < bd0.wait && !routes.some(r => r.border && r.border.port === o.port)).slice(0, 2).forEach(o => {
+  const bd0 = rt.border;   // one button: the nearby port with the shortest line in your own lane, if shorter than here
+  if (bd0 && bd0.north && bd0.wait != null && !nav) (bd0.others || []).filter(o => o.lane === bd0.lane && o.minutes < bd0.wait && !routes.some(r => r.border && r.border.port === o.port)).sort((x, y) => x.minutes - y.minutes).slice(0, 1).forEach(o => {
     const cb = el('button', 'cross', tr('Cross at ') + o.port + tr(' instead') + ' (' + tr(o.lane || 'Regular') + ': ' + (o.minutes ? fmtTime(o.minutes * 60) : tr('No wait')) + ')');
     cb.dataset.raw = ''; cb.onclick = () => crossAt(rt, o.port); w.appendChild(cb);
   });
