@@ -3938,17 +3938,21 @@ function borderTrim(data) {
   });
 }
 function crossingOf(rt) {   // the port a route crosses at, which way, and how long until you get there
+  // A route through Tijuana can pass close to one port (San Ysidro) on its way to cross at another (Otay Mesa):
+  // the port the route comes closest to is the one it crosses at
   const c = rt.coords;
+  let pick = null;
   for (const [port, crossing, lat, lon] of PORTS) {
     if (!c.some((q, i) => i % 3 === 0 && Math.abs(q[0] - lat) < 0.03 && Math.abs(q[1] - lon) < 0.03)) continue;
     let best = Infinity, bi = -1;
     c.forEach((q, i) => { const d = meters(q, [lat, lon]); if (d < best) { best = d; bi = i; } });
-    if (best > 600) continue;
-    const before = c[Math.max(0, bi - 40)], after = c[Math.min(c.length - 1, bi + 40)];
-    let t = 0; for (const st of rt.steps) { if (st.begin >= bi) break; t += st.time || 0; }
-    return { port, crossing, lat, lon, idx: bi, north: after[0] > before[0], eta: t };
+    if (best > 600 || (pick && best >= pick.best)) continue;
+    pick = { port, crossing, lat, lon, bi, best };
   }
-  return null;
+  if (!pick) return null;
+  const bi = pick.bi, before = c[Math.max(0, bi - 40)], after = c[Math.min(c.length - 1, bi + 40)];
+  let t = 0; for (const st of rt.steps) { if (st.begin >= bi) break; t += st.time || 0; }
+  return { port: pick.port, crossing: pick.crossing, lat: pick.lat, lon: pick.lon, idx: bi, north: after[0] > before[0], eta: t };
 }
 async function checkBorder(list) {
   list.forEach(rt => {   // undo an earlier lane's changes before working them out again
