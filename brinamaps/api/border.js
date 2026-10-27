@@ -14,7 +14,8 @@ export default async function handler(req) {
   let data;
   const tries = [];   // what the agency's site answered, for /api/border?debug=1 and the server log
   try {
-    // asked twice before giving up (the agency's site turns some requests away); the app then asks it directly
+    // The agency's site turned away requests with no User-Agent (502s on 27 Oct); with one it answers in about 0.2 s.
+    // Asked twice before giving up; the app then asks it directly
     const ask = async () => {
       const t0 = Date.now();
       try {

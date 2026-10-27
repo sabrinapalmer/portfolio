@@ -51,6 +51,10 @@ class Pool:
         c = sqlite3.connect('file:' + os.path.realpath(DATA) + '?mode=ro&immutable=1', uri=True, check_same_thread=False)
         c.execute('PRAGMA mmap_size = 8000000000')
         c.execute('PRAGMA cache_size = -64000')
+        try:   # how many places hold each 3-letter piece, for the typo search (fuzzy)
+            c.execute("CREATE VIRTUAL TABLE temp.vocab USING fts5vocab(main, names, 'row')")
+        except sqlite3.Error:
+            pass
         return key, c
 
     def put(self, kc):
@@ -258,6 +262,42 @@ def correct(q):
     return (best, best_key[0], best_key[1], best_whole) if best else None
 
 
+def fuzzy(q, lat, lon, lim):
+    """Places near you whose name is close to what was typed, for any name ("puerto nuebo", "starbuks", "farmacya").
+    Candidates share the rarest 3-letter pieces of the words typed (the name index ranks the ones sharing the most),
+    then each is compared with what was typed, ignoring little words, spaces and doubled letters."""
+    nq = fold(q)
+    grams = {w[i:i + 3] for w in nq.split(' ') for i in range(len(w) - 2)}
+    if len(grams) < 2:
+        return []
+    c = db()
+    try:
+        df = {g: (c.execute('SELECT doc FROM temp.vocab WHERE term = ?', (g,)).fetchone() or [0])[0] for g in grams}
+        total = c.execute('SELECT max(rid) FROM places').fetchone()[0] or 1
+    except sqlite3.Error:
+        return []
+    have = sorted((g for g in grams if df[g] > 0), key=lambda g: df[g])
+    rare = [g for g in have if df[g] < total / 100][:6]
+    rows = []
+    for pieces, km in ((rare, 25), (have[:4], 8)):   # rare pieces over a wider area; only common ones: closer by
+        if not pieces:
+            continue
+        sq = cells(lat, lon, km)
+        expr = 'norm : (' + ' OR '.join('"%s"' % g for g in pieces) + ') AND cell : (' + ' OR '.join('"%s"' % x for x in sq) + ')'
+        rows = c.execute('SELECT ' + SEL + ' FROM places p WHERE p.rid IN (SELECT rowid FROM names WHERE names MATCH ? ORDER BY rank LIMIT 300)', (expr,)).fetchall()
+        if len(rows) >= 5:
+            break
+    cq = canon(nq)
+    found = []
+    for r in rows:
+        cn = canon(r[-1])
+        sc = max(ratio(cq, cn), ratio(cq, cn[:len(cq) + 1]) if len(cn) > len(cq) else 0)
+        if sc >= 0.78:
+            found.append((-round(sc, 2), dist(lat, lon, r[4], r[5]), r))
+    found.sort(key=lambda f: f[:2])
+    return [dict(row(f[2][:-1], f[1]), fixed='fuzzy') for f in found[:lim]]
+
+
 def search_or_correct(q, lat, lon, km, lim):
     """search(), plus the same search for the chain name nearest to what was typed when that is a different name
     ("wallmart" -> walmart, "in and out" -> in n out burger, "home depot" -> the home depot). The chain's places come
@@ -266,7 +306,10 @@ def search_or_correct(q, lat, lon, km, lim):
     hit = correct(q)
     nq = fold(q)
     if not hit or hit[0] == nq:
-        return out
+        if len(out) >= 3:
+            return out
+        seen = {o.get('id') for o in out}   # few found: names near you spelled a little differently
+        return out + [o for o in fuzzy(q, lat, lon, lim) if o.get('id') not in seen][:max(0, lim - len(out))]
     c, score, count, whole = hit   # whole: the typed name matches the chain's whole name, not just its start
     seen = {o.get('id') for o in out}
     more = [dict(o, fixed=c) for o in search(c, lat, lon, km, lim) if o.get('id') not in seen]
