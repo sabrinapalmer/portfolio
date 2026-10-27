@@ -174,6 +174,7 @@
 				3ECEC80A308FA1A700F9BD0C /* Sources */,
 				3ECEC80B308FA1A700F9BD0C /* Frameworks */,
 				3ECEC80C308FA1A700F9BD0C /* Resources */,
+				B1D0B0B0B0B0B0B0B0B0B002 /* Build number */,
 			);
 			buildRules = (
 			);
@@ -197,6 +198,7 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				B1D0B0B0B0B0B0B0B0B0B001 /* Build number */,
 				9592DBEFFC6D2A0C8D5DEB22 /* [CP] Embed Pods Frameworks */,
 				3ECEC81E308FA1A800F9BD0C /* Embed Foundation Extensions */,
 			);
@@ -308,6 +310,40 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-App/Pods-App-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		B1D0B0B0B0B0B0B0B0B0B001 /* Build number */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Build number";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Every build gets a build number from the date and time (yymmddHHMM), the same for the app and its widget, so\n# App Store Connect never sees the same number twice. Shared by both targets for 10 minutes (one archive).\nf=\"${PROJECT_DIR}/.build-number\"\nif [ ! -f \"$f\" ] || [ -n \"$(find \"$f\" -mmin +10)\" ]; then date +%y%m%d%H%M > \"$f\"; fi\nn=$(cat \"$f\")\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $n\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\necho \"build number $n\"\n";
+			showEnvVarsInLog = 0;
+		};
+		B1D0B0B0B0B0B0B0B0B0B002 /* Build number */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Build number";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Every build gets a build number from the date and time (yymmddHHMM), the same for the app and its widget, so\n# App Store Connect never sees the same number twice. Shared by both targets for 10 minutes (one archive).\nf=\"${PROJECT_DIR}/.build-number\"\nif [ ! -f \"$f\" ] || [ -n \"$(find \"$f\" -mmin +10)\" ]; then date +%y%m%d%H%M > \"$f\"; fi\nn=$(cat \"$f\")\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $n\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\necho \"build number $n\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -376,7 +412,7 @@
 				DEVELOPMENT_TEAM = 7QGX7L6QSL;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrinaNavWidget/Info.plist;
@@ -430,7 +466,7 @@
 				DEVELOPMENT_TEAM = 7QGX7L6QSL;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrinaNavWidget/Info.plist;
@@ -582,6 +618,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 7QGX7L6QSL;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -606,6 +643,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 7QGX7L6QSL;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
