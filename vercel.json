@@ -5,6 +5,14 @@
       "destination": "/networth/index.html"
     },
     {
+      "source": "/portraits",
+      "destination": "/portraits.html"
+    },
+    {
+      "source": "/listings",
+      "destination": "/listings.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://brinamaps.com/api/:path*"
     },
