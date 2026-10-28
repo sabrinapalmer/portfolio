@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listing Photos Baja</title>
+<meta name="description" content="Flat-rate Airbnb, VRBO and real estate listing photography from Rosarito to Ensenada by Sabrina Palmer. Book a shoot online.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Nunito:wght@400;600;700&display=swap">
+<style>
+/* Layout: same system as portraits page, cooler accent; package picker + date + checkout. */
+:root{
+  --bg:#f3f5f2; --fg:#15303a; --muted:#5a6b72; --sea:#0f6d78; --sea-deep:#0b3f4a;
+  --accent:#e0592f; --accent-ink:#fff; --sun:#ffc54a; --card:#ffffff; --line:#d8ded9; --ok:#1f7a4d;
+  --display:"Bricolage Grotesque","Arial Black",sans-serif; --body:"Nunito","Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f2228; --fg:#ecf0ec; --muted:#a3b3b6; --sea:#1b8b97; --sea-deep:#092e36;
+  --accent:#ff7a52; --accent-ink:#1a1a1a; --sun:#ffcf5e; --card:#15333b; --line:#294a52; --ok:#5cc48f; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0f2228; --fg:#ecf0ec; --muted:#a3b3b6; --sea:#1b8b97; --sea-deep:#092e36;
+  --accent:#ff7a52; --accent-ink:#1a1a1a; --sun:#ffcf5e; --card:#15333b; --line:#294a52; --ok:#5cc48f; color-scheme:dark }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:17px;line-height:1.55}
+a{color:var(--sea)}
+.wrap{max-width:900px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.3rem,7vw,4.2rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,4vw,2.1rem);font-weight:800}
+h3{font-size:1.05rem;font-weight:800}
+p{margin:0}
+.eyebrow{font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+nav.top{background:var(--sea-deep)}
+nav.top .wrap{display:flex;justify-content:space-between;align-items:center;padding-block:.8rem;gap:1rem;flex-wrap:wrap}
+nav.top a{color:#f3f5f2;text-decoration:none;font-weight:700;font-size:.95rem}
+nav.top .brand{font-family:var(--display);font-weight:800;font-size:1.1rem}
+.hero{background:var(--sea-deep);color:#f3f5f2}
+.hero .wrap{padding-block:2.4rem 2.8rem;display:grid;gap:1rem}
+.hero .eyebrow{color:var(--sun)}
+.hero .lead{font-size:1.1rem;max-width:38rem;color:#cfdcdc}
+.stats{display:flex;gap:2rem;flex-wrap:wrap;margin-top:.4rem}
+.stats div{display:grid}
+.stats b{font-family:var(--display);font-size:1.6rem;font-weight:800;color:var(--sun)}
+.stats span{font-size:.85rem;color:#cfdcdc}
+section .wrap{padding-block:2.6rem}
+.pkgs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem}
+.pkg{border:2px solid var(--line);border-radius:16px;padding:1.1rem;display:grid;gap:.5rem;align-content:start;background:var(--card);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.pkg[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.pkg .price{font-family:var(--display);font-size:2rem;font-weight:800;line-height:1;color:var(--sea)}
+.pkg p{font-size:.93rem;color:var(--muted)}
+.addons{display:flex;flex-wrap:wrap;gap:.6rem}
+.addon{display:flex;align-items:center;gap:.5rem;border:2px solid var(--line);border-radius:999px;padding:.4rem .9rem;font-weight:700;font-size:.92rem;cursor:pointer;background:var(--card)}
+.addon input{width:auto;margin:0}
+.book{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.3rem;display:grid;gap:1.1rem}
+.days{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.3rem;scrollbar-width:thin}
+.daybtn{flex:0 0 auto;border:2px solid var(--line);background:transparent;color:var(--fg);border-radius:12px;padding:.5rem .8rem;font:inherit;font-weight:700;cursor:pointer;display:grid;text-align:center;min-width:72px}
+.daybtn small{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.daybtn[aria-pressed="true"]{background:var(--sea);border-color:var(--sea);color:#fff}
+.daybtn[aria-pressed="true"] small{color:#cfdcdc}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.5rem}
+.slot{font-family:var(--display);font-weight:800;font-size:1rem;padding:.7rem .5rem;border-radius:10px;border:2px solid var(--line);background:transparent;color:var(--fg);cursor:pointer}
+.slot[aria-pressed="true"]{background:var(--sea);border-color:var(--sea);color:#fff}
+.slot:disabled{opacity:.45;cursor:default}
+form{display:grid;gap:.8rem}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+@media (max-width:560px){.fields{grid-template-columns:1fr}}
+label{display:grid;gap:.25rem;font-size:.9rem;font-weight:700}
+input,select,textarea{font:inherit;font-size:1rem;padding:.65rem .75rem;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:100%;min-width:0}
+textarea{min-height:4.5rem;resize:vertical}
+.summary{border-top:1px dashed var(--line);padding-top:.9rem;display:grid;gap:.3rem;font-size:.97rem}
+.summary .row{display:flex;justify-content:space-between;gap:1rem}
+.summary .big{font-family:var(--display);font-weight:800;font-size:1.3rem}
+.btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:1.05rem;padding:.9rem 1.3rem;border-radius:12px;text-decoration:none;border:2px solid transparent;cursor:pointer;background:var(--accent);color:var(--accent-ink);text-align:center}
+.btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
+.btn:focus-visible,.slot:focus-visible,.daybtn:focus-visible,.pkg:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.note{font-size:.88rem;color:var(--muted)}
+.terms{font-size:.85rem;color:var(--muted);border-left:3px solid var(--sun);padding-left:.8rem}
+.done{display:grid;gap:.6rem;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:1rem}
+.done strong{color:var(--ok)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
+.step{display:grid;gap:.3rem}
+.step b{font-family:var(--display);font-size:1.05rem}
+.step p{font-size:.93rem;color:var(--muted)}
+footer .wrap{padding-block:2rem;color:var(--muted);font-size:.9rem;display:grid;gap:.3rem}
+.contact{font-family:var(--display);font-weight:800;word-break:break-all;color:var(--fg)}
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="brand" href="https://sabrinapalmer.com">Sabrina Palmer Photo</a>
+  <a href="/portraits">Beach &amp; dog portraits →</a>
+</div></nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Rosarito · La Misión · La Salina · Ensenada</span>
+    <h1>Listing photos that get the booking.</h1>
+    <p class="lead">Flat-rate photography for Airbnb, VRBO and homes for sale. Bright, level, wide interiors with the windows and the view both exposed, every room, the outdoor space, delivered within 24 hours in Airbnb, MLS and print sizes.</p>
+    <div class="stats">
+      <div><b>24 hr</b><span>delivery</span></div>
+      <div><b>8 yrs</b><span>shooting listings</span></div>
+      <div><b>$0</b><span>travel fee, Rosarito to La Misión</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="book">
+  <div class="wrap">
+    <div class="book">
+      <div><span class="eyebrow">1 · Package</span><h2>Choose what we're shooting</h2></div>
+      <div class="pkgs" id="pkgs">
+        <button type="button" class="pkg" data-id="condo" data-price="175" data-dep="50" aria-pressed="false">
+          <h3>Condo or casita</h3><div class="price">$175</div><p>Studio to 2 bedrooms. Up to 20 finished photos including exterior and amenities. About 60 minutes on site.</p>
+        </button>
+        <button type="button" class="pkg" data-id="house" data-price="275" data-dep="75" aria-pressed="false">
+          <h3>House or villa</h3><div class="price">$275</div><p>3+ bedrooms, pool, rooftop, ocean view. Up to 35 finished photos. About 90 minutes on site.</p>
+        </button>
+        <button type="button" class="pkg" data-id="estate" data-price="395" data-dep="100" aria-pressed="false">
+          <h3>Large estate or multi-unit</h3><div class="price">$395</div><p>5+ bedrooms or 2–3 units at one address. Up to 50 finished photos. Half day on site.</p>
+        </button>
+      </div>
+      <div>
+        <span class="eyebrow">Add-ons</span>
+        <div class="addons" style="margin-top:.5rem">
+          <label class="addon"><input type="checkbox" class="add" data-price="75" id="addTwilight"> Twilight exterior, +$75</label>
+          <label class="addon"><input type="checkbox" class="add" data-price="40" id="addVertical"> Vertical crops for Instagram and Reels, +$40</label>
+          <label class="addon"><input type="checkbox" class="add" data-price="50" id="addRush"> Same-day delivery, +$50</label>
+        </div>
+      </div>
+
+      <div><span class="eyebrow">2 · Date</span><h2>Pick a day and a window</h2></div>
+      <div class="days" id="days" role="group" aria-label="Choose a day"></div>
+      <div class="slots" id="slots"></div>
+      <p class="note">Interiors photograph best mid-morning to early afternoon. Twilight add-on is shot the same evening.</p>
+
+      <div><span class="eyebrow">3 · Property</span><h2>Where and who</h2></div>
+      <form id="bookform" novalidate>
+        <div class="fields">
+          <label>Your name<input id="name" required autocomplete="name"></label>
+          <label>Phone or WhatsApp<input id="phone" required autocomplete="tel" inputmode="tel"></label>
+          <label>Email<input id="email" type="email" required autocomplete="email"></label>
+          <label>Listing link (Airbnb, VRBO, MLS) or address<input id="listing" required></label>
+          <label>Bedrooms<input id="beds" type="number" min="0" max="20" value="2"></label>
+          <label>Access on shoot day<select id="access"><option>I'll meet you there</option><option>Lockbox / smart lock</option><option>Property manager</option><option>Guests checking out that morning</option></select></label>
+        </div>
+        <label>Anything to feature or avoid (view, pool, construction next door)<textarea id="notes"></textarea></label>
+
+        <div class="summary">
+          <div class="row"><span>Package</span><strong id="sPkg">Choose a package above</strong></div>
+          <div class="row"><span>Date</span><span id="sDate">—</span></div>
+          <div class="row"><span>Shoot total</span><span id="sPrice">—</span></div>
+          <div class="row"><span>Booking deposit (paid now)</span><span id="sDeposit">—</span></div>
+          <div class="row big"><span>Due on delivery</span><span id="sBalance">—</span></div>
+        </div>
+
+        <p class="terms">The booking deposit is non-refundable and is credited in full to the shoot. If the property isn't accessible or ready at the booked time, the deposit is kept and we rebook with a new deposit. Reschedule free up to 24 hours ahead. Balance is due when the gallery is delivered; files release on payment. Photos are licensed for marketing this property; the photographer keeps copyright.</p>
+        <label style="display:flex;gap:.6rem;align-items:start;font-weight:600"><input type="checkbox" id="agree" style="width:auto;margin-top:.3rem" required> I understand the deposit is non-refundable and is applied to the shoot.</label>
+
+        <a class="btn" id="pay" href="#" aria-disabled="true" target="_blank" rel="noopener">Pay deposit and book the shoot</a>
+        <p class="note">Paying opens a secure checkout in a new tab and sends your details to Sabrina. You'll get a confirmation with the arrival time by WhatsApp or email within a few hours. Questions: <span class="contact">sabrinampalmer@gmail.com</span></p>
+        <div class="done" id="done" hidden>
+          <strong>Request sent.</strong>
+          <span>If the checkout didn't open, use this link: <a id="payAgain" href="#" target="_blank" rel="noopener">pay the deposit</a>. If your email app didn't open either, copy this and send it to sabrinampalmer@gmail.com:</span>
+          <textarea id="fallback" readonly></textarea>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="display:grid;gap:1.2rem">
+    <span class="eyebrow">Before I arrive</span>
+    <h2>Fifteen minutes of prep is worth a thousand dollars of staging.</h2>
+    <div class="steps">
+      <div class="step"><b>Lights on, fans off</b><p>Every lamp and overhead light on, ceiling fans stopped, blinds fully open or fully up.</p></div>
+      <div class="step"><b>Counters clear</b><p>Kitchen and bathroom counters empty except one or two decor items. Hide bins, cords, chargers and toiletries.</p></div>
+      <div class="step"><b>Beds made, towels folded</b><p>Hotel-style. Pillows plumped, throws straight, closet doors shut.</p></div>
+      <div class="step"><b>Outside too</b><p>Pool clean, cushions out, hose and cars out of frame. Patio furniture set as if guests are about to sit down.</p></div>
+    </div>
+    <p class="note">I shoot a Canon 5D Mark IV with a 16–35mm, bracketed and blended so windows show the view instead of blowing out. Verticals corrected, colors neutral, no cartoon HDR. Portfolio at <a href="https://sabrinapalmer.com">sabrinapalmer.com</a>.</p>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  <span>Sabrina Palmer Photo · Rosarito to Ensenada, Baja California</span>
+  <span>sabrinampalmer@gmail.com</span>
+</div></footer>
+
+<script>
+/* ===== CONFIG: edit these lines ===== */
+var CONFIG = {
+  photographerEmail: "sabrinampalmer@gmail.com",
+  payBase: "https://paypal.me/sabrinampalmer/",   // or a Stripe Payment Link with payType "fixed"
+  payType: "paypalme",
+  daysAhead: 14,
+  windows: ["9:00 am","11:00 am","1:00 pm"],
+  booked: []                                   // e.g. ["2026-10-30 11:00 am"]
+};
+/* ==================================== */
+(function(){
+  var sel={pkg:null,price:0,dep:0,name:'',date:null,label:null,win:null};
+  var pkgs=document.querySelectorAll('.pkg');
+  pkgs.forEach(function(b){b.addEventListener('click',function(){
+    pkgs.forEach(function(x){x.setAttribute('aria-pressed','false')});b.setAttribute('aria-pressed','true');
+    sel.pkg=b.dataset.id;sel.price=+b.dataset.price;sel.dep=+b.dataset.dep;sel.name=b.querySelector('h3').textContent;update();
+  })});
+  var days=document.getElementById('days'),slots=document.getElementById('slots');
+  var fmt=new Intl.DateTimeFormat('en-US',{weekday:'short'}),fmtD=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'});
+  function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+  var today=new Date();today.setHours(0,0,0,0);
+  for(var i=0;i<CONFIG.daysAhead;i++){(function(i){
+    var d=new Date(today);d.setDate(today.getDate()+i);
+    var b=document.createElement('button');b.type='button';b.className='daybtn';b.setAttribute('aria-pressed','false');
+    b.innerHTML='<small>'+(i===0?'Today':i===1?'Tomorrow':fmt.format(d))+'</small><span>'+fmtD.format(d)+'</span>';
+    b.addEventListener('click',function(){pickDay(d,b)});days.appendChild(b);if(i===1)pickDay(d,b);
+  })(i)}
+  function pickDay(d,b){
+    days.querySelectorAll('.daybtn').forEach(function(x){x.setAttribute('aria-pressed','false')});b.setAttribute('aria-pressed','true');
+    sel.date=iso(d);sel.label=fmt.format(d)+' '+fmtD.format(d);sel.win=null;slots.innerHTML='';
+    var now=new Date(),isToday=iso(d)===iso(now);
+    CONFIG.windows.forEach(function(w){
+      var h=parseInt(w,10);if(/pm/.test(w)&&h<12)h+=12;
+      var dis=(isToday&&now.getHours()>=h-2)||CONFIG.booked.indexOf(sel.date+' '+w)>-1;
+      var s=document.createElement('button');s.type='button';s.className='slot';s.setAttribute('aria-pressed','false');s.textContent=w+(dis?' · taken':'');s.disabled=dis;
+      s.addEventListener('click',function(){slots.querySelectorAll('.slot').forEach(function(x){x.setAttribute('aria-pressed','false')});s.setAttribute('aria-pressed','true');sel.win=w;update()});
+      slots.appendChild(s);
+    });
+    update();
+  }
+  var pay=document.getElementById('pay'),form=document.getElementById('bookform');
+  function addons(){var t=0;document.querySelectorAll('.add:checked').forEach(function(c){t+=+c.dataset.price});return t}
+  function money(n){return '$'+n+' USD'}
+  function update(){
+    var ok=sel.pkg&&sel.win;var total=sel.price+addons();
+    document.getElementById('sPkg').textContent=sel.pkg?sel.name+(addons()?' + add-ons':''):'Choose a package above';
+    document.getElementById('sDate').textContent=sel.win?sel.label+' at '+sel.win:'—';
+    document.getElementById('sPrice').textContent=sel.pkg?money(total):'—';
+    document.getElementById('sDeposit').textContent=sel.pkg?money(sel.dep):'—';
+    document.getElementById('sBalance').textContent=sel.pkg?money(total-sel.dep):'—';
+    pay.setAttribute('aria-disabled',ok&&form.checkValidity()?'false':'true');
+  }
+  form.addEventListener('input',update);document.querySelectorAll('.add').forEach(function(c){c.addEventListener('change',update)});
+  function payUrl(dep){return CONFIG.payType==='paypalme'?CONFIG.payBase.replace(/\/?$/,'/')+dep+'USD':CONFIG.payBase}
+  pay.addEventListener('click',function(e){
+    if(pay.getAttribute('aria-disabled')==='true'){e.preventDefault();form.reportValidity();return}
+    var url=payUrl(sel.dep);pay.href=url;document.getElementById('payAgain').href=url;
+    var adds=[];document.querySelectorAll('.add:checked').forEach(function(c){adds.push(c.parentNode.textContent.trim())});
+    var body='LISTING SHOOT BOOKING\nPackage: '+sel.name+'\nAdd-ons: '+(adds.join('; ')||'none')+'\nDate: '+sel.date+' '+sel.win+'\nName: '+document.getElementById('name').value+'\nPhone: '+document.getElementById('phone').value+'\nEmail: '+document.getElementById('email').value+'\nListing: '+document.getElementById('listing').value+'\nBedrooms: '+document.getElementById('beds').value+'\nAccess: '+document.getElementById('access').value+'\nNotes: '+document.getElementById('notes').value+'\nDeposit: $'+sel.dep+' via '+url+'\nTotal: '+document.getElementById('sPrice').textContent;
+    document.getElementById('fallback').value=body;document.getElementById('done').hidden=false;
+    setTimeout(function(){window.location.href='mailto:'+CONFIG.photographerEmail+'?subject='+encodeURIComponent('Shoot booking: '+sel.name+' '+sel.date)+'&body='+encodeURIComponent(body)},600);
+  });
+  update();
+})();
+</script>
+</body>
+</html>
