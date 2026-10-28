@@ -8,12 +8,14 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:map": "node tests/map/run.mjs"
+    "test:map": "node tests/map/run.mjs",
+    "test:shop": "node tests/shop/run.mjs"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@heroicons/react": "^2.1.5",
     "@vercel/analytics": "^1.6.1",
+    "@vercel/blob": "^2.8.2",
     "autoprefixer": "^10.4.20",
     "framer-motion": "^11.11.10",
     "lucide-react": "^0.453.0",
@@ -21,6 +23,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.27.0",
+    "stripe": "^23.0.1",
     "tailwindcss": "^3.4.14"
   },
   "devDependencies": {
