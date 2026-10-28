@@ -1,4 +1,4 @@
-import { SquareCode, Gamepad2, Palette, Mail } from "lucide-react";
+import { SquareCode, Gamepad2, Palette, ShoppingBag, Mail } from "lucide-react";
 
 export const navItems = [
   {
@@ -21,6 +21,13 @@ export const navItems = [
     icon: Palette,
     description: "Photography and paintings",
     gradient: "from-purple-400 to-pink-400",
+  },
+  {
+    path: "shop",
+    name: "Prints",
+    icon: ShoppingBag,
+    description: "Prints, canvases and calendars",
+    gradient: "from-pink-400 to-purple-400",
   },
   {
     path: "contact",

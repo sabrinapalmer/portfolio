@@ -43,5 +43,10 @@
       "destination": "https://brinamaps.com/map/:path*",
       "permanent": false
     }
-  ]
+  ],
+  "functions": {
+    "api/shop/*.js": {
+      "maxDuration": 60
+    }
+  }
 }
