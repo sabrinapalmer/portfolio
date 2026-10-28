@@ -3,23 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Beach &amp; Dog Portraits La Salina</title>
-<meta name="description" content="Beach family, couple and dog portrait sessions at La Salina, Baja California with photographer Sabrina Palmer. Book a daytime or sunset slot online.">
+<title>Beach & Dog Portraits · SMP Photography</title>
+<meta name="description" content="Beach family, couple and dog portrait sessions at La Salina, Baja California with SMP Photography. Book a daytime or sunset slot online.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Nunito:wght@400;600;700&display=swap">
 <style>
-/* Layout: sand ground, deep-sea header, calendar strip + slot grid + checkout card. */
 :root{
   --bg:#fbf3e4; --fg:#163a3f; --muted:#5c6f70; --sea:#0f6d78; --sea-deep:#0b4f58;
-  --coral:#ff6a4d; --coral-ink:#fff; --sun:#ffc54a; --card:#ffffff; --line:#e3d7c0; --ok:#1f7a4d;
+  --coral:#ff6a4d; --coral-ink:#fff; --sun:#ffc54a; --card:#ffffff; --line:#e3d7c0; --ok:#1f7a4d; --off:#ece3d0;
   --display:"Bricolage Grotesque","Arial Black",sans-serif; --body:"Nunito","Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#102a2e; --fg:#f2ead9; --muted:#a9b9b8; --sea:#1b8b97; --sea-deep:#0b3f46;
-  --coral:#ff7a5f; --coral-ink:#1a1a1a; --sun:#ffcf5e; --card:#173a40; --line:#2b5157; --ok:#5cc48f; color-scheme:dark }}
+  --coral:#ff7a5f; --coral-ink:#1a1a1a; --sun:#ffcf5e; --card:#173a40; --line:#2b5157; --ok:#5cc48f; --off:#122f34; color-scheme:dark }}
 :root[data-theme="dark"]{
   --bg:#102a2e; --fg:#f2ead9; --muted:#a9b9b8; --sea:#1b8b97; --sea-deep:#0b3f46;
-  --coral:#ff7a5f; --coral-ink:#1a1a1a; --sun:#ffcf5e; --card:#173a40; --line:#2b5157; --ok:#5cc48f; color-scheme:dark }
+  --coral:#ff7a5f; --coral-ink:#1a1a1a; --sun:#ffcf5e; --card:#173a40; --line:#2b5157; --ok:#5cc48f; --off:#122f34; color-scheme:dark }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:17px;line-height:1.55}
 a{color:var(--sea)}
@@ -33,12 +33,13 @@ p{margin:0}
 nav.top{background:var(--sea-deep)}
 nav.top .wrap{display:flex;justify-content:space-between;align-items:center;padding-block:.8rem;gap:1rem;flex-wrap:wrap}
 nav.top a{color:#fbf3e4;text-decoration:none;font-weight:700;font-size:.95rem}
-nav.top .brand{font-family:var(--display);font-weight:800;font-size:1.1rem}
+nav.top .brand{font-family:var(--display);font-weight:800;font-size:1.15rem;letter-spacing:.02em}
 .hero{background:var(--sea-deep);color:#fbf3e4;position:relative;overflow:hidden}
 .hero .wrap{padding-block:2.4rem 4.2rem;display:grid;gap:1rem;position:relative;z-index:1}
 .hero .eyebrow{color:var(--sun)}
 .hero .lead{font-size:1.1rem;max-width:36rem;color:#d9e6e4}
-.sun{position:absolute;right:-40px;bottom:-120px;width:300px;height:300px;border-radius:50%;background:var(--sun)}
+.sun{position:absolute;right:-40px;bottom:-150px;width:300px;height:300px;border-radius:50%;background:var(--sun)}
+@media (max-width:640px){.sun{width:180px;height:180px;right:-60px;bottom:-110px}}
 .waves{position:absolute;left:0;right:0;bottom:-2px;height:50px;width:100%;display:block}
 section .wrap{padding-block:2.6rem}
 .tiers{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
@@ -51,20 +52,26 @@ ul.list{list-style:none;padding:0;margin:0;display:grid;gap:.4rem;font-size:.97r
 ul.list li{padding-left:1.3rem;position:relative}
 ul.list li::before{content:"";position:absolute;left:0;top:.55em;width:.65rem;height:.65rem;border-radius:50%;background:var(--sun)}
 .book{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.3rem;display:grid;gap:1.1rem}
-.days{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.3rem;scrollbar-width:thin}
-.daybtn{flex:0 0 auto;border:2px solid var(--line);background:transparent;color:var(--fg);border-radius:12px;padding:.5rem .8rem;font:inherit;font-weight:700;cursor:pointer;display:grid;text-align:center;min-width:72px}
+.days{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
+.daybtn{border:2px solid var(--line);background:transparent;color:var(--fg);border-radius:12px;padding:.6rem .5rem;font:inherit;font-weight:700;cursor:pointer;display:grid;text-align:center}
 .daybtn small{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .daybtn[aria-pressed="true"]{background:var(--sea);border-color:var(--sea);color:#fff}
 .daybtn[aria-pressed="true"] small{color:#d9e6e4}
-.group{display:grid;gap:.5rem}
-.group h3{font-size:.85rem;color:var(--muted);font-family:var(--body);font-weight:700;text-transform:uppercase;letter-spacing:.1em}
+.slotbox{border:1px solid var(--line);border-radius:14px;padding:.9rem;display:grid;gap:.7rem;background:var(--bg)}
+.slotbox h3{font-size:.85rem;color:var(--muted);font-family:var(--body);font-weight:700;text-transform:uppercase;letter-spacing:.1em}
 .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.5rem}
-.slot{font-family:var(--display);font-weight:800;font-size:1rem;padding:.7rem .4rem;border-radius:10px;border:2px solid var(--line);background:transparent;color:var(--fg);cursor:pointer;font-variant-numeric:tabular-nums;display:grid;gap:.1rem}
-.slot small{font-family:var(--body);font-weight:600;font-size:.75rem;color:var(--muted)}
-.slot.sun{border-color:var(--coral)}
+.slot{font-family:var(--display);font-weight:800;font-size:1rem;padding:.65rem .4rem;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;font-variant-numeric:tabular-nums;display:grid;gap:.1rem}
+.slot small{font-family:var(--body);font-weight:600;font-size:.72rem;color:var(--muted)}
+.slot.sunset{border-color:var(--coral);grid-column:span 2;background:linear-gradient(180deg,color-mix(in srgb,var(--sun) 25%,var(--card)),var(--card))}
 .slot[aria-pressed="true"]{background:var(--sea);border-color:var(--sea);color:#fff}
 .slot[aria-pressed="true"] small{color:#d9e6e4}
+.slot:disabled{background:var(--off);border-color:transparent;color:var(--muted);cursor:default;text-decoration:line-through}
+.slot:disabled small{text-decoration:none}
 .slot:focus-visible,.daybtn:focus-visible,.btn:focus-visible{outline:3px solid var(--coral);outline-offset:2px}
+.legend{display:flex;gap:1rem;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:.8rem;height:.8rem;border-radius:3px;margin-right:.35rem;vertical-align:-1px;border:2px solid var(--line);background:var(--card)}
+.legend .l-sun::before{border-color:var(--coral)}
+.legend .l-off::before{background:var(--off);border-color:transparent}
 form{display:grid;gap:.8rem}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
 @media (max-width:560px){.fields{grid-template-columns:1fr}}
@@ -76,18 +83,17 @@ textarea{min-height:4.5rem;resize:vertical}
 .summary .big{font-family:var(--display);font-weight:800;font-size:1.3rem}
 .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:1.05rem;padding:.9rem 1.3rem;border-radius:12px;text-decoration:none;border:2px solid transparent;cursor:pointer;background:var(--coral);color:var(--coral-ink);text-align:center}
 .btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
-.btn.line{background:transparent;border-color:var(--sea);color:var(--sea)}
 .note{font-size:.88rem;color:var(--muted)}
 .terms{font-size:.85rem;color:var(--muted);border-left:3px solid var(--sun);padding-left:.8rem}
-.done{display:grid;gap:.6rem;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:1rem}
-.done strong{color:var(--ok)}
+.sent{display:grid;gap:.3rem;font-size:.95rem}
+.sent strong{color:var(--ok)}
 footer .wrap{padding-block:2rem;color:var(--muted);font-size:.9rem;display:grid;gap:.3rem}
 .contact{font-family:var(--display);font-weight:800;word-break:break-all;color:var(--fg)}
 </style>
 </head>
 <body>
 <nav class="top"><div class="wrap">
-  <a class="brand" href="https://sabrinapalmer.com">Sabrina Palmer Photo</a>
+  <a class="brand" href="https://sabrinapalmer.com">SMP Photography</a>
   <a href="/listings">Airbnb &amp; real estate photos →</a>
 </div></nav>
 
@@ -107,7 +113,7 @@ footer .wrap{padding-block:2rem;color:var(--muted);font-size:.9rem;display:grid;
     <div class="tiers">
       <div class="tier">
         <h3>Daytime session</h3>
-        <div class="price">$95 <small>USD · about $1,750 MXN</small></div>
+        <div class="price">$100 <small>USD · about $1,850 MXN</small></div>
         <ul class="list">
           <li>30 minutes, slots from 9:00 am to 3:30 pm</li>
           <li>15 edited high-resolution photos</li>
@@ -119,12 +125,12 @@ footer .wrap{padding-block:2rem;color:var(--muted);font-size:.9rem;display:grid;
       <div class="tier sunset">
         <span class="eyebrow">One per evening</span>
         <h3>Sunset session</h3>
-        <div class="price">$175 <small>USD · about $3,250 MXN</small></div>
+        <div class="price">$150 <small>USD · about $2,800 MXN</small></div>
         <ul class="list">
-          <li>45 minutes, starting 60 minutes before sunset</li>
-          <li>25 edited high-resolution photos</li>
-          <li>Up to 8 people; +$10 per extra person</li>
-          <li>The only slot that gets the golden light</li>
+          <li>30 minutes straddling sunset: 15 before for backlit, silhouette-style shots, 15 after for the soft afterglow on faces</li>
+          <li>15 edited high-resolution photos</li>
+          <li>Up to 6 people; +$10 per extra person</li>
+          <li>The only slot that gets both kinds of light</li>
           <li>Dogs welcome, including dog-only sunset sessions</li>
         </ul>
       </div>
@@ -136,39 +142,38 @@ footer .wrap{padding-block:2rem;color:var(--muted);font-size:.9rem;display:grid;
 <section id="book">
   <div class="wrap">
     <div class="book">
-      <div>
-        <span class="eyebrow">Book</span>
-        <h2>Pick a day and a slot</h2>
-      </div>
+      <div><span class="eyebrow">Book</span><h2>Pick a day and a time</h2></div>
       <div class="days" id="days" role="group" aria-label="Choose a day"></div>
-      <div class="group"><h3>Daytime · $95</h3><div class="slots" id="daySlots"></div></div>
-      <div class="group"><h3>Sunset · $175 · one per evening</h3><div class="slots" id="sunSlots"></div></div>
+      <div class="slotbox">
+        <h3 id="slotTitle">Times</h3>
+        <div class="slots" id="slots"></div>
+        <div class="legend"><span>Daytime $100</span><span class="l-sun">Sunset $150</span><span class="l-off">Taken or past</span></div>
+      </div>
 
       <form id="bookform" novalidate>
         <div class="fields">
-          <label>Your name<input id="name" name="name" required autocomplete="name"></label>
-          <label>Phone or WhatsApp<input id="phone" name="phone" required autocomplete="tel" inputmode="tel"></label>
-          <label>Email<input id="email" name="email" type="email" required autocomplete="email"></label>
-          <label>People in the photos<input id="people" name="people" type="number" min="1" max="20" value="2" required></label>
+          <label>Your name<input id="name" required autocomplete="name"></label>
+          <label>Phone or WhatsApp<input id="phone" required autocomplete="tel" inputmode="tel"></label>
+          <label>Email<input id="email" type="email" required autocomplete="email"></label>
+          <label>People in the photos<input id="people" type="number" min="0" max="20" value="2" required></label>
         </div>
-        <label>Anything I should know (dog names and breeds, kids' ages, occasion)<textarea id="notes" name="notes"></textarea></label>
+        <label>Anything I should know (dog names and breeds, kids' ages, occasion)<textarea id="notes"></textarea></label>
 
-        <div class="summary" id="summary">
-          <div class="row"><span>Session</span><strong id="sSession">Choose a slot above</strong></div>
+        <div class="summary">
+          <div class="row"><span>Session</span><strong id="sSession">Choose a time above</strong></div>
           <div class="row"><span>Session price</span><span id="sPrice">—</span></div>
           <div class="row"><span>Booking deposit (paid now)</span><span id="sDeposit">—</span></div>
           <div class="row big"><span>Due at the session</span><span id="sBalance">—</span></div>
         </div>
 
-        <p class="terms" id="terms">The booking deposit is non-refundable. It is credited in full toward your session. If you don't show within 15 minutes of your slot, the deposit is kept and the slot is released. Reschedule free up to 24 hours ahead; weather cancellations are rescheduled, never charged.</p>
+        <p class="terms">The booking deposit is non-refundable. It is credited in full toward your session. If you don't show within 15 minutes of your slot, the deposit is kept and the slot is released. Reschedule free up to 24 hours ahead; weather cancellations are rescheduled, never charged.</p>
         <label style="display:flex;gap:.6rem;align-items:start;font-weight:600"><input type="checkbox" id="agree" style="width:auto;margin-top:.3rem" required> I understand the deposit is non-refundable and is applied to my session.</label>
 
-        <a class="btn" id="pay" href="#" aria-disabled="true" target="_blank" rel="noopener">Pay deposit and hold my slot</a>
-        <p class="note">Paying opens a secure checkout in a new tab. Your details are sent to Sabrina when you tap the button; the slot is held once the deposit arrives, and you'll get a confirmation by WhatsApp or email within a few hours. Questions: <span class="contact">sabrinampalmer@gmail.com</span></p>
-        <div class="done" id="done" hidden>
-          <strong>Request sent.</strong>
-          <span>If the checkout didn't open, use this link: <a id="payAgain" href="#" target="_blank" rel="noopener">pay the deposit</a>. If your email app didn't open either, copy this and send it to sabrinampalmer@gmail.com:</span>
-          <textarea id="fallback" readonly></textarea>
+        <a class="btn" id="pay" href="#" aria-disabled="true" target="_blank" rel="noopener">Pay deposit and hold my time</a>
+        <p class="note" id="payNote">Paying opens PayPal in a new tab and sends your booking details to SMP Photography. Your time is held once the deposit arrives; you'll get a confirmation by WhatsApp or email within a few hours.</p>
+        <div class="sent" id="sent" hidden>
+          <strong>Booking request sent.</strong>
+          <span>Finish the deposit in the PayPal tab (<a id="payAgain" href="#" target="_blank" rel="noopener">reopen it</a> if needed). Confirmation follows by WhatsApp or email.</span>
         </div>
       </form>
     </div>
@@ -179,101 +184,89 @@ footer .wrap{padding-block:2rem;color:var(--muted);font-size:.9rem;display:grid;
   <div class="wrap" style="display:grid;gap:.8rem;max-width:720px">
     <span class="eyebrow">What to expect</span>
     <h2>Fast, unposed, and done before anyone gets bored.</h2>
-    <p>We meet on the beach at La Salina (exact spot sent with your confirmation). I shoot a Canon 5D Mark IV and work quickly; kids and dogs do best when nobody has to hold still. For dog sessions, bring a favorite toy and a long leash; I photograph them running, swimming and shaking off, then clone the leash out. Wear colors that look good against sand and water: cream, rust, denim, olive, white. Photos arrive as a private online gallery you can download and share. More of my work at <a href="https://sabrinapalmer.com">sabrinapalmer.com</a>.</p>
+    <p>We meet on the beach at La Salina (exact spot sent with your confirmation). I shoot a Canon 5D Mark IV and work quickly; kids and dogs do best when nobody has to hold still. For dog sessions, bring a favorite toy and a long leash; I photograph them running, swimming and shaking off, then clone the leash out. Wear colors that look good against sand and water: cream, rust, denim, olive, white. Photos arrive as a private online gallery you can download and share. More work at <a href="https://sabrinapalmer.com">sabrinapalmer.com</a>.</p>
   </div>
 </section>
 
 <footer><div class="wrap">
-  <span>Sabrina Palmer Photo · La Salina, Baja California</span>
-  <span>sabrinampalmer@gmail.com</span>
+  <span>SMP Photography · Sabrina Palmer · La Salina, Baja California</span>
+  <span class="contact">sabrinampalmer@gmail.com</span>
 </div></footer>
 
 <script>
-/* ===== CONFIG: edit these lines ===== */
+/* ===== CONFIG ===== */
 var CONFIG = {
   photographerEmail: "sabrinampalmer@gmail.com",
-  // Payment link base. PayPal.me: "https://paypal.me/YOURHANDLE/" (amount is appended automatically).
-  // Stripe Payment Link: paste the full link and set payType: "fixed".
   payBase: "https://paypal.me/sabrinampalmer/",
-  payType: "paypalme",            // "paypalme" or "fixed"
-  depositDay: 30,                 // USD, daytime session
-  depositSunset: 60,              // USD, sunset session
-  priceDay: 95,
-  priceSunset: 175,
-  daysAhead: 14,
+  priceDay: 100, priceSunset: 150,
+  depositDay: 30, depositSunset: 50,
+  daysAhead: 3,
   daySlots: ["9:00","9:30","10:00","10:30","11:00","11:30","12:00","12:30","1:00","1:30","2:00","2:30","3:00","3:30"],
-  sunsetTimes: {10:"4:45",11:"4:00",12:"3:50",1:"4:10",2:"4:35",3:"5:50",4:"6:10",5:"6:30",6:"6:45",7:"6:45",8:"6:25",9:"5:50"}, // start times by month (Baja, ~60 min before sunset)
-  booked: []                      // e.g. ["2026-10-29 sunset","2026-10-30 11:00"] to mark slots taken
+  // approximate sunset at La Salina by month (local time); session starts 15 min before and ends 15 min after
+  sunsetTimes: {1:"5:05",2:"5:30",3:"6:55",4:"7:15",5:"7:35",6:"7:55",7:"7:55",8:"7:35",9:"7:00",10:"6:20",11:"4:50",12:"4:45"},
+  booked: []   // e.g. ["2026-10-29 sunset","2026-10-30 11:00"]
 };
-/* ==================================== */
+/* ================== */
 (function(){
-  var days=document.getElementById('days'), dayWrap=document.getElementById('daySlots'), sunWrap=document.getElementById('sunSlots');
+  var days=document.getElementById('days'), slots=document.getElementById('slots'), title=document.getElementById('slotTitle');
   var sel={date:null,label:null,type:null,time:null};
+  var pay=document.getElementById('pay'),form=document.getElementById('bookform');
   var fmt=new Intl.DateTimeFormat('en-US',{weekday:'short'}), fmtD=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'});
   function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-  var today=new Date(); today.setHours(0,0,0,0);
-  var list=[];
-  for(var i=0;i<CONFIG.daysAhead;i++){var d=new Date(today);d.setDate(today.getDate()+i);list.push(d)}
-  list.forEach(function(d,i){
+  function to24(t){var h=parseInt(t,10),m=parseInt(t.split(':')[1],10);if(h<8)h+=12;return h*60+m}
+  var today=new Date();today.setHours(0,0,0,0);
+  for(var i=0;i<CONFIG.daysAhead;i++){(function(i){
+    var d=new Date(today);d.setDate(today.getDate()+i);
     var b=document.createElement('button');b.type='button';b.className='daybtn';b.setAttribute('aria-pressed','false');
     b.innerHTML='<small>'+(i===0?'Today':i===1?'Tomorrow':fmt.format(d))+'</small><span>'+fmtD.format(d)+'</span>';
-    b.addEventListener('click',function(){pickDay(d,b)});
-    days.appendChild(b);
-    if(i===0)pickDay(d,b);
-  });
+    b.addEventListener('click',function(){pickDay(d,b)});days.appendChild(b);if(i===0)pickDay(d,b);
+  })(i)}
   function pickDay(d,b){
-    days.querySelectorAll('.daybtn').forEach(function(x){x.setAttribute('aria-pressed','false')});
-    b.setAttribute('aria-pressed','true');
+    days.querySelectorAll('.daybtn').forEach(function(x){x.setAttribute('aria-pressed','false')});b.setAttribute('aria-pressed','true');
     sel={date:iso(d),label:fmt.format(d)+' '+fmtD.format(d),type:null,time:null};
-    renderSlots(d);update();
-  }
-  function renderSlots(d){
-    dayWrap.innerHTML='';sunWrap.innerHTML='';
-    var now=new Date(), isToday=iso(d)===iso(now);
+    title.textContent='Times · '+sel.label;
+    slots.innerHTML='';
+    var now=new Date(),isToday=iso(d)===iso(now),nowMin=now.getHours()*60+now.getMinutes();
     CONFIG.daySlots.forEach(function(t){
-      var h=parseInt(t,10), m=parseInt(t.split(':')[1],10); if(h<8)h+=12;
-      var past=isToday && (now.getHours()>h || (now.getHours()===h && now.getMinutes()>m-45));
-      var taken=CONFIG.booked.indexOf(sel.date+' '+t)>-1;
-      addSlot(dayWrap,t,(h<12?'am':'pm'),'day',past||taken);
+      var past=isToday&&nowMin>to24(t)-45, taken=CONFIG.booked.indexOf(sel.date+' '+t)>-1;
+      addSlot(t,(to24(t)<720?'am':'pm'),'day',past?'past':taken?'taken':null);
     });
-    var st=CONFIG.sunsetTimes[d.getMonth()+1]||'5:00';
-    var sh=parseInt(st,10)+12;
-    var sunPast=isToday && now.getHours()>=sh-1;
-    var sunTaken=CONFIG.booked.indexOf(sel.date+' sunset')>-1;
-    addSlot(sunWrap,st,'pm · sunset','sunset',sunPast||sunTaken);
+    var sunset=CONFIG.sunsetTimes[d.getMonth()+1]||'6:00';
+    if(d.getMonth()===9&&d.getDate()>=25)sunset='6:05'; if(d.getMonth()===10&&d.getDate()<8)sunset='4:55';
+    var startMin=to24(sunset)-15, st=(Math.floor(startMin/60)>12?Math.floor(startMin/60)-12:Math.floor(startMin/60))+':'+String(startMin%60).padStart(2,'0');
+    var sunPast=isToday&&nowMin>startMin-45, sunTaken=CONFIG.booked.indexOf(sel.date+' sunset')>-1;
+    addSlot(st,'sunset '+sunset+' pm','sunset',sunPast?'past':sunTaken?'taken':null);
+    update();
   }
-  function addSlot(w,t,sub,type,disabled){
-    var b=document.createElement('button');b.type='button';b.className='slot'+(type==='sunset'?' sun':'');b.setAttribute('aria-pressed','false');
-    b.innerHTML=t+'<small>'+(disabled?'taken':sub)+'</small>';b.disabled=disabled;
+  function addSlot(t,sub,type,off){
+    var b=document.createElement('button');b.type='button';b.className='slot'+(type==='sunset'?' sunset':'');b.setAttribute('aria-pressed','false');
+    b.innerHTML=t+'<small>'+(off||sub)+'</small>';b.disabled=!!off;
     b.addEventListener('click',function(){
-      document.querySelectorAll('.slot').forEach(function(x){x.setAttribute('aria-pressed','false')});
+      slots.querySelectorAll('.slot').forEach(function(x){x.setAttribute('aria-pressed','false')});
       b.setAttribute('aria-pressed','true');sel.type=type;sel.time=t;update();
     });
-    w.appendChild(b);
+    slots.appendChild(b);
   }
-  var pay=document.getElementById('pay'), form=document.getElementById('bookform');
   function money(n){return '$'+n+' USD'}
   function update(){
     var ok=!!sel.type;
     var price=sel.type==='sunset'?CONFIG.priceSunset:CONFIG.priceDay;
     var dep=sel.type==='sunset'?CONFIG.depositSunset:CONFIG.depositDay;
-    var extra=Math.max(0,(parseInt(document.getElementById('people').value||'0',10))-(sel.type==='sunset'?8:6))*10;
-    document.getElementById('sSession').textContent=ok?(sel.type==='sunset'?'Sunset':'Daytime')+' · '+sel.label+' at '+sel.time:'Choose a slot above';
+    var extra=Math.max(0,(parseInt(document.getElementById('people').value||'0',10))-6)*10;
+    document.getElementById('sSession').textContent=ok?(sel.type==='sunset'?'Sunset':'Daytime')+' · '+sel.label+' at '+sel.time:'Choose a time above';
     document.getElementById('sPrice').textContent=ok?money(price+extra):'—';
     document.getElementById('sDeposit').textContent=ok?money(dep):'—';
     document.getElementById('sBalance').textContent=ok?money(price+extra-dep):'—';
-    pay.setAttribute('aria-disabled', ok&&form.checkValidity()?'false':'true');
+    pay.setAttribute('aria-disabled',ok&&form.checkValidity()?'false':'true');
   }
   form.addEventListener('input',update);
-  function payUrl(dep){return CONFIG.payType==='paypalme'?CONFIG.payBase.replace(/\/?$/,'/')+dep+'USD':CONFIG.payBase}
+  function payUrl(dep){return CONFIG.payBase.replace(/\/?$/,'/')+dep+'USD'}
   pay.addEventListener('click',function(e){
     if(pay.getAttribute('aria-disabled')==='true'){e.preventDefault();form.reportValidity();return}
     var dep=sel.type==='sunset'?CONFIG.depositSunset:CONFIG.depositDay;
-    var url=payUrl(dep); pay.href=url; document.getElementById('payAgain').href=url;
-    var body='BEACH / DOG PORTRAIT BOOKING\nSession: '+document.getElementById('sSession').textContent+'\nDate: '+sel.date+'\nName: '+document.getElementById('name').value+'\nPhone: '+document.getElementById('phone').value+'\nEmail: '+document.getElementById('email').value+'\nPeople: '+document.getElementById('people').value+'\nNotes: '+document.getElementById('notes').value+'\nDeposit: $'+dep+' paid via '+url+'\nTotal: '+document.getElementById('sPrice').textContent;
-    document.getElementById('fallback').value=body;
-    document.getElementById('done').hidden=false;
-    // send the request by email (opens the visitor's mail app), payment opens in the new tab via the link itself
+    var url=payUrl(dep);pay.href=url;document.getElementById('payAgain').href=url;
+    var body='BEACH / DOG PORTRAIT BOOKING\nSession: '+document.getElementById('sSession').textContent+'\nDate: '+sel.date+'\nName: '+document.getElementById('name').value+'\nPhone: '+document.getElementById('phone').value+'\nEmail: '+document.getElementById('email').value+'\nPeople: '+document.getElementById('people').value+'\nNotes: '+document.getElementById('notes').value+'\nDeposit: $'+dep+' via '+url+'\nTotal: '+document.getElementById('sPrice').textContent;
+    document.getElementById('payNote').hidden=true;document.getElementById('sent').hidden=false;
     setTimeout(function(){window.location.href='mailto:'+CONFIG.photographerEmail+'?subject='+encodeURIComponent('Booking: '+document.getElementById('sSession').textContent)+'&body='+encodeURIComponent(body)},600);
   });
   update();
