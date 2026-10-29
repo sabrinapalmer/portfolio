@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Analyst</title>
+<meta name="description" content="Understand, keep and move your streaming history and playlists. Runs entirely in your browser.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#fbf7f1; --card:#ffffff; --ink:#1d1a17; --muted:#6c655c; --line:#e9e1d6;
+  --accent:#ff5c8a; --accent2:#ffb347; --accent3:#4fc1b5; --accent4:#7c6cff;
+  --radius:18px; --shadow:0 6px 24px rgba(40,30,20,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171412; --card:#221e1b; --ink:#f3ede6; --muted:#a79d92; --line:#352f2a; --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{ --bg:#171412; --card:#221e1b; --ink:#f3ede6; --muted:#a79d92; --line:#352f2a; --shadow:0 6px 24px rgba(0,0,0,.35); }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent4)}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:20px}
+h1{margin:0;font-size:clamp(28px,5vw,44px);letter-spacing:-.02em}
+h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3),var(--accent4));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:300% 100%;animation:shift 9s linear infinite}
+@keyframes shift{to{background-position:300% 0}}
+.sub{color:var(--muted);margin:4px 0 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.drop{border:2px dashed var(--accent3);border-radius:var(--radius);padding:36px 16px;text-align:center;transition:.2s;cursor:pointer;background:var(--card)}
+.drop.over{background:rgba(79,193,181,.12);transform:scale(1.01)}
+.drop strong{display:block;font-size:18px}
+.drop small{color:var(--muted)}
+.btn{display:inline-block;border:0;border-radius:999px;padding:10px 18px;background:var(--ink);color:var(--bg);font-weight:600;cursor:pointer;font-size:14px;transition:transform .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn.alt{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.small{padding:6px 12px;font-size:13px}
+.btn.pink{background:var(--accent);color:#fff}
+.stat{padding:16px}
+.stat .n{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.stat .l{color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:20px 0 14px}
+.tab{padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600;font-size:14px}
+.tab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.panel{display:none}.panel.on{display:block}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin-top:4px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+select,input[type=text],input[type=search]{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:14px}
+.chartbox{position:relative;height:260px}
+.muted{color:var(--muted)}
+.hid{display:none}
+details{border-top:1px solid var(--line);padding:10px 0}
+summary{cursor:pointer;font-weight:600;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;background:rgba(124,108,255,.14);color:var(--accent4);font-size:12px;font-weight:600;margin-left:6px}
+.status{font-size:14px;color:var(--muted);margin-top:10px;min-height:20px}
+.note{font-size:14px;color:var(--muted)}
+h2{font-size:20px;margin:0 0 10px}
+h3{font-size:16px;margin:18px 0 8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+code{background:rgba(127,127,127,.15);padding:1px 5px;border-radius:5px;font-size:13px}
+pre{background:rgba(127,127,127,.12);padding:12px;border-radius:12px;overflow:auto;font-size:13px}
+.heat{display:grid;grid-template-columns:repeat(24,1fr);gap:3px}
+.heat div{aspect-ratio:1;border-radius:3px;background:var(--accent);opacity:.08}
+.heatlbl{display:grid;grid-template-columns:repeat(24,1fr);font-size:10px;color:var(--muted);margin-top:4px}
+.scroll{max-height:460px;overflow:auto}
+.search{width:100%;max-width:360px}
+footer{margin-top:40px;color:var(--muted);font-size:13px}
+@media (max-width:600px){.chartbox{height:220px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1><span>Music Analyst</span></h1>
+    <p class="sub">Your listening history and playlists, outside the app. Everything runs in your browser; nothing is uploaded.</p>
+  </div>
+  <div class="row">
+    <button class="btn alt small" id="loadSaved" style="display:none">Load saved data</button>
+    <button class="btn alt small" id="demoBtn">Try with sample data</button>
+  </div>
+</header>
+
+<section id="intake">
+  <div class="drop" id="drop">
+    <strong>Drop your Spotify export here</strong>
+    <small>The ZIP as downloaded, or the JSON files inside it. Account data export, extended streaming history, or both.</small>
+    <div style="margin-top:14px"><button class="btn pink" type="button" id="pickBtn">Choose files</button></div>
+    <input type="file" id="file" multiple accept=".zip,.json,application/zip,application/json" class="hid">
+  </div>
+  <div class="status" id="status"></div>
+  <details style="margin-top:8px">
+    <summary>How to get the export</summary>
+    <ol class="note">
+      <li>Spotify account page → Privacy settings → Download your data.</li>
+      <li>Tick <b>Account data</b> (playlists, library, last year of history, ~5 days) and <b>Extended streaming history</b> (every play since your account started, up to ~30 days).</li>
+      <li>Spotify emails a ZIP. Drop it here. The page reads <code>StreamingHistory*.json</code>, <code>Streaming_History_Audio_*.json</code>, <code>Playlist*.json</code>, <code>YourLibrary.json</code> and <code>Follow.json</code>; everything else is ignored.</li>
+    </ol>
+  </details>
+</section>
+
+<section id="app" class="hid">
+  <div class="controls">
+    <label>Period <select id="yearSel"><option value="all">All time</option></select></label>
+    <label>Rank by <select id="rankSel"><option value="ms">Time listened</option><option value="plays">Play count</option></select></label>
+    <span class="muted" id="rangeNote"></span>
+    <span style="flex:1"></span>
+    <button class="btn alt small" id="saveBtn">Save in this browser</button>
+    <button class="btn alt small" id="clearBtn">Start over</button>
+  </div>
+
+  <div class="grid g4" id="stats"></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-t="overview">Overview</button>
+    <button class="tab" data-t="top">Artists &amp; tracks</button>
+    <button class="tab" data-t="habits">Habits</button>
+    <button class="tab" data-t="discovery">Discovery</button>
+    <button class="tab" data-t="playlists">Playlists</button>
+    <button class="tab" data-t="library">Library</button>
+    <button class="tab" data-t="export">Keep &amp; move</button>
+  </div>
+
+  <div class="panel on" id="p-overview">
+    <div class="grid g2">
+      <div class="card"><h2>Listening over time</h2><div class="chartbox"><canvas id="cMonthly"></canvas></div></div>
+      <div class="card"><h2>Top 10 artists</h2><div class="chartbox"><canvas id="cArtists"></canvas></div></div>
+      <div class="card"><h2>Where you listen</h2><div class="chartbox"><canvas id="cPlatform"></canvas></div><p class="note" id="platformNote"></p></div>
+      <div class="card"><h2>Podcasts vs music</h2><div class="chartbox"><canvas id="cType"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-top">
+    <div class="controls"><input type="search" id="topSearch" class="search" placeholder="Filter by artist, track or album"></div>
+    <div class="grid g2">
+      <div class="card"><h2>Artists</h2><div class="scroll"><table id="tArtists"></table></div></div>
+      <div class="card"><h2>Tracks</h2><div class="scroll"><table id="tTracks"></table></div></div>
+      <div class="card"><h2>Albums</h2><div class="scroll"><table id="tAlbums"></table></div></div>
+      <div class="card"><h2>Podcast shows</h2><div class="scroll"><table id="tShows"></table></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-habits">
+    <div class="grid g2">
+      <div class="card"><h2>Hour of day (local time)</h2><div class="heat" id="heat"></div><div class="heatlbl" id="heatlbl"></div><p class="note">Darker = more listening. Times use this device's timezone.</p></div>
+      <div class="card"><h2>Day of week</h2><div class="chartbox"><canvas id="cDow"></canvas></div></div>
+      <div class="card"><h2>Skipping and shuffle</h2><div id="skipBox" class="note"></div><div class="chartbox" style="margin-top:10px"><canvas id="cReason"></canvas></div></div>
+      <div class="card"><h2>Year by year</h2><div class="scroll"><table id="tYears"></table></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-discovery">
+    <div class="grid g2">
+      <div class="card"><h2>New artists found per year</h2><div class="chartbox"><canvas id="cNew"></canvas></div><p class="note">An artist counts as new in the year you first played them (extended history only; the one-year export can't see further back).</p></div>
+      <div class="card"><h2>Artists you dropped</h2><p class="note">Big in an earlier year, nothing in the last 12 months of data.</p><div class="scroll"><table id="tDropped"></table></div></div>
+      <div class="card"><h2>One-hit listens</h2><p class="note">Artists you played exactly once, in full. Worth a second look.</p><div class="scroll"><table id="tOneHit"></table></div></div>
+      <div class="card"><h2>Most-skipped tracks</h2><p class="note">Tracks started 5+ times and skipped most of the time.</p><div class="scroll"><table id="tSkipped"></table></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-playlists">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Playlists <span class="pill" id="plCount"></span></h2>
+        <div class="row">
+          <button class="btn small" data-plexport="csv">All as CSV (zip)</button>
+          <button class="btn small" data-plexport="m3u">All as M3U (zip)</button>
+          <button class="btn small alt" data-plexport="json">All as JSON</button>
+        </div>
+      </div>
+      <p class="note">Playlists come from the account-data export (<code>Playlist*.json</code>). Spotify's API no longer lets small independent apps read other people's profiles, so the export is the reliable route.</p>
+      <div id="plList"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-library">
+    <div class="grid g2">
+      <div class="card"><h2>Liked songs <span class="pill" id="likedCount"></span></h2><div class="row" style="margin-bottom:8px"><button class="btn small" data-lib="tracks-csv">CSV</button><button class="btn small alt" data-lib="tracks-m3u">M3U</button></div><div class="scroll"><table id="tLiked"></table></div></div>
+      <div class="card"><h2>Saved albums <span class="pill" id="albumCount"></span></h2><div class="row" style="margin-bottom:8px"><button class="btn small" data-lib="albums-csv">CSV</button></div><div class="scroll"><table id="tSavedAlbums"></table></div></div>
+      <div class="card"><h2>Followed artists <span class="pill" id="artistCount"></span></h2><div class="row" style="margin-bottom:8px"><button class="btn small" data-lib="artists-csv">CSV</button></div><div class="scroll"><table id="tFollowed"></table></div></div>
+      <div class="card"><h2>Shows and episodes <span class="pill" id="showCount"></span></h2><div class="scroll"><table id="tSavedShows"></table></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-export">
+    <div class="grid g2">
+      <div class="card">
+        <h2>Move to another service</h2>
+        <p class="note">Transfer tools (Soundiiz, TuneMyMusic, FreeYourMusic) and most apps accept a CSV with Title, Artist, Album columns. These files use exactly that layout.</p>
+        <div class="row">
+          <button class="btn small" data-plexport="csv">Playlists CSV (zip)</button>
+          <button class="btn small" data-lib="tracks-csv">Liked songs CSV</button>
+          <button class="btn small" data-x="top-csv">Top 500 tracks CSV</button>
+        </div>
+        <h3>Apple Music / YouTube Music / Tidal / Deezer</h3>
+        <p class="note">Use the CSVs above with a transfer tool, or paste them into the service's importer where one exists. Local-file M3Us won't help here.</p>
+      </div>
+      <div class="card">
+        <h2>Set up your own music server</h2>
+        <p class="note">Navidrome, Jellyfin, Plexamp and Funkwhale all play files you own and import M3U playlists. The M3Us here reference files as <code>Artist/Album/Title.ext</code>, matching the folder layout beets, Lidarr and most taggers produce. Rename the extension to match your rips.</p>
+        <div class="row">
+          <button class="btn small" data-plexport="m3u">Playlists M3U (zip)</button>
+          <button class="btn small" data-lib="tracks-m3u">Liked songs M3U</button>
+          <button class="btn small" data-x="shopping">Shopping list CSV</button>
+          <button class="btn small alt" data-x="lidarr">Artist list for Lidarr</button>
+        </div>
+        <p class="note" style="margin-top:10px">The shopping list is every unique album that appears in your playlists, liked songs, or top plays, with how many of your tracks it covers, so you can buy or rip the ones that matter first. Bandcamp and Discogs search links are included.</p>
+      </div>
+      <div class="card">
+        <h2>Keep the raw history</h2>
+        <p class="note">One flat CSV of every play, normalized across both export formats. Opens in a spreadsheet; survives Spotify changing its formats.</p>
+        <div class="row">
+          <button class="btn small" data-x="history-csv">History CSV</button>
+          <button class="btn small alt" data-x="bundle">Everything (zip)</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Summary report</h2>
+        <p class="note">A plain-text summary of the current period. Paste it anywhere.</p>
+        <div class="row"><button class="btn small" data-x="report">Download report</button><button class="btn small alt" id="copyReport">Copy to clipboard</button></div>
+        <pre id="reportPre" style="margin-top:10px;max-height:300px"></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>Reads the official export files only. No account login, no tracking, no server. Built by Sabrina Palmer.</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const fmtH=ms=>{const h=ms/36e5;return h>=10?Math.round(h).toLocaleString()+' h':h>=1?h.toFixed(1)+' h':Math.round(ms/6e4)+' min'};
+const fmtN=n=>n.toLocaleString();
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uriLink=u=>{if(!u)return'';const m=/^spotify:(track|album|artist|episode|show|playlist):([A-Za-z0-9]+)/.exec(u);return m?`https://open.spotify.com/${m[1]}/${m[2]}`:''};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+// ---------- state ----------
+let D={streams:[],playlists:[],library:{tracks:[],albums:[],artists:[],shows:[],episodes:[]},follow:{},sources:[]};
+let charts={};
+let year='all', rank='ms';
+
+// ---------- parsing ----------
+function parseStreamBasic(r){ // StreamingHistory*.json
+  if(!r||!r.endTime)return null;
+  return {ts:new Date(r.endTime.replace(' ','T')+':00Z'),ms:r.msPlayed||0,track:r.trackName||'',artist:r.artistName||'',album:'',uri:'',platform:'',skipped:null,shuffle:null,reason_end:'',country:'',type:'music',src:'basic'};
+}
+function parseStreamExt(r){ // Streaming_History_Audio_*.json
+  if(!r||!r.ts)return null;
+  const isMusic=!!r.master_metadata_track_name, isPod=!!r.episode_name, isBook=!!r.audiobook_title;
+  if(!isMusic&&!isPod&&!isBook)return null;
+  return {ts:new Date(r.ts),ms:r.ms_played||0,
+    track:isMusic?r.master_metadata_track_name:isPod?r.episode_name:r.audiobook_chapter_title||r.audiobook_title,
+    artist:isMusic?(r.master_metadata_album_artist_name||''):isPod?(r.episode_show_name||''):(r.audiobook_title||''),
+    album:isMusic?(r.master_metadata_album_album_name||''):'',
+    uri:r.spotify_track_uri||r.spotify_episode_uri||r.audiobook_uri||'',
+    platform:normPlatform(r.platform),skipped:r.skipped===true?1:r.skipped===false?0:null,
+    shuffle:r.shuffle===true?1:r.shuffle===false?0:null,reason_end:r.reason_end||'',reason_start:r.reason_start||'',country:r.conn_country||'',
+    type:isMusic?'music':isPod?'podcast':'audiobook',src:'ext'};
+}
+function normPlatform(p){
+  if(!p)return'Unknown';p=p.toLowerCase();
+  if(p.includes('ios')||p.includes('iphone')||p.includes('ipad'))return'iPhone / iPad';
+  if(p.includes('android'))return'Android';
+  if(p.includes('osx')||p.includes('macos')||p.includes('mac '))return'Mac';
+  if(p.includes('windows'))return'Windows';
+  if(p.includes('web'))return'Web player';
+  if(p.includes('sonos')||p.includes('cast')||p.includes('google')||p.includes('alexa')||p.includes('echo')||p.includes('speaker'))return'Speakers';
+  if(p.includes('car')||p.includes('tesla')||p.includes('vehicle'))return'Car';
+  if(p.includes('tv')||p.includes('roku')||p.includes('fire')||p.includes('xbox')||p.includes('playstation')||p.includes('ps4')||p.includes('ps5'))return'TV / console';
+  if(p.includes('linux'))return'Linux';
+  return p.split(/[ (]/)[0].replace(/^\w/,c=>c.toUpperCase());
+}
+function parsePlaylists(j){
+  const out=[];(j.playlists||[]).forEach(p=>{
+    const items=(p.items||[]).map(it=>{
+      if(it.track)return{title:it.track.trackName||'',artist:it.track.artistName||'',album:it.track.albumName||'',uri:it.track.trackUri||'',added:it.addedDate||'',kind:'track'};
+      if(it.episode)return{title:it.episode.episodeName||'',artist:it.episode.showName||'',album:'',uri:it.episode.episodeUri||'',added:it.addedDate||'',kind:'episode'};
+      if(it.localTrack)return{title:it.localTrack.trackName||it.localTrack.name||'',artist:it.localTrack.artistName||'',album:it.localTrack.albumName||'',uri:'',added:it.addedDate||'',kind:'local'};
+      return null;}).filter(Boolean);
+    out.push({name:p.name||'Untitled',description:p.description||'',modified:p.lastModifiedDate||'',followers:p.numberOfFollowers||0,items});
+  });return out;
+}
+function parseLibrary(j){
+  return{tracks:(j.tracks||[]).map(t=>({title:t.track||'',artist:t.artist||'',album:t.album||'',uri:t.uri||''})),
+    albums:(j.albums||[]).map(a=>({title:a.album||'',artist:a.artist||'',uri:a.uri||''})),
+    artists:(j.artists||[]).map(a=>({name:a.name||'',uri:a.uri||''})),
+    shows:(j.shows||[]).map(s=>({name:s.name||'',publisher:s.publisher||'',uri:s.uri||''})),
+    episodes:(j.episodes||[]).map(e=>({name:e.name||'',show:e.show||'',uri:e.uri||''}))};
+}
+async function ingestFiles(files){
+  setStatus('Reading…');
+  const jsons=[];
+  for(const f of files){
+    const name=f.name.toLowerCase();
+    if(name.endsWith('.zip')){
+      const zip=await JSZip.loadAsync(f);
+      for(const [path,entry] of Object.entries(zip.files)){
+        if(entry.dir||!path.toLowerCase().endsWith('.json'))continue;
+        jsons.push({name:path.split('/').pop(),text:await entry.async('string')});
+      }
+    }else if(name.endsWith('.json')){jsons.push({name:f.name,text:await f.text()});}
+  }
+  if(!jsons.length){setStatus('No JSON files found. Drop the ZIP Spotify sent you, or the .json files inside it.');return;}
+  const basic=[],ext=[];let pls=[],lib=null,follow={},used=[];
+  for(const {name,text} of jsons){
+    let j;try{j=JSON.parse(text)}catch(e){continue}
+    const n=name.toLowerCase();
+    if(/streaming_history_(audio|video)/.test(n)||/endsong/.test(n)){(Array.isArray(j)?j:[]).forEach(r=>{const s=parseStreamExt(r);if(s)ext.push(s)});used.push(name);}
+    else if(/streaminghistory/.test(n)){(Array.isArray(j)?j:[]).forEach(r=>{const s=parseStreamBasic(r);if(s)basic.push(s)});used.push(name);}
+    else if(/playlist/.test(n)&&j.playlists){pls=pls.concat(parsePlaylists(j));used.push(name);}
+    else if(/yourlibrary/.test(n)){lib=parseLibrary(j);used.push(name);}
+    else if(/^follow/.test(n)||/\/follow\.json$/.test(n)){follow=j;used.push(name);}
+  }
+  // Prefer extended history; the basic export is a subset of it.
+  let streams=ext.length?ext:basic;
+  if(ext.length&&basic.length){
+    const maxExt=Math.max(...ext.map(s=>+s.ts));
+    basic.forEach(s=>{if(+s.ts>maxExt+36e5)streams.push(s)}); // keep basic rows newer than extended coverage
+  }
+  streams=streams.filter(s=>!isNaN(+s.ts)).sort((a,b)=>a.ts-b.ts);
+  D={streams,playlists:pls,library:lib||D.library,follow,sources:used};
+  if(!streams.length&&!pls.length&&!lib){setStatus('Those files didn\'t contain history, playlists or library data. Expected names: StreamingHistory*.json, Streaming_History_Audio_*.json, Playlist1.json, YourLibrary.json.');return;}
+  setStatus(`Loaded ${used.length} file(s): ${fmtN(streams.length)} plays, ${pls.length} playlists, ${(lib?lib.tracks.length:0)} liked songs.`);
+  boot();
+}
+function setStatus(t){$('#status').textContent=t}
+
+// ---------- filtering & aggregation ----------
+function filtered(){return year==='all'?D.streams:D.streams.filter(s=>s.ts.getFullYear()==year)}
+function agg(rows,keyFn,extra){
+  const m=new Map();
+  for(const s of rows){const k=keyFn(s);if(!k)continue;let o=m.get(k);if(!o){o={key:k,ms:0,plays:0,full:0,skips:0,starts:0,first:s.ts,last:s.ts,uri:s.uri,album:s.album,artist:s.artist,track:s.track};m.set(k,o)}
+    o.ms+=s.ms;o.starts++;if(s.ms>=30000)o.plays++;if(s.skipped===1)o.skips++;if(s.ms>=30000&&s.skipped===0)o.full++;if(s.ts<o.first)o.first=s.ts;if(s.ts>o.last)o.last=s.ts;if(!o.uri&&s.uri)o.uri=s.uri;}
+  return Array.from(m.values());
+}
+const sortBy=(arr,k)=>arr.sort((a,b)=>b[k]-a[k]);
+
+// ---------- rendering ----------
+function boot(){
+  $('#intake').classList.add('hid');$('#app').classList.remove('hid');
+  const ys=[...new Set(D.streams.map(s=>s.ts.getFullYear()))].sort((a,b)=>b-a);
+  const sel=$('#yearSel');sel.innerHTML='<option value="all">All time</option>'+ys.map(y=>`<option value="${y}">${y}</option>`).join('');
+  year='all';render();
+}
+function render(){
+  const rows=filtered(),music=rows.filter(s=>s.type==='music');
+  const totalMs=rows.reduce((a,s)=>a+s.ms,0),musicMs=music.reduce((a,s)=>a+s.ms,0);
+  const artists=agg(music,s=>s.artist),tracks=agg(music,s=>s.uri||(s.artist+'\u2014'+s.track)),albums=agg(music,s=>s.album?s.artist+'\u2014'+s.album:'');
+  const shows=agg(rows.filter(s=>s.type==='podcast'),s=>s.artist);
+  if(rows.length){const a=rows[0].ts,b=rows[rows.length-1].ts;$('#rangeNote').textContent=`${a.toLocaleDateString()} – ${b.toLocaleDateString()} · ${D.streams.some(s=>s.src==='ext')?'extended history':'last-year history only'}`}
+  else $('#rangeNote').textContent='No history in these files';
+  // stats
+  const days=rows.length?Math.max(1,(rows[rows.length-1].ts-rows[0].ts)/864e5):0;
+  $('#stats').innerHTML=[
+    [fmtH(totalMs),'listened'],[fmtN(music.filter(s=>s.ms>=30000).length),'music plays (30s+)'],[fmtN(artists.length),'distinct artists'],[fmtN(tracks.length),'distinct tracks'],
+    [days?fmtH(totalMs/days*1):'—','per day on average'],[fmtH(totalMs-musicMs),'podcasts & books']
+  ].map(([n,l])=>`<div class="card stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  renderOverview(rows,music,artists);
+  renderTop(artists,tracks,albums,shows);
+  renderHabits(rows,music);
+  renderDiscovery(music,tracks);
+  renderPlaylists();renderLibrary();
+  $('#reportPre').textContent=buildReport(rows,music,artists,tracks,albums);
+}
+function mkChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart($('#'+id),cfg);}
+const palette=()=>[css('--accent'),css('--accent2'),css('--accent3'),css('--accent4'),'#f28c28','#59a14f','#e15759','#76b7b2','#b07aa1','#9c755f'];
+function baseOpts(extra){return Object.assign({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:css('--muted'),maxRotation:0,autoSkip:true},grid:{display:false}},y:{ticks:{color:css('--muted')},grid:{color:css('--line')}}}},extra||{})}
+function renderOverview(rows,music,artists){
+  // monthly or daily
+  const byKey=new Map();const monthly=year==='all';
+  for(const s of rows){const k=monthly?s.ts.getFullYear()+'-'+String(s.ts.getMonth()+1).padStart(2,'0'):s.ts.toISOString().slice(0,10);byKey.set(k,(byKey.get(k)||0)+s.ms)}
+  const keys=[...byKey.keys()].sort();
+  mkChart('cMonthly',{type:monthly?'bar':'line',data:{labels:keys,datasets:[{data:keys.map(k=>+(byKey.get(k)/36e5).toFixed(1)),backgroundColor:css('--accent'),borderColor:css('--accent'),borderRadius:4,tension:.3,pointRadius:0,fill:false}]},options:baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+' hours'}}}})});
+  const top=sortBy(artists.slice(),rank).slice(0,10);
+  mkChart('cArtists',{type:'bar',data:{labels:top.map(a=>a.key),datasets:[{data:top.map(a=>rank==='ms'?+(a.ms/36e5).toFixed(1):a.plays),backgroundColor:palette(),borderRadius:6}]},options:baseOpts({indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x+(rank==='ms'?' hours':' plays')}}}})});
+  const pf=agg(rows,s=>s.platform||'');sortBy(pf,'ms');
+  if(pf.length){mkChart('cPlatform',{type:'doughnut',data:{labels:pf.map(p=>p.key),datasets:[{data:pf.map(p=>+(p.ms/36e5).toFixed(1)),backgroundColor:palette(),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:css('--ink')}}}}});$('#platformNote').textContent='';}
+  else{if(charts.cPlatform)charts.cPlatform.destroy();$('#platformNote').textContent='Device info is only in the extended streaming history.';}
+  const ty=agg(rows,s=>s.type);
+  mkChart('cType',{type:'doughnut',data:{labels:ty.map(t=>t.key),datasets:[{data:ty.map(t=>+(t.ms/36e5).toFixed(1)),backgroundColor:palette(),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:css('--ink')}}}}});
+}
+function tableRows(list,cols,limit){
+  const max=Math.max(1,...list.slice(0,limit).map(r=>r[rank]));
+  return `<thead><tr>${cols.map(c=>`<th class="${c.num?'num':''}">${c.h}</th>`).join('')}</tr></thead><tbody>`+
+    list.slice(0,limit).map((r,i)=>`<tr>${cols.map(c=>`<td class="${c.num?'num':''}">${c.f(r,i)}${c.bar?`<div class="bar" style="width:${Math.round(r[rank]/max*100)}%"></div>`:''}</td>`).join('')}</tr>`).join('')+'</tbody>';
+}
+let TOP={};
+function renderTop(artists,tracks,albums,shows){
+  TOP={artists,tracks,albums,shows};applyTopFilter();
+}
+function applyTopFilter(){
+  const q=($('#topSearch').value||'').toLowerCase();
+  const f=(l,fn)=>q?l.filter(r=>fn(r).toLowerCase().includes(q)):l;
+  const link=r=>{const u=uriLink(r.uri);return u?` <a href="${u}" target="_blank" rel="noopener" title="Open in Spotify">↗</a>`:''};
+  $('#tArtists').innerHTML=tableRows(sortBy(f(TOP.artists,r=>r.key).slice(),rank),[{h:'#',f:(r,i)=>i+1},{h:'Artist',f:r=>esc(r.key),bar:true},{h:'Time',num:true,f:r=>fmtH(r.ms)},{h:'Plays',num:true,f:r=>fmtN(r.plays)}],100);
+  $('#tTracks').innerHTML=tableRows(sortBy(f(TOP.tracks,r=>r.track+' '+r.artist+' '+r.album).slice(),rank),[{h:'#',f:(r,i)=>i+1},{h:'Track',f:r=>`<b>${esc(r.track)}</b>${link(r)}<br><span class="muted">${esc(r.artist)}</span>`,bar:true},{h:'Time',num:true,f:r=>fmtH(r.ms)},{h:'Plays',num:true,f:r=>fmtN(r.plays)}],100);
+  $('#tAlbums').innerHTML=tableRows(sortBy(f(TOP.albums,r=>r.key).slice(),rank),[{h:'#',f:(r,i)=>i+1},{h:'Album',f:r=>`<b>${esc(r.album)}</b><br><span class="muted">${esc(r.artist)}</span>`,bar:true},{h:'Time',num:true,f:r=>fmtH(r.ms)},{h:'Plays',num:true,f:r=>fmtN(r.plays)}],100);
+  const sh=sortBy(f(TOP.shows,r=>r.key).slice(),'ms');
+  $('#tShows').innerHTML=sh.length?tableRows(sh,[{h:'#',f:(r,i)=>i+1},{h:'Show',f:r=>esc(r.key),bar:true},{h:'Time',num:true,f:r=>fmtH(r.ms)},{h:'Episodes',num:true,f:r=>fmtN(r.starts)}],50):'<tr><td class="muted">No podcast listening in this period.</td></tr>';
+}
+function renderHabits(rows,music){
+  const hours=new Array(24).fill(0);rows.forEach(s=>hours[s.ts.getHours()]+=s.ms);const mx=Math.max(1,...hours);
+  $('#heat').innerHTML=hours.map((v,h)=>`<div style="opacity:${(0.08+0.92*v/mx).toFixed(2)}" title="${h}:00 – ${fmtH(v)}"></div>`).join('');
+  $('#heatlbl').innerHTML=hours.map((_,h)=>`<span>${h%6===0?h:''}</span>`).join('');
+  const dow=new Array(7).fill(0);rows.forEach(s=>dow[s.ts.getDay()]+=s.ms);
+  const lbl=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  mkChart('cDow',{type:'bar',data:{labels:lbl,datasets:[{data:dow.map(v=>+(v/36e5).toFixed(1)),backgroundColor:css('--accent3'),borderRadius:6}]},options:baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+' hours'}}}})});
+  const known=music.filter(s=>s.skipped!==null),skips=known.filter(s=>s.skipped===1).length;
+  const shuf=music.filter(s=>s.shuffle!==null),shufOn=shuf.filter(s=>s.shuffle===1).length;
+  const under30=music.filter(s=>s.ms<30000).length;
+  $('#skipBox').innerHTML=known.length?`Skip rate <b>${(skips/known.length*100).toFixed(1)}%</b> of ${fmtN(known.length)} plays · Shuffle on <b>${shuf.length?(shufOn/shuf.length*100).toFixed(0):'—'}%</b> of the time · <b>${(under30/Math.max(1,music.length)*100).toFixed(0)}%</b> of starts lasted under 30 seconds.`:`<b>${(under30/Math.max(1,music.length)*100).toFixed(0)}%</b> of starts lasted under 30 seconds. Skip and shuffle flags are only in the extended history.`;
+  const re=agg(music,s=>s.reason_end||'unknown');sortBy(re,'starts');
+  const nice={trackdone:'Played to end',fwdbtn:'Skipped forward',backbtn:'Went back',endplay:'Stopped',logout:'Logged out',remote:'Another device',unexpected_exit:'App closed',unexpected_exit_while_paused:'Closed while paused',unknown:'Unknown',playbtn:'Play pressed',clickrow:'Chose a track',appload:'App opened',trackerror:'Track error',popup:'Popup'};
+  if(re.length)mkChart('cReason',{type:'bar',data:{labels:re.slice(0,8).map(r=>nice[r.key]||r.key),datasets:[{data:re.slice(0,8).map(r=>r.starts),backgroundColor:css('--accent4'),borderRadius:6}]},options:baseOpts({indexAxis:'y'})});else if(charts.cReason)charts.cReason.destroy();
+  const yrs=agg(D.streams,s=>String(s.ts.getFullYear()));yrs.sort((a,b)=>b.key-a.key);
+  const yrTop=y=>{const a=sortBy(agg(D.streams.filter(s=>s.type==='music'&&s.ts.getFullYear()==y),s=>s.artist),'ms')[0];return a?esc(a.key):'—'};
+  $('#tYears').innerHTML=`<thead><tr><th>Year</th><th class="num">Time</th><th class="num">Plays</th><th>Top artist</th></tr></thead><tbody>`+yrs.map(y=>`<tr><td>${y.key}</td><td class="num">${fmtH(y.ms)}</td><td class="num">${fmtN(y.plays)}</td><td>${yrTop(y.key)}</td></tr>`).join('')+'</tbody>';
+}
+function renderDiscovery(music,tracks){
+  const all=D.streams.filter(s=>s.type==='music'&&s.ms>=30000);
+  const first=new Map();all.forEach(s=>{if(s.artist&&!first.has(s.artist))first.set(s.artist,s.ts.getFullYear())});
+  const perYear=new Map();first.forEach(y=>perYear.set(y,(perYear.get(y)||0)+1));
+  const ys=[...perYear.keys()].sort();
+  mkChart('cNew',{type:'bar',data:{labels:ys,datasets:[{data:ys.map(y=>perYear.get(y)),backgroundColor:css('--accent2'),borderRadius:6}]},options:baseOpts()});
+  // dropped artists: top in some past year, zero in the last 365 days of data
+  if(all.length){
+    const end=all[all.length-1].ts,cut=new Date(+end-365*864e5);
+    const recent=new Set(all.filter(s=>s.ts>=cut).map(s=>s.artist));
+    const past=sortBy(agg(all.filter(s=>s.ts<cut),s=>s.artist),'ms').filter(a=>!recent.has(a.key)&&a.ms>=36e5).slice(0,40);
+    $('#tDropped').innerHTML=past.length?`<thead><tr><th>Artist</th><th class="num">Time then</th><th>Last played</th></tr></thead><tbody>`+past.map(a=>`<tr><td>${esc(a.key)}</td><td class="num">${fmtH(a.ms)}</td><td class="muted">${a.last.toLocaleDateString()}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">Needs more than a year of history.</td></tr>';
+  }
+  const one=agg(music,s=>s.artist).filter(a=>a.starts===1&&a.ms>=120000).sort((a,b)=>b.last-a.last).slice(0,40);
+  $('#tOneHit').innerHTML=one.length?`<thead><tr><th>Artist</th><th>Track</th><th>When</th></tr></thead><tbody>`+one.map(a=>`<tr><td>${esc(a.key)}</td><td>${esc(a.track)}</td><td class="muted">${a.last.toLocaleDateString()}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">None in this period.</td></tr>';
+  const sk=tracks.filter(t=>t.starts>=5&&t.skips>0).map(t=>Object.assign({rate:t.skips/t.starts},t)).filter(t=>t.rate>=.5).sort((a,b)=>b.rate-a.rate||b.starts-a.starts).slice(0,40);
+  $('#tSkipped').innerHTML=sk.length?`<thead><tr><th>Track</th><th class="num">Starts</th><th class="num">Skipped</th></tr></thead><tbody>`+sk.map(t=>`<tr><td><b>${esc(t.track)}</b><br><span class="muted">${esc(t.artist)}</span></td><td class="num">${t.starts}</td><td class="num">${Math.round(t.rate*100)}%</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">Needs skip flags from the extended history.</td></tr>';
+}
+function renderPlaylists(){
+  const pl=D.playlists;$('#plCount').textContent=pl.length;
+  $('#plList').innerHTML=pl.length?pl.map((p,i)=>`<details><summary><span>${esc(p.name)} <span class="pill">${p.items.length}</span></span><span class="row"><span class="muted" style="font-weight:400;font-size:13px">${p.modified?('updated '+p.modified.slice(0,10)):''}</span><button class="btn small" data-pl="${i}" data-fmt="csv">CSV</button><button class="btn small alt" data-pl="${i}" data-fmt="m3u">M3U</button></span></summary>${p.description?`<p class="note">${esc(p.description)}</p>`:''}<div class="scroll"><table><thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Album</th><th>Added</th></tr></thead><tbody>${p.items.map((t,j)=>`<tr><td>${j+1}</td><td>${esc(t.title)}${uriLink(t.uri)?` <a href="${uriLink(t.uri)}" target="_blank" rel="noopener">↗</a>`:''}${t.kind==='local'?' <span class="pill">local file</span>':''}</td><td>${esc(t.artist)}</td><td class="muted">${esc(t.album)}</td><td class="muted">${(t.added||'').slice(0,10)}</td></tr>`).join('')}</tbody></table></div></details>`).join(''):'<p class="note">No Playlist*.json in these files. It is in the Account data export, not the extended history.</p>';
+}
+function renderLibrary(){
+  const L=D.library;$('#likedCount').textContent=L.tracks.length;$('#albumCount').textContent=L.albums.length;$('#artistCount').textContent=L.artists.length;$('#showCount').textContent=L.shows.length+L.episodes.length;
+  const tbl=(rows,cols)=>rows.length?`<thead><tr>${cols.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead><tbody>`+rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(c[1](r))}</td>`).join('')}</tr>`).join('')+'</tbody>':'<tr><td class="muted">Nothing here. YourLibrary.json is in the Account data export.</td></tr>';
+  $('#tLiked').innerHTML=tbl(L.tracks,[['Title',r=>r.title],['Artist',r=>r.artist],['Album',r=>r.album]]);
+  $('#tSavedAlbums').innerHTML=tbl(L.albums,[['Album',r=>r.title],['Artist',r=>r.artist]]);
+  $('#tFollowed').innerHTML=tbl(L.artists,[['Artist',r=>r.name]]);
+  $('#tSavedShows').innerHTML=tbl([...L.shows.map(s=>({a:s.name,b:s.publisher,c:'show'})),...L.episodes.map(e=>({a:e.name,b:e.show,c:'episode'}))],[['Name',r=>r.a],['Show / publisher',r=>r.b],['Type',r=>r.c]]);
+}
+
+// ---------- exports ----------
+const csvCell=v=>{v=String(v??'');return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const toCSV=(head,rows)=>'\ufeff'+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
+const safe=s=>String(s||'untitled').replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,' ').trim().slice(0,120);
+function trackCSV(items){return toCSV(['Title','Artist','Album','Spotify URI','Spotify URL','Added'],items.map(t=>[t.title,t.artist,t.album,t.uri,uriLink(t.uri),(t.added||'').slice(0,10)]))}
+function trackM3U(name,items){return '#EXTM3U\n#PLAYLIST:'+name+'\n'+items.map(t=>`#EXTINF:-1,${t.artist} - ${t.title}\n${safe(t.artist)}/${safe(t.album||'Unknown Album')}/${safe(t.title)}.flac`).join('\n')+'\n'}
+function download(name,content,type){const blob=content instanceof Blob?content:new Blob([content],{type:type||'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+async function zipOf(files,name){const z=new JSZip();files.forEach(([n,c])=>z.file(n,c));download(name,await z.generateAsync({type:'blob'}),'application/zip')}
+function playlistsExport(fmt){
+  const pl=D.playlists;if(!pl.length)return alert('No playlists loaded.');
+  if(fmt==='json')return download('playlists.json',JSON.stringify(pl,null,2),'application/json');
+  zipOf(pl.map(p=>[safe(p.name)+'.'+fmt,fmt==='csv'?trackCSV(p.items):trackM3U(p.name,p.items)]),'playlists-'+fmt+'.zip');
+}
+function libExport(which){
+  const L=D.library;
+  if(which==='tracks-csv')download('liked-songs.csv',trackCSV(L.tracks),'text/csv');
+  if(which==='tracks-m3u')download('liked-songs.m3u',trackM3U('Liked Songs',L.tracks));
+  if(which==='albums-csv')download('saved-albums.csv',toCSV(['Album','Artist','Spotify URL'],L.albums.map(a=>[a.title,a.artist,uriLink(a.uri)])),'text/csv');
+  if(which==='artists-csv')download('followed-artists.csv',toCSV(['Artist','Spotify URL'],L.artists.map(a=>[a.name,uriLink(a.uri)])),'text/csv');
+}
+function historyCSV(){return toCSV(['Timestamp (UTC)','Type','Track','Artist','Album','Seconds played','Platform','Skipped','Shuffle','Reason ended','Country','Spotify URI'],D.streams.map(s=>[s.ts.toISOString(),s.type,s.track,s.artist,s.album,Math.round(s.ms/1000),s.platform,s.skipped===null?'':s.skipped,s.shuffle===null?'':s.shuffle,s.reason_end,s.country,s.uri]))}
+function topTracksCSV(){const t=sortBy(agg(D.streams.filter(s=>s.type==='music'),s=>s.uri||(s.artist+'\u2014'+s.track)),rank).slice(0,500);return toCSV(['Title','Artist','Album','Hours','Plays','Spotify URL'],t.map(r=>[r.track,r.artist,r.album,(r.ms/36e5).toFixed(2),r.plays,uriLink(r.uri)]))}
+function shoppingCSV(){
+  const m=new Map();const add=(artist,album,why)=>{if(!artist)return;const k=artist+'\u2014'+(album||'');let o=m.get(k);if(!o){o={artist,album:album||'',pl:0,liked:0,top:0,tracks:new Set()};m.set(k,o)}o[why]++;};
+  D.playlists.forEach(p=>p.items.forEach(t=>{add(t.artist,t.album,'pl');(m.get(t.artist+'\u2014'+(t.album||''))||{tracks:new Set()}).tracks.add(t.title)}));
+  D.library.tracks.forEach(t=>{add(t.artist,t.album,'liked');m.get(t.artist+'\u2014'+(t.album||'')).tracks.add(t.title)});
+  sortBy(agg(D.streams.filter(s=>s.type==='music'),s=>s.uri||(s.artist+'\u2014'+s.track)),'ms').slice(0,300).forEach(t=>{add(t.artist,t.album,'top');m.get(t.artist+'\u2014'+(t.album||'')).tracks.add(t.track)});
+  const rows=[...m.values()].map(o=>Object.assign(o,{score:o.tracks.size})).sort((a,b)=>b.score-a.score);
+  const q=s=>encodeURIComponent(s);
+  return toCSV(['Artist','Album','Your tracks on it','In playlists','Liked','Top played','Bandcamp search','Discogs search','Tracks'],rows.map(o=>[o.artist,o.album,o.score,o.pl,o.liked,o.top,`https://bandcamp.com/search?q=${q(o.artist+' '+o.album)}`,`https://www.discogs.com/search/?q=${q(o.artist+' '+o.album)}&type=release`,[...o.tracks].join('; ')]));
+}
+function lidarrList(){const s=new Set();D.playlists.forEach(p=>p.items.forEach(t=>t.artist&&s.add(t.artist)));D.library.tracks.forEach(t=>t.artist&&s.add(t.artist));D.library.artists.forEach(a=>a.name&&s.add(a.name));sortBy(agg(D.streams.filter(x=>x.type==='music'),x=>x.artist),'ms').slice(0,200).forEach(a=>s.add(a.key));return [...s].sort((a,b)=>a.localeCompare(b)).join('\n')+'\n'}
+function buildReport(rows,music,artists,tracks,albums){
+  const L=[];const per=year==='all'?'All time':year;const t=sortBy(artists.slice(),rank).slice(0,10),tt=sortBy(tracks.slice(),rank).slice(0,10),ta=sortBy(albums.slice(),rank).slice(0,5);
+  L.push(`MUSIC ANALYST — ${per}`);if(rows.length)L.push(`${rows[0].ts.toLocaleDateString()} to ${rows[rows.length-1].ts.toLocaleDateString()}`);
+  L.push(`Total listening: ${fmtH(rows.reduce((a,s)=>a+s.ms,0))} · ${fmtN(music.filter(s=>s.ms>=30000).length)} music plays · ${fmtN(artists.length)} artists · ${fmtN(tracks.length)} tracks`);
+  L.push('','Top artists');t.forEach((a,i)=>L.push(`${i+1}. ${a.key} — ${fmtH(a.ms)}, ${a.plays} plays`));
+  L.push('','Top tracks');tt.forEach((a,i)=>L.push(`${i+1}. ${a.track} — ${a.artist} — ${a.plays} plays`));
+  L.push('','Top albums');ta.forEach((a,i)=>L.push(`${i+1}. ${a.album} — ${a.artist} — ${fmtH(a.ms)}`));
+  L.push('',`Playlists: ${D.playlists.length} · Liked songs: ${D.library.tracks.length} · Followed artists: ${D.library.artists.length}`);
+  return L.join('\n');
+}
+async function bundle(){
+  const files=[['history.csv',historyCSV()],['top-tracks.csv',topTracksCSV()],['shopping-list.csv',shoppingCSV()],['artists-for-lidarr.txt',lidarrList()],['liked-songs.csv',trackCSV(D.library.tracks)],['liked-songs.m3u',trackM3U('Liked Songs',D.library.tracks)],['saved-albums.csv',toCSV(['Album','Artist'],D.library.albums.map(a=>[a.title,a.artist]))],['followed-artists.csv',toCSV(['Artist'],D.library.artists.map(a=>[a.name]))],['playlists.json',JSON.stringify(D.playlists,null,2)],['report.txt',$('#reportPre').textContent]];
+  D.playlists.forEach(p=>{files.push(['playlists/csv/'+safe(p.name)+'.csv',trackCSV(p.items)]);files.push(['playlists/m3u/'+safe(p.name)+'.m3u',trackM3U(p.name,p.items)])});
+  await zipOf(files,'music-analyst-bundle.zip');
+}
+
+// ---------- save / restore (IndexedDB) ----------
+const idb={open:()=>new Promise((res,rej)=>{const r=indexedDB.open('musicanalyst',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}),
+  set:async(k,v)=>{const db=await idb.open();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})},
+  get:async k=>{const db=await idb.open();return new Promise((res,rej)=>{const r=db.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})},
+  del:async k=>{const db=await idb.open();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').delete(k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}};
+async function saveLocal(){try{const copy=Object.assign({},D,{streams:D.streams.map(s=>Object.assign({},s,{ts:+s.ts}))});await idb.set('data',copy);alert('Saved in this browser only. Clear with "Start over".')}catch(e){alert('Could not save here (private window or storage blocked).')}}
+async function loadLocal(){try{const d=await idb.get('data');if(!d)return false;d.streams.forEach(s=>s.ts=new Date(s.ts));D=d;boot();return true}catch(e){return false}}
+(async()=>{try{if(await idb.get('data'))$('#loadSaved').style.display='inline-block'}catch(e){}})();
+
+// ---------- demo data ----------
+function demo(){
+  const artists=[['Ada Vale','Lanterns',['Harbor','Night Bus','Copper']],['The Moss Lanes','Salt & Static',['Salt','Static','Red Pines','Outer Loop']],['Juno Park','Blue Hours',['Blue Hour','Falling Slowly','Ghost Town']],['Ferris Oak','Field Notes',['Wren','Lantern Row']],['Kit Marlowe Trio','Small Hours',['Lullaby','Interlude','Nine']],['Delphine','Cassette',['Cassette','Tidal','Summer Arcs']],['North Gate','Sodium',['Sodium','Pylon']],['Mara Lune','Hearth',['Hearth','Window Seat']]];
+  const plats=['iPhone / iPad','Mac','Speakers','Car','Web player'];const rnd=n=>Math.floor(Math.random()*n);
+  const streams=[];const start=new Date('2021-01-01T00:00:00Z');
+  for(let i=0;i<9000;i++){const a=artists[Math.min(artists.length-1,Math.floor(Math.pow(Math.random(),1.8)*artists.length))];const t=a[2][rnd(a[2].length)];const ts=new Date(+start+Math.random()*(Date.now()-+start));if(Math.random()<.4)ts.setUTCHours(1+rnd(6));const skipped=Math.random()<.18;
+    streams.push({ts,ms:skipped?rnd(25000):120000+rnd(180000),track:t,artist:a[0],album:a[1],uri:'spotify:track:'+btoa(a[0]+t).replace(/[^A-Za-z0-9]/g,'').slice(0,22),platform:plats[Math.floor(Math.pow(Math.random(),2)*plats.length)],skipped:skipped?1:0,shuffle:Math.random()<.6?1:0,reason_end:skipped?'fwdbtn':Math.random()<.8?'trackdone':'endplay',country:'MX',type:'music',src:'ext'});}
+  for(let i=0;i<400;i++){const ts=new Date(+start+Math.random()*(Date.now()-+start));streams.push({ts,ms:600000+rnd(2400000),track:'Episode '+(i+1),artist:['Slow Radio','Dirt Road Dispatch'][rnd(2)],album:'',uri:'',platform:'iPhone / iPad',skipped:0,shuffle:0,reason_end:'endplay',country:'MX',type:'podcast',src:'ext'})}
+  streams.sort((a,b)=>a.ts-b.ts);
+  const mk=(name,n)=>({name,description:'',modified:'2026-09-01',followers:0,items:Array.from({length:n},()=>{const a=artists[rnd(artists.length)];const t=a[2][rnd(a[2].length)];return{title:t,artist:a[0],album:a[1],uri:'spotify:track:'+btoa(a[0]+t).replace(/[^A-Za-z0-9]/g,'').slice(0,22),added:'2025-03-01',kind:'track'}})});
+  D={streams,playlists:[mk('Desert drives',24),mk('Kitchen',18),mk('Darkroom',31)],library:{tracks:artists.flatMap(a=>a[2].slice(0,2).map(t=>({title:t,artist:a[0],album:a[1],uri:''}))),albums:artists.slice(0,4).map(a=>({title:a[1],artist:a[0],uri:''})),artists:artists.slice(0,5).map(a=>({name:a[0],uri:''})),shows:[{name:'Slow Radio',publisher:'',uri:''}],episodes:[]},follow:{},sources:['demo']};
+  boot();
+}
+
+// ---------- wiring ----------
+const drop=$('#drop'),fileIn=$('#file');
+drop.addEventListener('click',e=>{if(e.target.id!=='pickBtn')fileIn.click()});
+$('#pickBtn').addEventListener('click',e=>{e.stopPropagation();fileIn.click()});
+fileIn.addEventListener('change',()=>ingestFiles([...fileIn.files]).catch(e=>setStatus('Could not read files: '+e.message)));
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>ingestFiles([...e.dataTransfer.files]).catch(err=>setStatus('Could not read files: '+err.message)));
+$('#demoBtn').addEventListener('click',demo);
+$('#loadSaved').addEventListener('click',loadLocal);
+$('#saveBtn').addEventListener('click',saveLocal);
+$('#clearBtn').addEventListener('click',async()=>{if(!confirm('Clear loaded data from this page and this browser?'))return;try{await idb.del('data')}catch(e){}location.reload()});
+$('#yearSel').addEventListener('change',e=>{year=e.target.value;render()});
+$('#rankSel').addEventListener('change',e=>{rank=e.target.value;render()});
+$('#topSearch').addEventListener('input',applyTopFilter);
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(!b)return;$$('.tab').forEach(t=>t.classList.toggle('on',t===b));$$('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+b.dataset.t));});
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.plexport)playlistsExport(b.dataset.plexport);
+  if(b.dataset.lib)libExport(b.dataset.lib);
+  if(b.dataset.pl!==undefined){const p=D.playlists[+b.dataset.pl];e.preventDefault();b.dataset.fmt==='csv'?download(safe(p.name)+'.csv',trackCSV(p.items),'text/csv'):download(safe(p.name)+'.m3u',trackM3U(p.name,p.items))}
+  const x=b.dataset.x;
+  if(x==='history-csv')download('listening-history.csv',historyCSV(),'text/csv');
+  if(x==='top-csv')download('top-tracks.csv',topTracksCSV(),'text/csv');
+  if(x==='shopping')download('shopping-list.csv',shoppingCSV(),'text/csv');
+  if(x==='lidarr')download('artists.txt',lidarrList());
+  if(x==='report')download('music-report.txt',$('#reportPre').textContent);
+  if(x==='bundle')bundle();
+});
+$('#copyReport').addEventListener('click',()=>navigator.clipboard.writeText($('#reportPre').textContent).then(()=>{$('#copyReport').textContent='Copied';setTimeout(()=>$('#copyReport').textContent='Copy to clipboard',1500)}));
+})();
+</script>
+</body>
+</html>
