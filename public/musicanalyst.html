@@ -93,7 +93,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
 <section id="intake">
   <div class="drop" id="drop">
     <strong>Drop your Spotify export here</strong>
-    <small>The ZIP as downloaded, or the JSON files inside it. Account data export, extended streaming history, or both.</small>
+    <small>The ZIP as downloaded, or the JSON files inside it. Account data export, extended streaming history, or both. You can add more files later; duplicates are skipped.</small>
     <div style="margin-top:14px"><button class="btn pink" type="button" id="pickBtn">Choose files</button></div>
     <input type="file" id="file" multiple accept=".zip,.json,application/zip,application/json" class="hid">
   </div>
@@ -114,10 +114,12 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
     <label>Rank by <select id="rankSel"><option value="ms">Time listened</option><option value="plays">Play count</option></select></label>
     <span class="muted" id="rangeNote"></span>
     <span style="flex:1"></span>
+    <button class="btn small pink" id="addBtn">Add more files</button>
     <button class="btn alt small" id="saveBtn">Save in this browser</button>
     <button class="btn alt small" id="clearBtn">Start over</button>
   </div>
 
+  <p class="status hid" id="appStatus" style="margin:0 0 12px"></p>
   <div class="grid g4" id="stats"></div>
 
   <div class="tabs" id="tabs">
@@ -299,7 +301,8 @@ function parseLibrary(j){
     shows:(j.shows||[]).map(s=>({name:s.name||'',publisher:s.publisher||'',uri:s.uri||''})),
     episodes:(j.episodes||[]).map(e=>({name:e.name||'',show:e.show||'',uri:e.uri||''}))};
 }
-async function ingestFiles(files){
+const sKey=s=>(+s.ts)+'|'+(s.uri||s.artist+'/'+s.track)+'|'+s.ms;
+async function ingestFiles(files,merge){
   setStatus('Reading…');
   const jsons=[];
   for(const f of files){
@@ -329,10 +332,20 @@ async function ingestFiles(files){
     const maxExt=Math.max(...ext.map(s=>+s.ts));
     basic.forEach(s=>{if(+s.ts>maxExt+36e5)streams.push(s)}); // keep basic rows newer than extended coverage
   }
-  streams=streams.filter(s=>!isNaN(+s.ts)).sort((a,b)=>a.ts-b.ts);
-  D={streams,playlists:pls,library:lib||D.library,follow,sources:used};
+  streams=streams.filter(s=>!isNaN(+s.ts));
   if(!streams.length&&!pls.length&&!lib){setStatus('Those files didn\'t contain history, playlists or library data. Expected names: StreamingHistory*.json, Streaming_History_Audio_*.json, Playlist1.json, YourLibrary.json.');return;}
-  setStatus(`Loaded ${used.length} file(s): ${fmtN(streams.length)} plays, ${pls.length} playlists, ${(lib?lib.tracks.length:0)} liked songs.`);
+  if(merge&&D.sources.length){
+    const seen=new Set(D.streams.map(sKey));let added=0;
+    for(const s of streams){const k=sKey(s);if(seen.has(k))continue;seen.add(k);D.streams.push(s);added++;}
+    const plNames=new Set(D.playlists.map(p=>p.name));pls.forEach(p=>{if(!plNames.has(p.name))D.playlists.push(p)});
+    if(lib)D.library=lib;if(Object.keys(follow).length)D.follow=follow;D.sources=D.sources.concat(used);
+    D.streams.sort((a,b)=>a.ts-b.ts);
+    setStatus(`Added ${used.length} file(s): ${fmtN(added)} new plays (${fmtN(streams.length-added)} duplicates skipped). Total ${fmtN(D.streams.length)} plays, ${D.playlists.length} playlists.`);
+  }else{
+    streams.sort((a,b)=>a.ts-b.ts);
+    D={streams,playlists:pls,library:lib||D.library,follow,sources:used};
+    setStatus(`Loaded ${used.length} file(s): ${fmtN(streams.length)} plays, ${pls.length} playlists, ${(lib?lib.tracks.length:0)} liked songs.`);
+  }
   boot();
 }
 function setStatus(t){$('#status').textContent=t}
@@ -352,7 +365,8 @@ function boot(){
   $('#intake').classList.add('hid');$('#app').classList.remove('hid');
   const ys=[...new Set(D.streams.map(s=>s.ts.getFullYear()))].sort((a,b)=>b-a);
   const sel=$('#yearSel');sel.innerHTML='<option value="all">All time</option>'+ys.map(y=>`<option value="${y}">${y}</option>`).join('');
-  year='all';render();
+  if(!ys.includes(+year))year='all';sel.value=year;render();
+  const st=$('#status');if(st.textContent){const n=$('#appStatus');n.textContent=st.textContent;n.classList.remove('hid');clearTimeout(n._t);n._t=setTimeout(()=>n.classList.add('hid'),8000);}
 }
 function render(){
   const rows=filtered(),music=rows.filter(s=>s.type==='music');
@@ -534,7 +548,12 @@ function demo(){
 const drop=$('#drop'),fileIn=$('#file');
 drop.addEventListener('click',e=>{if(e.target.id!=='pickBtn')fileIn.click()});
 $('#pickBtn').addEventListener('click',e=>{e.stopPropagation();fileIn.click()});
-fileIn.addEventListener('change',()=>ingestFiles([...fileIn.files]).catch(e=>setStatus('Could not read files: '+e.message)));
+let mergeNext=false;
+fileIn.addEventListener('change',()=>{const m=mergeNext;mergeNext=false;ingestFiles([...fileIn.files],m).catch(e=>setStatus('Could not read files: '+e.message)).finally(()=>{fileIn.value=''})});
+$('#addBtn').addEventListener('click',()=>{mergeNext=true;fileIn.click()});
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{if($('#app').classList.contains('hid'))return;e.preventDefault();document.body.style.outline='3px dashed '+css('--accent3')}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{if($('#app').classList.contains('hid'))return;e.preventDefault();document.body.style.outline=''}));
+document.addEventListener('drop',e=>{if($('#app').classList.contains('hid'))return;ingestFiles([...e.dataTransfer.files],true).catch(err=>setStatus('Could not read files: '+err.message))});
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
 drop.addEventListener('drop',e=>ingestFiles([...e.dataTransfer.files]).catch(err=>setStatus('Could not read files: '+err.message)));
