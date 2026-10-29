@@ -534,7 +534,7 @@ function renderDeep(rows,music,artists,tracks){
   runs.reverse();
   $('#tEras').innerHTML=runs.length?`<thead><tr><th>Artist</th><th>From</th><th>To</th><th class="num">Months</th></tr></thead><tbody>`+runs.slice(0,80).map(r=>`<tr><td><b>${esc(r.artist)}</b></td><td>${monName(r.start)}</td><td>${r.n>1?monName(r.end):'—'}</td><td class="num">${r.n}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">No music in this period.</td></tr>';
   // --- obsessions: most plays of a track in one week ---
-  const wk=new Map();music.filter(s=>s.ms>=30000).forEach(s=>{const d=new Date(s.ts);const day=(d.getDay()+6)%7;const mon=new Date(d-day*864e5);const k=(s.uri||s.artist+'—'+s.track)+'|'+dayKey(mon);let o=wk.get(k);if(!o){o={track:s.track,artist:s.artist,week:dayKey(mon),n:0,key:s.uri||s.artist+'—'+s.track};wk.set(k,o)}o.n++});
+  const wk=new Map();music.filter(s=>s.ms>=30000).forEach(s=>{const d=new Date(s.ts);const day=(d.getDay()+6)%7;const mon=new Date(d-day*864e5);const tk=s.artist+'—'+s.track,k=tk+'|'+dayKey(mon);let o=wk.get(k);if(!o){o={track:s.track,artist:s.artist,week:dayKey(mon),n:0,key:tk};wk.set(k,o)}o.n++});
   const bestPer=new Map();[...wk.values()].forEach(o=>{const b=bestPer.get(o.key);if(!b||o.n>b.n)bestPer.set(o.key,o)});
   const ob=[...bestPer.values()].sort((a,b)=>b.n-a.n).slice(0,25);
   $('#tObsess').innerHTML=ob.length?`<thead><tr><th>Track</th><th>Week of</th><th class="num">Plays</th></tr></thead><tbody>`+ob.map(o=>`<tr><td><b>${esc(o.track)}</b><br><span class="muted">${esc(o.artist)}</span></td><td>${new Date(o.week+'T12:00:00').toLocaleDateString()}</td><td class="num">${o.n}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">No music in this period.</td></tr>';
