@@ -127,6 +127,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
     <button class="tab" data-t="top">Artists &amp; tracks</button>
     <button class="tab" data-t="habits">Habits</button>
     <button class="tab" data-t="discovery">Discovery</button>
+    <button class="tab" data-t="deep">Deep dive</button>
     <button class="tab" data-t="playlists">Playlists</button>
     <button class="tab" data-t="library">Library</button>
     <button class="tab" data-t="export">Keep &amp; move</button>
@@ -166,6 +167,24 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
       <div class="card"><h2>Artists you dropped</h2><p class="note">Big in an earlier year, nothing in the last 12 months of data.</p><div class="scroll"><table id="tDropped"></table></div></div>
       <div class="card"><h2>One-hit listens</h2><p class="note">Artists you played exactly once, in full. Worth a second look.</p><div class="scroll"><table id="tOneHit"></table></div></div>
       <div class="card"><h2>Most-skipped tracks</h2><p class="note">Tracks started 5+ times and skipped most of the time.</p><div class="scroll"><table id="tSkipped"></table></div></div>
+    </div>
+  </div>
+
+
+  <div class="panel" id="p-deep">
+    <div class="grid g2">
+      <div class="card"><h2>Compared with the year before</h2><div id="yoyBox" class="note"></div></div>
+      <div class="card"><h2>Streaks and big days</h2><div id="streakBox" class="note"></div><div class="scroll" style="margin-top:8px"><table id="tBigDays"></table></div></div>
+      <div class="card"><h2>Longest sessions</h2><p class="note">A session ends after a 30-minute gap.</p><div class="scroll"><table id="tSessions"></table></div></div>
+      <div class="card"><h2>Eras</h2><p class="note">Your #1 artist each month, merged into runs.</p><div class="scroll"><table id="tEras"></table></div></div>
+      <div class="card"><h2>Obsessions</h2><p class="note">The most plays of one track inside a single week.</p><div class="scroll"><table id="tObsess"></table></div></div>
+      <div class="card"><h2>Loyalty</h2><p class="note">Tracks you have come back to in the most separate years (all history).</p><div class="scroll"><table id="tLoyal"></table></div></div>
+      <div class="card"><h2>Rediscoveries</h2><p class="note">Tracks you left alone for two years or more, then picked up again (all history).</p><div class="scroll"><table id="tRedisc"></table></div></div>
+      <div class="card"><h2>Seasons</h2><div class="chartbox"><canvas id="cSeason"></canvas></div><p class="note">Total listening by calendar month across the selected period.</p></div>
+      <div class="card"><h2>How plays start</h2><div class="chartbox"><canvas id="cStart"></canvas></div><p class="note" id="startNote"></p></div>
+      <div class="card"><h2>Where in the world</h2><div class="scroll"><table id="tCountries"></table></div></div>
+      <div class="card"><h2>Concentration</h2><div id="concBox" class="note"></div></div>
+      <div class="card"><h2>Time of day</h2><div id="todBox" class="note"></div></div>
     </div>
   </div>
 
@@ -268,7 +287,7 @@ function parseStreamExt(r){ // Streaming_History_Audio_*.json
     album:isMusic?(r.master_metadata_album_album_name||''):'',
     uri:r.spotify_track_uri||r.spotify_episode_uri||r.audiobook_uri||'',
     platform:normPlatform(r.platform),skipped:r.skipped===true?1:r.skipped===false?0:null,
-    shuffle:r.shuffle===true?1:r.shuffle===false?0:null,reason_end:r.reason_end||'',reason_start:r.reason_start||'',country:r.conn_country||'',
+    shuffle:r.shuffle===true?1:r.shuffle===false?0:null,offline:r.offline===true?1:0,incognito:r.incognito_mode===true?1:0,reason_end:r.reason_end||'',reason_start:r.reason_start||'',country:r.conn_country||'',
     type:isMusic?'music':isPod?'podcast':'audiobook',src:'ext'};
 }
 function normPlatform(p){
@@ -385,6 +404,7 @@ function render(){
   renderTop(artists,tracks,albums,shows);
   renderHabits(rows,music);
   renderDiscovery(music,tracks);
+  renderDeep(rows,music,artists,tracks);
   renderPlaylists();renderLibrary();
   $('#reportPre').textContent=buildReport(rows,music,artists,tracks,albums);
 }
@@ -460,6 +480,104 @@ function renderDiscovery(music,tracks){
   const sk=tracks.filter(t=>t.starts>=5&&t.skips>0).map(t=>Object.assign({rate:t.skips/t.starts},t)).filter(t=>t.rate>=.5).sort((a,b)=>b.rate-a.rate||b.starts-a.starts).slice(0,40);
   $('#tSkipped').innerHTML=sk.length?`<thead><tr><th>Track</th><th class="num">Starts</th><th class="num">Skipped</th></tr></thead><tbody>`+sk.map(t=>`<tr><td><b>${esc(t.track)}</b><br><span class="muted">${esc(t.artist)}</span></td><td class="num">${t.starts}</td><td class="num">${Math.round(t.rate*100)}%</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">Needs skip flags from the extended history.</td></tr>';
 }
+
+function renderDeep(rows,music,artists,tracks){
+  const dayKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const monKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const monName=k=>new Date(k+'-15T12:00:00').toLocaleDateString(undefined,{month:'short',year:'numeric'});
+  const allMusic=D.streams.filter(s=>s.type==='music'&&s.ms>=30000);
+  // --- year over year ---
+  const yoy=$('#yoyBox');
+  if(year==='all'){yoy.innerHTML='Pick a year in the Period selector to compare it with the one before.';}
+  else{
+    const y=+year,prevRows=D.streams.filter(s=>s.ts.getFullYear()===y-1);
+    if(!prevRows.length)yoy.innerHTML=`No data for ${y-1} to compare against.`;
+    else{
+      const stat=rs=>{const m=rs.filter(s=>s.type==='music');const a=sortBy(agg(m,s=>s.artist),'ms');return{ms:rs.reduce((x,s)=>x+s.ms,0),plays:m.filter(s=>s.ms>=30000).length,artists:a.length,tracks:agg(m,s=>s.uri||(s.artist+'—'+s.track)).length,top:a[0]?a[0].key:'—',skip:(()=>{const k=m.filter(s=>s.skipped!==null);return k.length?k.filter(s=>s.skipped===1).length/k.length:null})()}};
+      const a=stat(rows),b=stat(prevRows);
+      const pct=(x,yv)=>yv?`<b style="color:${x>=yv?'var(--accent3)':'var(--accent)'}">${x>=yv?'+':''}${Math.round((x-yv)/yv*100)}%</b>`:'';
+      const firstThis=new Set(),seenBefore=new Set(allMusic.filter(s=>s.ts.getFullYear()<y).map(s=>s.artist));allMusic.filter(s=>s.ts.getFullYear()===y).forEach(s=>{if(!seenBefore.has(s.artist))firstThis.add(s.artist)});
+      yoy.innerHTML=`<table><thead><tr><th></th><th class="num">${y}</th><th class="num">${y-1}</th><th class="num">Change</th></tr></thead><tbody>
+      <tr><td>Listening</td><td class="num">${fmtH(a.ms)}</td><td class="num">${fmtH(b.ms)}</td><td class="num">${pct(a.ms,b.ms)}</td></tr>
+      <tr><td>Music plays</td><td class="num">${fmtN(a.plays)}</td><td class="num">${fmtN(b.plays)}</td><td class="num">${pct(a.plays,b.plays)}</td></tr>
+      <tr><td>Distinct artists</td><td class="num">${fmtN(a.artists)}</td><td class="num">${fmtN(b.artists)}</td><td class="num">${pct(a.artists,b.artists)}</td></tr>
+      <tr><td>Distinct tracks</td><td class="num">${fmtN(a.tracks)}</td><td class="num">${fmtN(b.tracks)}</td><td class="num">${pct(a.tracks,b.tracks)}</td></tr>
+      <tr><td>Skip rate</td><td class="num">${a.skip===null?'—':Math.round(a.skip*100)+'%'}</td><td class="num">${b.skip===null?'—':Math.round(b.skip*100)+'%'}</td><td></td></tr>
+      <tr><td>Top artist</td><td colspan="3">${esc(a.top)}${a.top!==b.top?` <span class="muted">(was ${esc(b.top)})</span>`:' <span class="muted">(same as before)</span>'}</td></tr>
+      <tr><td>Artists new to you</td><td colspan="3">${fmtN(firstThis.size)} first heard in ${y}</td></tr></tbody></table>`;
+    }
+  }
+  // --- streaks & big days ---
+  const days=new Map();rows.forEach(s=>{const k=dayKey(s.ts);const o=days.get(k)||{ms:0,n:0};o.ms+=s.ms;o.n++;days.set(k,o)});
+  const dk=[...days.keys()].sort();let best=0,bestEnd='',cur=0,prev=null,curStreak=0;
+  for(const k of dk){const d=new Date(k+'T12:00:00');cur=(prev&&(d-prev)/864e5<1.5)?cur+1:1;if(cur>best){best=cur;bestEnd=k}prev=d}
+  curStreak=cur;
+  const span=dk.length?Math.round((new Date(dk[dk.length-1]+'T12:00:00')-new Date(dk[0]+'T12:00:00'))/864e5)+1:0;
+  const bestStart=best?dayKey(new Date(new Date(bestEnd+'T12:00:00')-(best-1)*864e5)):'';
+  $('#streakBox').innerHTML=dk.length?`Listened on <b>${fmtN(dk.length)}</b> of ${fmtN(span)} days (${Math.round(dk.length/span*100)}%). Longest streak <b>${best} days</b>${best>1?` (${bestStart} to ${bestEnd})`:''}. Streak at the end of this period: ${curStreak} day${curStreak===1?'':'s'}.`:'No history in this period.';
+  const big=[...days.entries()].sort((a,b)=>b[1].ms-a[1].ms).slice(0,10);
+  const dayTop=k=>{const a=sortBy(agg(rows.filter(s=>s.type==='music'&&dayKey(s.ts)===k),s=>s.artist),'ms')[0];return a?esc(a.key):'—'};
+  $('#tBigDays').innerHTML=`<thead><tr><th>Day</th><th class="num">Time</th><th class="num">Plays</th><th>Top artist</th></tr></thead><tbody>`+big.map(([k,o])=>`<tr><td>${new Date(k+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric'})}</td><td class="num">${fmtH(o.ms)}</td><td class="num">${o.n}</td><td>${dayTop(k)}</td></tr>`).join('')+'</tbody>';
+  // --- sessions (ts is when the play ended) ---
+  const sessions=[];let ss=null;
+  for(const s of rows){const st=+s.ts-s.ms;if(!ss||st-ss.end>30*6e4){ss={start:st,end:+s.ts,ms:0,n:0,art:new Map()};sessions.push(ss)}ss.end=Math.max(ss.end,+s.ts);ss.ms+=s.ms;ss.n++;if(s.type==='music')ss.art.set(s.artist,(ss.art.get(s.artist)||0)+s.ms)}
+  const topS=sessions.sort((a,b)=>b.ms-a.ms).slice(0,10);
+  const avgS=sessions.length?sessions.reduce((a,s)=>a+s.ms,0)/sessions.length:0;
+  $('#tSessions').innerHTML=`<thead><tr><th>Started</th><th class="num">Length</th><th class="num">Plays</th><th>Mostly</th></tr></thead><tbody>`+topS.map(s=>{const t=[...s.art.entries()].sort((a,b)=>b[1]-a[1])[0];return`<tr><td>${new Date(s.start).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td class="num">${fmtH(s.ms)}</td><td class="num">${s.n}</td><td>${t?esc(t[0]):'podcasts'}</td></tr>`}).join('')+`</tbody><tfoot><tr><td colspan="4" class="muted">${fmtN(sessions.length)} sessions, ${fmtH(avgS)} on average.</td></tr></tfoot>`;
+  // --- eras: #1 artist per month ---
+  const mm=new Map();music.forEach(s=>{const k=monKey(s.ts);let o=mm.get(k);if(!o){o=new Map();mm.set(k,o)}o.set(s.artist,(o.get(s.artist)||0)+s.ms)});
+  const months=[...mm.keys()].sort();const runs=[];
+  months.forEach(k=>{const top=[...mm.get(k).entries()].sort((a,b)=>b[1]-a[1])[0];if(!top)return;const last=runs[runs.length-1];
+    const prevMonth=last?new Date(last.end+'-15T12:00:00'):null,thisMonth=new Date(k+'-15T12:00:00');
+    const consecutive=prevMonth&&((thisMonth.getFullYear()-prevMonth.getFullYear())*12+thisMonth.getMonth()-prevMonth.getMonth()===1);
+    if(last&&last.artist===top[0]&&consecutive){last.end=k;last.n++;last.ms+=top[1]}else runs.push({artist:top[0],start:k,end:k,n:1,ms:top[1]})});
+  runs.reverse();
+  $('#tEras').innerHTML=runs.length?`<thead><tr><th>Artist</th><th>From</th><th>To</th><th class="num">Months</th></tr></thead><tbody>`+runs.slice(0,80).map(r=>`<tr><td><b>${esc(r.artist)}</b></td><td>${monName(r.start)}</td><td>${r.n>1?monName(r.end):'—'}</td><td class="num">${r.n}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">No music in this period.</td></tr>';
+  // --- obsessions: most plays of a track in one week ---
+  const wk=new Map();music.filter(s=>s.ms>=30000).forEach(s=>{const d=new Date(s.ts);const day=(d.getDay()+6)%7;const mon=new Date(d-day*864e5);const k=(s.uri||s.artist+'—'+s.track)+'|'+dayKey(mon);let o=wk.get(k);if(!o){o={track:s.track,artist:s.artist,week:dayKey(mon),n:0,key:s.uri||s.artist+'—'+s.track};wk.set(k,o)}o.n++});
+  const bestPer=new Map();[...wk.values()].forEach(o=>{const b=bestPer.get(o.key);if(!b||o.n>b.n)bestPer.set(o.key,o)});
+  const ob=[...bestPer.values()].sort((a,b)=>b.n-a.n).slice(0,25);
+  $('#tObsess').innerHTML=ob.length?`<thead><tr><th>Track</th><th>Week of</th><th class="num">Plays</th></tr></thead><tbody>`+ob.map(o=>`<tr><td><b>${esc(o.track)}</b><br><span class="muted">${esc(o.artist)}</span></td><td>${new Date(o.week+'T12:00:00').toLocaleDateString()}</td><td class="num">${o.n}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">No music in this period.</td></tr>';
+  // --- loyalty: tracks across most distinct years (all history) ---
+  const ly=new Map();allMusic.forEach(s=>{const k=s.uri||s.artist+'—'+s.track;let o=ly.get(k);if(!o){o={track:s.track,artist:s.artist,years:new Set(),n:0};ly.set(k,o)}o.years.add(s.ts.getFullYear());o.n++});
+  const loyal=[...ly.values()].filter(o=>o.years.size>=2).sort((a,b)=>b.years.size-a.years.size||b.n-a.n).slice(0,25);
+  $('#tLoyal').innerHTML=loyal.length?`<thead><tr><th>Track</th><th class="num">Years</th><th class="num">Plays</th><th>Which</th></tr></thead><tbody>`+loyal.map(o=>`<tr><td><b>${esc(o.track)}</b><br><span class="muted">${esc(o.artist)}</span></td><td class="num">${o.years.size}</td><td class="num">${o.n}</td><td class="muted">${[...o.years].sort().join(', ')}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">Needs more than one year of history.</td></tr>';
+  // --- rediscoveries: gap >= 2 years between plays, >=4 plays total ---
+  const byTrack=new Map();allMusic.forEach(s=>{const k=s.uri||s.artist+'—'+s.track;let o=byTrack.get(k);if(!o){o={track:s.track,artist:s.artist,ts:[]};byTrack.set(k,o)}o.ts.push(+s.ts)});
+  const red=[];byTrack.forEach(o=>{if(o.ts.length<4)return;o.ts.sort((a,b)=>a-b);let gap=0,at=0;for(let i=1;i<o.ts.length;i++){const g=o.ts[i]-o.ts[i-1];if(g>gap){gap=g;at=o.ts[i]}}if(gap>=730*864e5)red.push({track:o.track,artist:o.artist,gap,at,n:o.ts.length})});
+  red.sort((a,b)=>b.gap-a.gap);
+  $('#tRedisc').innerHTML=red.length?`<thead><tr><th>Track</th><th class="num">Gap</th><th>Came back</th></tr></thead><tbody>`+red.slice(0,25).map(o=>`<tr><td><b>${esc(o.track)}</b><br><span class="muted">${esc(o.artist)}</span></td><td class="num">${(o.gap/365/864e5).toFixed(1)} yrs</td><td class="muted">${new Date(o.at).toLocaleDateString()}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">None yet. Needs tracks with a two-year gap between plays.</td></tr>';
+  // --- seasons ---
+  const mo=new Array(12).fill(0);rows.forEach(s=>mo[s.ts.getMonth()]+=s.ms);
+  mkChart('cSeason',{type:'bar',data:{labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],datasets:[{data:mo.map(v=>+(v/36e5).toFixed(1)),backgroundColor:css('--accent2'),borderRadius:6}]},options:baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+' hours'}}}})});
+  // --- how plays start ---
+  const rs=agg(music.filter(s=>s.reason_start),s=>s.reason_start);sortBy(rs,'starts');
+  const niceS={trackdone:'Previous track ended',clickrow:'Picked a track',playbtn:'Pressed play',fwdbtn:'Skipped to it',backbtn:'Went back to it',appload:'App opened',remote:'Another device',trackerror:'After an error',popup:'Popup',unknown:'Unknown'};
+  if(rs.length){mkChart('cStart',{type:'bar',data:{labels:rs.slice(0,8).map(r=>niceS[r.key]||r.key),datasets:[{data:rs.slice(0,8).map(r=>r.starts),backgroundColor:css('--accent3'),borderRadius:6}]},options:baseOpts({indexAxis:'y'})});
+    const tot=rs.reduce((a,r)=>a+r.starts,0),auto=(rs.find(r=>r.key==='trackdone')||{starts:0}).starts,pick=(rs.find(r=>r.key==='clickrow')||{starts:0}).starts;
+    const off=music.filter(s=>s.offline===1).length,inc=music.filter(s=>s.incognito===1).length;
+    $('#startNote').innerHTML=`<b>${Math.round(auto/tot*100)}%</b> of plays flowed on from the previous track; <b>${Math.round(pick/tot*100)}%</b> you chose deliberately. Offline ${Math.round(off/Math.max(1,music.length)*100)}% · private session ${Math.round(inc/Math.max(1,music.length)*100)}%.`;}
+  else{if(charts.cStart)charts.cStart.destroy();$('#startNote').textContent='Start reasons are only in the extended history.';}
+  // --- countries ---
+  const cc=agg(rows.filter(s=>s.country),s=>s.country);sortBy(cc,'ms');
+  const names=typeof Intl.DisplayNames==='function'?new Intl.DisplayNames(undefined,{type:'region'}):null;
+  const cn=c=>{try{return names?names.of(c):c}catch(e){return c}};
+  $('#tCountries').innerHTML=cc.length?`<thead><tr><th>Country</th><th class="num">Time</th><th class="num">Plays</th><th>First</th><th>Last</th></tr></thead><tbody>`+cc.map(c=>`<tr><td>${esc(cn(c.key))}</td><td class="num">${fmtH(c.ms)}</td><td class="num">${fmtN(c.starts)}</td><td class="muted">${c.first.toLocaleDateString()}</td><td class="muted">${c.last.toLocaleDateString()}</td></tr>`).join('')+'</tbody>':'<tr><td class="muted">Country is only in the extended history.</td></tr>';
+  // --- concentration ---
+  const totalMusic=music.reduce((a,s)=>a+s.ms,0);const sorted=sortBy(artists.slice(),'ms');
+  const share=n=>totalMusic?Math.round(sorted.slice(0,n).reduce((a,x)=>a+x.ms,0)/totalMusic*100):0;
+  const plays30=music.filter(s=>s.ms>=30000).length;
+  const half=(()=>{let acc=0;for(let i=0;i<sorted.length;i++){acc+=sorted[i].ms;if(acc>=totalMusic/2)return i+1}return sorted.length})();
+  $('#concBox').innerHTML=music.length?`Your top artist is <b>${share(1)}%</b> of music time, top 10 are <b>${share(10)}%</b>, top 50 are <b>${share(50)}%</b>. Half of all your listening comes from just <b>${fmtN(half)}</b> artist${half===1?'':'s'}.<br><br>Variety: <b>${(tracks.length/Math.max(1,plays30)*100).toFixed(0)}</b> distinct tracks per 100 plays, and each track you play gets played <b>${(plays30/Math.max(1,tracks.length)).toFixed(1)}</b> times on average.`:'No music in this period.';
+  // --- time of day ---
+  const buckets=[['Night (midnight–5)',0,5],['Morning (5–12)',5,12],['Afternoon (12–18)',12,18],['Evening (18–midnight)',18,24]];
+  const tot=rows.reduce((a,s)=>a+s.ms,0);
+  const tod=buckets.map(([l,a,b])=>[l,rows.filter(s=>{const h=s.ts.getHours();return h>=a&&h<b}).reduce((x,s)=>x+s.ms,0)]);
+  const peak=tod.slice().sort((a,b)=>b[1]-a[1])[0];
+  const wkend=rows.filter(s=>[0,6].includes(s.ts.getDay())).reduce((a,s)=>a+s.ms,0);
+  $('#todBox').innerHTML=tot?tod.map(([l,v])=>`${l}: <b>${Math.round(v/tot*100)}%</b>`).join(' · ')+`<br><br>Peak window: <b>${peak[0]}</b>. Weekends are <b>${Math.round(wkend/tot*100)}%</b> of listening (29% would be even). Night listening (midnight to 5am) is <b>${fmtH(tod[0][1])}</b> in total.`:'No history in this period.';
+}
+
 function renderPlaylists(){
   const pl=D.playlists;$('#plCount').textContent=pl.length;
   $('#plList').innerHTML=pl.length?pl.map((p,i)=>`<details><summary><span>${esc(p.name)} <span class="pill">${p.items.length}</span></span><span class="row"><span class="muted" style="font-weight:400;font-size:13px">${p.modified?('updated '+p.modified.slice(0,10)):''}</span><button class="btn small" data-pl="${i}" data-fmt="csv">CSV</button><button class="btn small alt" data-pl="${i}" data-fmt="m3u">M3U</button></span></summary>${p.description?`<p class="note">${esc(p.description)}</p>`:''}<div class="scroll"><table><thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Album</th><th>Added</th></tr></thead><tbody>${p.items.map((t,j)=>`<tr><td>${j+1}</td><td>${esc(t.title)}${uriLink(t.uri)?` <a href="${uriLink(t.uri)}" target="_blank" rel="noopener">↗</a>`:''}${t.kind==='local'?' <span class="pill">local file</span>':''}</td><td>${esc(t.artist)}</td><td class="muted">${esc(t.album)}</td><td class="muted">${(t.added||'').slice(0,10)}</td></tr>`).join('')}</tbody></table></div></details>`).join(''):'<p class="note">No Playlist*.json in these files. It is in the Account data export, not the extended history.</p>';
