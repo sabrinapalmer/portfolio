@@ -178,6 +178,21 @@ ol.ins,ul.plain{margin:0;padding-left:1.2rem;display:grid;gap:.35rem}
 .confetti i{position:absolute;top:-20px;width:10px;height:14px;border-radius:3px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 details summary{cursor:pointer;font-weight:700}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:.55rem}
+.fact{background:var(--soft);border-radius:14px;padding:.6rem .75rem;min-width:0}
+.fact span{display:block;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fact b{font-size:1.02rem;line-height:1.25;display:block}
+.key{font-weight:700;font-size:1.05rem}
+details.more{border-top:1px dashed var(--line);padding-top:.55rem}
+details.more>summary{color:var(--teal);list-style:none;font-size:.95rem}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"+ "}
+details.more[open]>summary::before{content:"\2212  "}
+details.more>div{display:grid;gap:.55rem;margin-top:.55rem}
+details.sec>summary{list-style:none;display:grid;gap:.2rem}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary h2::after{content:" +";color:var(--teal)}
+details.sec[open]>summary h2::after{content:""}
 table.t{width:100%;border-collapse:collapse;font-size:.92rem}
 table.t th,table.t td{text-align:left;padding:.45rem .4rem;border-top:1px solid var(--line);vertical-align:top}
 .tablewrap{overflow-x:auto}
@@ -447,7 +462,8 @@ function pairDefault(){ return S.profile.pair || S.profile.goal==="lose"; }
 function templates(){ const n=S.profile.days.length; return n>=4 ? TPL.ul : n===3 ? TPL.full : TPL.full.slice(0,2); }
 function buildPlan(restart){
   const p=S.profile, old=S.plan, seen={};
-  const prev = (key,pat) => { if(!old) return null; const os=old.sessions.find(s=>s.key===key); const m=os&&os.slots.find(sl=>sl.pat===pat); if(m) return m; for(const s of old.sessions) for(const sl of s.slots) if(sl.pat===pat && !sl.custom) return sl; return null; };
+  const carry = !restart && old && S.log.length>0;
+  const prev = (key,pat) => { if(!carry) return null; const os=old.sessions.find(s=>s.key===key); const m=os&&os.slots.find(sl=>sl.pat===pat); if(m) return m; for(const s of old.sessions) for(const sl of s.slots) if(sl.pat===pat && !sl.custom) return sl; return null; };
   const sessions = templates().map(t=>{
     let pats=[...t.slots];
     const focusPats=[];
@@ -468,7 +484,8 @@ function buildPlan(restart){
       const L=ladder(sl.pat); const k=L.findIndex(x=>!used.has(x));
       if(k>=0){ sl.lvl=k; sl.lvl0=k; } else { const sw=swapsFor(sl.pat).find(x=>!used.has(x)); if(sw){ sl.custom=sw; sl.lvl0=null; } }
       used.add(slotId(sl)); });
-    const mk = sl => sl.map((x,i)=>({slot:i,id:slotId(x),pat:x.pat,rx:rxFor(x,i,"build")}));
+    const fullPhase = ["muscle","strength"].includes(p.goal) ? "progress" : "build";
+    const mk = sl => sl.map((x,i)=>({slot:i,id:slotId(x),pat:x.pat,rx:rxFor(x,i,fullPhase)}));
     while(slots.length>3 && estimateMin(mk(slots), pairDefault()) > p.minutes){
       let k=-1; for(let i=slots.length-1;i>=2;i--){ if(!slots[i].focus){ k=i; break; } }
       if(k<0) k=slots.length-1; slots.splice(k,1);
@@ -636,7 +653,7 @@ function viewToday(){
    <div class="card stack">
      <div class="row between"><p class="eyebrow">Week ${planWeek()+1} · ${PHASE_TXT[ph].name} phase</p><span class="chip s">${thisWeek} of ${S.profile.days.length} sessions this week</span></div>
      <h2>${esc(s.title)}</h2>
-     <p class="muted">About ${mins} minutes with warm-up${hasFinisher()?", finisher":""} and stretches · ${list.length} exercises${pairDefault()?" · paired":""}</p>
+     <p class="muted">${minsText(s)} with warm-up${hasFinisher()?", finisher":""} and stretches · ${list.length} exercises${pairDefault()?" · paired":""}</p>
      ${status}
      <p class="small">${PHASE_TXT[ph].text}</p>
      <div>${list.map((it,i)=>{const sl=msgs.slots[i]; return `<div class="slot"><img src="${img(it.id)}" alt="" loading="lazy"><div><b>${esc(nm(it.id))}</b> ${lvlDots(sl)}<div class="small muted">${esc(PAT[it.pat].label)}${sl.w?` · ${sl.w} ${U()}`:""}${sl.focus?" · focus":""}</div></div><span class="rx">${rxText(it.rx)}</span></div>`}).join("")}</div>
@@ -654,100 +671,125 @@ function weightForm(){ const last=bwNow(); return `<div class="row"><input id="w
 
 /* ---------- Plan ---------- */
 function opt(name,val,cur,label,sub,type="radio"){ const on = type==="checkbox" ? (cur||[]).includes(val) : String(cur)===String(val); return `<label class="opt"><input type="${type}" name="${name}" value="${val}" ${on?"checked":""}><b>${label}</b>${sub?`<small>${sub}</small>`:""}</label>`; }
+const OPEN=new Set(); let formOpen=false;
+function more(label, html, key=label){ return `<details class="more" data-k="${esc(key)}" ${OPEN.has(key)?"open":""}><summary>${label}</summary><div>${html}</div></details>`; }
+document.addEventListener("toggle", e=>{ const d=e.target; if(!(d instanceof HTMLDetailsElement)) return; if(d.classList.contains("sec")) formOpen=d.open; else if(d.dataset.k){ d.open?OPEN.add(d.dataset.k):OPEN.delete(d.dataset.k); } }, true);
+function facts(list){ return `<div class="facts">${list.filter(Boolean).map(([k,v])=>`<div class="fact"><span>${k}</span><b>${v}</b></div>`).join("")}</div>`; }
+function sessionMins(s){
+  const now=estimateMin(items(s,curPhase()),pairDefault());
+  const max=Math.max(estimateMin(items(s,"build"),pairDefault()), estimateMin(items(s,"progress"),pairDefault()));
+  return {now, max};
+}
+function minsText(s){ const m=sessionMins(s); return m.max>m.now+2 ? `~${m.now} min now, up to ~${m.max}` : `~${m.now} min`; }
+function splitName(){ const n=S.profile.days.length; return n>=4?"upper/lower split":n===3?"3 full-body sessions":"2 full-body sessions"; }
 function viewPlan(){
-  const p=S.profile, lb=U()==="lb";
-  return `<section class="panel">
-  <form class="card stack" id="pf" onsubmit="return false">
-    <h2>About you</h2>
-    <fieldset><legend>Goal</legend>
-      <div class="choice cols">${Object.entries(GOALS).map(([k,g])=>opt("goal",k,p.goal,g.name,`${g.what}<br><b>${g.rx}</b>`)).join("")}</div>
-      ${p.goal==="muscle"?`<p class="small note">On "lifting heavy to bulk": muscle grows about the same with heavy (≤6 reps) or moderate (8–15+) weights, as long as sets end close to failure (Schoenfeld et al., 2017). With home dumbbells, 8–12 reps is the practical range. Size comes from weekly volume and eating a small surplus. Very heavy, low-rep sets mainly build strength.</p>`:""}
-      ${p.goal==="lose"?`<p class="small note">Fat loss comes mostly from eating fewer calories than you burn. Lifting makes sure what you lose is fat, not muscle. Cardio adds calories burned and helps your heart. The plan does all three: short-rest lifting, a cardio finisher, a weekly cardio target, and a calorie range below.</p>`:""}
+  const p=S.profile, lb=U()==="lb", c=calTarget(), kg=bwKg();
+  const summary = S.plan ? (()=>{ const ph=curPhase(), wk=planWeek();
+    const tl=Array.from({length:12},(_,i)=>{const q=phaseOf(i); return `<div class="ph-${q} ${i===wk?"cur":""}" title="Week ${i+1}: ${PHASE_TXT[q].name}">${i+1}</div>`}).join("");
+    return `<div class="card stack">
+      <h2>Your plan</h2>
+      ${facts([["Goal",GOALS[p.goal].name],["Schedule",`${p.days.length} days/week · ${splitName()}`],["Sessions",`${p.minutes} min target`],["This week",`Week ${wk+1} · ${PHASE_TXT[ph].name}`],
+        c?["Calories",`${c.lo.toLocaleString()}–${c.hi.toLocaleString()} kcal/day`]:null, kg?["Protein",`${Math.round(1.6*kg)}–${Math.round(2.2*kg)} g/day`]:null, ["Cardio",`${cardioTarget()}+ min/week`],
+        p.focus.length?["Focus",p.focus.map(f=>FOCUS[f].label).join(", ")]:null])}
+      <p class="key">${PHASE_TXT[ph].name}: ${PHASE_TXT[ph].text}</p>
+      ${more("How the 12-week ramp works", `<div class="timeline">${tl}</div>
+        <div class="row small"><span class="chip" style="background:color-mix(in srgb,var(--teal) 30%,var(--card))">Foundation</span><span class="chip" style="background:color-mix(in srgb,var(--sun) 45%,var(--card))">Build</span><span class="chip" style="background:color-mix(in srgb,var(--pink) 35%,var(--card))">Progress</span><span class="chip">Deload</span></div>
+        <ul class="plain">${["foundation","build","progress","deload"].map(k=>`<li><b>${PHASE_TXT[k].name}:</b> ${PHASE_TXT[k].text}</li>`).join("")}</ul>
+        <p class="small muted">After week 12 the Progress/Deload cycle repeats. Separately, each exercise moves up or down its own ladder based on what you log.</p>`)}
+    </div>`; })() : "";
+  const goalNote = p.goal==="muscle" ? more("Do I need to lift heavy to bulk?", `<p>Not necessarily. Muscle grows about the same with heavy (≤6 reps) or moderate (8–15+) weights when sets end close to failure (Schoenfeld et al., 2017). Size comes from weekly sets plus a small calorie surplus. Very heavy, low-rep work mainly builds strength. With home dumbbells, 8–12 reps is the practical range.</p>`)
+    : p.goal==="lose" ? more("How this goal loses fat", `<p>Fat loss comes mostly from eating fewer calories than you burn. Lifting makes sure what you lose is fat, not muscle. Cardio adds calories burned and helps your heart. This setting uses short rests, a cardio finisher each session, a weekly cardio target, and a calorie range.</p>`) : "";
+  const form = `<form id="pf" onsubmit="return false"><details class="sec card" ${(!S.plan||formOpen)?"open":""}>
+    <summary><h2>${S.plan?"Edit your answers":"Set up your plan"}</h2>${S.plan?`<span class="small muted">${GOALS[p.goal].name} · ${{new:"new",some:"some experience",exp:"experienced"}[p.exp]} · ${p.days.map(d=>DAYN[d]).join("/")} · ${p.minutes} min</span>`:""}</summary>
+    <div class="stack" style="gap:1.4rem;margin-top:1rem">
+    <fieldset><legend>1. Goal</legend>
+      <div class="choice cols">${Object.entries(GOALS).map(([k,g])=>opt("goal",k,p.goal,g.name,g.rx)).join("")}</div>
+      <p class="small muted">${GOALS[p.goal].what}</p>${goalNote}
     </fieldset>
-    <fieldset><legend>Focus areas <span class="small muted" style="font-family:var(--body)">(optional, pick any)</span></legend>
+    <fieldset><legend>2. Focus areas <span class="small muted" style="font-family:var(--body)">optional</span></legend>
       <div class="choice chips">${Object.entries(FOCUS).map(([k,f])=>opt("focus",k,p.focus,f.label,"","checkbox")).join("")}</div>
-      <p class="small muted">Each focus adds an exercise or extra sets for that area. It shapes the muscle; it can't burn fat from one spot. A flatter stomach comes from overall fat loss plus core work.</p>
+      ${more("What a focus area does", `<p>Each focus adds an exercise or an extra set for that area. It shapes the muscle but can't burn fat from one spot. A flatter stomach comes from overall fat loss plus core work.</p>`)}
     </fieldset>
-    <fieldset><legend>Body</legend>
+    <fieldset><legend>3. Body</legend>
       <div class="grid g4">
-        <label class="f">Sex <span class="h">For the calorie formula</span><select name="sex"><option value="">–</option><option value="f" ${p.sex==="f"?"selected":""}>Female</option><option value="m" ${p.sex==="m"?"selected":""}>Male</option></select></label>
+        <label class="f">Sex<select name="sex"><option value="">–</option><option value="f" ${p.sex==="f"?"selected":""}>Female</option><option value="m" ${p.sex==="m"?"selected":""}>Male</option></select></label>
         <label class="f">Age<input type="number" inputmode="numeric" name="age" value="${esc(p.age)}"></label>
-        ${lb?`<label class="f">Height (ft)<input type="number" inputmode="numeric" name="hFt" value="${esc(p.hFt)}"></label><label class="f">(in)<input type="number" inputmode="numeric" name="hIn" value="${esc(p.hIn)}"></label>`
+        ${lb?`<label class="f">Height (ft)<input type="number" inputmode="numeric" name="hFt" value="${esc(p.hFt)}"></label><label class="f">Height (in)<input type="number" inputmode="numeric" name="hIn" value="${esc(p.hIn)}"></label>`
             :`<label class="f">Height (cm)<input type="number" inputmode="numeric" name="hCm" value="${esc(p.hCm)}"></label>`}
-        <label class="f">Weight now (${U()})<input type="number" inputmode="decimal" name="bw" value="${esc(p.bw)}"></label>
-        <label class="f">Goal weight (${U()}) <span class="h">Optional</span><input type="number" inputmode="decimal" name="target" value="${esc(p.target)}"></label>
-        <label class="f">Daily activity outside workouts<select name="activity">${[["1.2","Mostly sitting"],["1.375","Light: on your feet some"],["1.55","Moderate: active job or lots of walking"],["1.725","Very active"]].map(([v,l])=>`<option value="${v}" ${p.activity===v?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="f">Weight (${U()})<input type="number" inputmode="decimal" name="bw" value="${esc(p.bw)}"></label>
+        <label class="f">Goal weight<input type="number" inputmode="decimal" name="target" value="${esc(p.target)}" placeholder="optional"></label>
+        <label class="f">Daily activity<select name="activity">${[["1.2","Mostly sitting"],["1.375","On my feet some"],["1.55","Active job / lots of walking"],["1.725","Very active"]].map(([v,l])=>`<option value="${v}" ${p.activity===v?"selected":""}>${l}</option>`).join("")}</select></label>
         <label class="f">Units<select name="units"><option value="lb" ${lb?"selected":""}>lb / ft</option><option value="kg" ${!lb?"selected":""}>kg / cm</option></select></label>
       </div>
       <div id="calb">${calBlock()}</div>
     </fieldset>
-    <fieldset><legend>Experience</legend>
-      <div class="choice cols">${opt("exp","new",p.exp,"New or returning","Under ~6 months of steady lifting")}${opt("exp","some",p.exp,"Some experience","6 months to 2 years")}${opt("exp","exp",p.exp,"Experienced","2+ years, confident with form")}</div>
+    <fieldset><legend>4. Experience</legend>
+      <div class="choice cols">${opt("exp","new",p.exp,"New or returning","Under 6 months")}${opt("exp","some",p.exp,"Some experience","6 months – 2 years")}${opt("exp","exp",p.exp,"Experienced","2+ years")}</div>
     </fieldset>
-    <fieldset><legend>Preferences</legend>
-      <label class="f">Favorite cardio<select name="cardio">${[["walk","Walking"],["run","Running"],["bike","Cycling"],["swim","Swimming"],["dance","Dance / classes"],["rope","Jump rope"],["none","No preference"]].map(([v,l])=>`<option value="${v}" ${p.cardio===v?"selected":""}>${l}</option>`).join("")}</select></label>
-      <label class="row"><input type="checkbox" name="lowImpact" ${p.lowImpact?"checked":""}> Low impact: no jumping</label>
-      <div class="stack"><b>Go easy on</b><div class="choice chips">${Object.entries(AVOID).map(([k,a])=>opt("avoid",k,p.avoid,a.label,"","checkbox")).join("")}</div><span class="small muted">Removes exercises that commonly bother that joint. If something hurts, see a professional.</span></div>
-    </fieldset>
-    <fieldset><legend>Schedule</legend>
+    <fieldset><legend>5. Schedule</legend>
       <div class="days">${WEEK_ORDER.map(d=>`<button type="button" class="day" data-day="${d}" aria-pressed="${p.days.includes(d)}">${DAYN[d]}</button>`).join("")}</div>
-      <p class="small muted">${p.days.length>=4?"Upper/lower split: each muscle twice a week.":p.days.length===3?"Three full-body sessions (A/B/C) rotating.":"Two full-body sessions (A/B) rotating."}</p>
+      <p class="small muted">${p.days.length} days → ${splitName()}.</p>
       ${spacingWarnings().map(w=>`<div class="note warn small">${w}</div>`).join("")}
-      <div class="choice cols">${[30,45,60].map(m=>opt("minutes",m,p.minutes,`${m} min`,m===30?"3–4 exercises":m===45?"4–6 exercises":"5–8 exercises")).join("")}</div>
+      <div class="choice cols">${[30,45,60].map(m=>opt("minutes",m,p.minutes,`${m} min`,"")).join("")}</div>
       <div class="grid g3">
         <label class="f">Preferred time<input type="time" name="time" value="${esc(p.time)}"></label>
-        <label class="f">Usual bedtime <span class="h">For caffeine and late-session advice</span><input type="time" name="bed" value="${esc(p.bed)}"></label>
+        <label class="f">Usual bedtime<input type="time" name="bed" value="${esc(p.bed)}"></label>
       </div>
     </fieldset>
-    <fieldset><legend>Equipment &amp; options</legend>
-      <label class="f">Dumbbells you own <span class="h">Each weight, e.g. 5, 10, 15, 25. Used to pick your next weight.</span><input type="text" name="dbs" value="${esc(p.dbs)}" placeholder="5, 10, 15, 20"></label>
-      <label class="row"><input type="checkbox" name="adj" ${p.adj?"checked":""}> Adjustable dumbbells (any weight in ${lb?"2.5 lb":"1 kg"} steps)</label>
-      <label class="row"><input type="checkbox" name="pair" ${p.pair?"checked":""}> Pair exercises to save time${p.goal==="lose"?" (always on for fat loss)":""}</label>
-      <label class="row"><input type="checkbox" name="voice" ${p.voice?"checked":""}> Spoken cues during sessions</label>
-      <label class="row"><input type="checkbox" name="noDeload" ${p.noDeload?"checked":""}> Skip planned deload weeks</label>
+    <fieldset><legend>6. Preferences &amp; equipment</legend>
+      <div class="grid g2">
+        <label class="f">Favorite cardio<select name="cardio">${[["walk","Walking"],["run","Running"],["bike","Cycling"],["swim","Swimming"],["dance","Dance / classes"],["rope","Jump rope"],["none","No preference"]].map(([v,l])=>`<option value="${v}" ${p.cardio===v?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="f">Dumbbells you own <span class="h">e.g. 5, 10, 15, 25</span><input type="text" name="dbs" value="${esc(p.dbs)}" placeholder="5, 10, 15, 20"></label>
+      </div>
+      <div class="stack"><b>Go easy on</b><div class="choice chips">${Object.entries(AVOID).map(([k,a])=>opt("avoid",k,p.avoid,a.label,"","checkbox")).join("")}</div></div>
+      <div class="stack">
+        <label class="row"><input type="checkbox" name="lowImpact" ${p.lowImpact?"checked":""}> Low impact (no jumping)</label>
+        <label class="row"><input type="checkbox" name="adj" ${p.adj?"checked":""}> Adjustable dumbbells</label>
+        <label class="row"><input type="checkbox" name="pair" ${p.pair?"checked":""}> Pair exercises to save time${p.goal==="lose"?" (always on for fat loss)":""}</label>
+        <label class="row"><input type="checkbox" name="voice" ${p.voice?"checked":""}> Spoken cues during sessions</label>
+        <label class="row"><input type="checkbox" name="noDeload" ${p.noDeload?"checked":""}> Skip deload weeks</label>
+      </div>
     </fieldset>
     <div class="row"><button type="button" class="btn pink big" data-act="build">${S.plan?"Update plan":"Build my plan"}</button>${S.plan?'<button type="button" class="btn ghost" data-act="restart">Restart from week 1</button>':""}</div>
-    ${S.plan?'<p class="small muted">Updating keeps your current levels and weights. Restarting puts you back to week 1 of the ramp.</p>':""}
-  </form>
-  ${S.plan?planCards():""}
-  </section>`;
+    ${S.plan?`<p class="small muted">${S.log.length?"Updating keeps the levels and weights you've earned in logged sessions.":"You haven't logged a session yet, so updating builds a fresh plan from your answers."}</p>`:""}
+    </div></details></form>`;
+  return `<section class="panel">${summary}${form}${S.plan?planCards():""}</section>`;
 }
 function calBlock(){
-  const c=calTarget(), kg=bwKg(); const t=num(S.profile.target), w=bwNow();
-  if(!c) return `<p class="small muted">Fill in sex, age, height and weight to see a calorie estimate.</p>`;
-  let eta="";
-  if(t && w && c.d!=="maintain"){ const diff=Math.abs(w-t); const fast = c.d==="lose"?0.01:0.005, slow=c.d==="lose"?0.005:0.0025; eta=` At that pace, reaching ${t} ${U()} takes roughly ${Math.round(diff/(w*fast))}–${Math.round(diff/(w*slow))} weeks.`; }
-  const mismatch = (S.profile.goal==="muscle" && c.d==="lose") ? `<p class="small">Building muscle while losing weight is called recomposition. It works best for newer lifters. Use the upper end of the calorie range and the high end of protein.</p>`:"";
-  return `<div class="note ok small"><b>Estimated daily burn: ~${c.T.toLocaleString()} kcal.</b> Target: <b>${c.lo.toLocaleString()}–${c.hi.toLocaleString()} kcal/day</b>, ${c.why}.${eta} Protein: ${Math.round(1.6*kg)}–${Math.round(2.2*kg)} g/day.<br>The formula (Mifflin-St Jeor) is an estimate that can be off by about 10%. Your weigh-ins on the Scorecard correct it over time.</div>${mismatch}`;
+  const c=calTarget(), kg=bwKg(), t=num(S.profile.target), w=bwNow();
+  if(!c) return `<p class="small muted">Add sex, age, height and weight to get a daily calorie and protein target.</p>`;
+  let eta=""; if(t && w && c.d!=="maintain"){ const diff=Math.abs(w-t), fast=c.d==="lose"?0.01:0.005, slow=c.d==="lose"?0.005:0.0025; eta=`<p>Reaching ${t} ${U()} at that pace: about ${Math.round(diff/(w*fast))}–${Math.round(diff/(w*slow))} weeks.</p>`; }
+  return `<div class="note ok"><p class="key">${c.lo.toLocaleString()}–${c.hi.toLocaleString()} kcal/day · ${Math.round(1.6*kg)}–${Math.round(2.2*kg)} g protein</p>
+    ${more("How this is calculated", `<p>Estimated daily burn: about ${c.T.toLocaleString()} kcal (Mifflin-St Jeor formula × your activity level). The target is ${c.why}.</p>${eta}<p>The formula can be off by about 10%. Your weigh-ins on the Scorecard correct it over time.</p>${(S.profile.goal==="muscle"&&c.d==="lose")?"<p>Building muscle while losing weight (recomposition) works best for newer lifters. Use the top of the calorie range and the high end of protein.</p>":""}`)}</div>`;
 }
 function planCards(){
-  const sess=S.plan.sessions, ph=curPhase(), wk=planWeek(), perWeek=S.profile.days.length/sess.length;
-  const tl=Array.from({length:12},(_,i)=>{const p=phaseOf(i); return `<div class="ph-${p} ${i===wk?"cur":""}" title="Week ${i+1}: ${PHASE_TXT[p].name}">${i+1}</div>`}).join("");
+  const sess=S.plan.sessions, ph=curPhase(), perWeek=S.profile.days.length/sess.length;
   const vol={};
   sess.forEach(s=>items(s,"build").forEach(it=>{ const e=EX[it.id]; if(!e) return; const n=it.rx.sets*perWeek; e.pm.forEach(m=>{const g=GROUP[m]; if(g) vol[g]=(vol[g]||0)+n;}); e.sm.forEach(m=>{const g=GROUP[m]; if(g) vol[g]=(vol[g]||0)+n*0.5;}); }));
   const order=["Chest","Back","Shoulders","Biceps","Triceps","Quads","Hamstrings","Glutes","Calves","Core"], mx=Math.max(10,...Object.values(vol));
-  return `<div class="card stack"><h2>Your ramp</h2>
-     <div class="timeline">${tl}</div>
-     <div class="row small"><span class="chip" style="background:color-mix(in srgb,var(--teal) 30%,var(--card))">Foundation</span><span class="chip" style="background:color-mix(in srgb,var(--sun) 45%,var(--card))">Build</span><span class="chip" style="background:color-mix(in srgb,var(--pink) 35%,var(--card))">Progress</span><span class="chip">Deload</span></div>
-     <p><b>Now: week ${wk+1}, ${PHASE_TXT[ph].name}.</b> ${PHASE_TXT[ph].text}</p>
-     <p class="small muted">After week 12 the Progress/Deload cycle repeats. Within each phase, every exercise moves up or down its own ladder based on what you log.</p></div>
+  const low=order.filter(g=>(vol[g]||0)<6);
+  const few = sess.some(s=>s.slots.length<=3);
+  return `<h2 style="margin-top:.4rem">Sessions</h2>
+   ${few?`<div class="note small">Only 3 exercises fit in ${S.profile.minutes} minutes at this goal's sets and rests. To fit more, turn on pairing or pick a longer session.</div>`:""}
    <div class="grid g2">${sess.map((s,si)=>{const list=items(s,ph); return `<div class="card stack">
-      <div class="row between"><h3>${esc(s.title)}</h3><span class="chip t">~${estimateMin(list,pairDefault())} min</span></div>
-      <div>${list.map((it,i)=>{const sl=s.slots[i]; const L=ladder(sl.pat), sw=swapsFor(sl.pat); const cur=slotId(sl);
-        const opts = sl.pat==="extra" ? `<b>${esc(nm(cur))}</b>` : `<select data-swap="${si}:${i}" aria-label="Exercise for ${esc(PAT[sl.pat].label)}">${L.map((id,k)=>`<option value="L${k}" ${!sl.custom&&k===Math.min(sl.lvl,L.length-1)?"selected":""}>${L.length>1?`Lv ${k+1}: `:""}${esc(nm(id))}</option>`).join("")}${sw.map(id=>`<option value="S${id}" ${sl.custom===id?"selected":""}>Swap: ${esc(nm(id))}</option>`).join("")}${sl.custom&&!sw.includes(sl.custom)&&!L.includes(sl.custom)?`<option selected>${esc(nm(sl.custom))}</option>`:""}</select>`;
-        return `<div class="slot"><img src="${img(cur)}" alt="" loading="lazy"><div><div class="small muted">${esc(PAT[sl.pat].label)} ${lvlDots(sl)}${sl.focus?' <span class="chip p">focus</span>':""}</div>${opts}${NOTE[cur]?`<div class="small muted">${esc(NOTE[cur])}</div>`:""}</div><div class="stack side" style="justify-items:end;gap:.2rem"><span class="rx">${rxText(it.rx)}</span>${sl.w?`<span class="small muted">${sl.w} ${U()}</span>`:""}<button type="button" class="link small" data-rm="${si}:${i}">remove</button></div></div>`}).join("")}</div>
-      <p class="small muted">Big multi-joint lifts first, smaller ones after (NSCA exercise order).${hasFinisher()?" Ends with a cardio finisher.":""}</p>
+      <div class="row between"><h3>${esc(s.title)}</h3><span class="chip t">${minsText(s)}</span></div>
+      <div>${list.map((it,i)=>{const sl=s.slots[i]; return `<div class="slot"><img src="${img(it.id)}" alt="" loading="lazy"><div><b>${esc(nm(it.id))}</b> ${lvlDots(sl)}<div class="small muted">${rxText(it.rx)}${sl.w?` · ${sl.w} ${U()}`:""}${sl.focus?" · focus":""}</div></div></div>`}).join("")}</div>
+      ${more("Change exercises", list.map((it,i)=>{const sl=s.slots[i], L=ladder(sl.pat), sw=swapsFor(sl.pat), cur=slotId(sl);
+        const sel = sl.pat==="extra" ? `<b>${esc(nm(cur))}</b>` : `<select data-swap="${si}:${i}" aria-label="Exercise for ${esc(PAT[sl.pat].label)}">${L.map((id,k)=>`<option value="L${k}" ${!sl.custom&&k===Math.min(sl.lvl,L.length-1)?"selected":""}>${L.length>1?`Level ${k+1}: `:""}${esc(nm(id))}</option>`).join("")}${sw.map(id=>`<option value="S${id}" ${sl.custom===id?"selected":""}>Swap: ${esc(nm(id))}</option>`).join("")}</select>`;
+        return `<div class="stack" style="gap:.25rem"><span class="small muted">${esc(PAT[sl.pat].label)}</span><div class="row" style="flex-wrap:nowrap">${sel}<button type="button" class="link small" data-rm="${si}:${i}">remove</button></div></div>`}).join("")+`<p class="small muted">Levels go from easiest to hardest. Add more exercises from the Moves tab.</p>`, "chg"+si)}
     </div>`}).join("")}</div>
-   <div class="card stack"><h3>Cardio plan</h3><p>${cardioPlanText()}</p></div>
-   <div class="card stack"><h3>Weekly sets per muscle</h3><p class="small muted">${S.profile.goal==="muscle"?"For growth, aim for about 10+ hard sets per muscle per week (Schoenfeld et al., 2017). Add focus areas to raise a group.":"Primary muscles count 1 per set, secondary ½."}</p><div class="bars">${order.map(g=>{const v=vol[g]||0; return `<div class="bar"><span>${g}</span><div class="tr"><div class="fl" style="width:${Math.min(100,v/mx*100)}%"></div></div><b>${Math.round(v)}</b></div>`}).join("")}</div></div>
-   <div class="card tint stack"><h3>How it adjusts</h3>
-     <ul class="plain">
-      <li><b>Missed the target</b> (under the minimum reps on 2+ sets): next time it gets easier. A weighted exercise drops to your next lighter dumbbell. A bodyweight exercise, or one already at your lightest weight, moves down its ladder to an easier version, e.g. push-ups → incline push-ups. Hit the top of the easier version twice and you move back up.</li>
-      <li><b>Hit the top of the range on every set, two sessions in a row</b>: you level up. For muscle and strength goals, weight goes up first when your next dumbbell is a reasonable jump (≤20%). For fat loss, tone and general goals, you move to a harder variation first, and rests get 15 s shorter.</li>
-      <li><b>In between</b>: same exercise and weight; add a rep where you can.</li>
-      <li>Light days and deload weeks never trigger changes.</li>
-     </ul>
-     <p class="small muted">This is the NSCA's "2-for-2" load rule applied to rep ranges, combined with the variation ladders <i>Overcoming Gravity</i> uses for bodyweight training.</p></div>`;
+   <div class="card stack"><h3>Weekly sets per muscle</h3>
+     <p class="key">${low.length?`Lightest: ${low.join(", ")}`:"Every muscle group gets 6+ sets a week"}</p>
+     <div class="bars">${order.map(g=>{const v=vol[g]||0; return `<div class="bar"><span>${g}</span><div class="tr"><div class="fl" style="width:${Math.min(100,v/mx*100)}%"></div></div><b>${Math.round(v)}</b></div>`}).join("")}</div>
+     ${more("What these numbers mean", `<p>Hard sets per muscle per week. A muscle that's the main target of an exercise counts 1 per set; a helper muscle counts ½.</p><p>For muscle growth, research points to about 10+ sets per muscle per week (Schoenfeld et al., 2017). To raise a group, add a focus area or an exercise from Moves.</p>`)}</div>
+   <div class="card stack"><h3>Cardio</h3><p class="key">${S.profile.goal==="lose"?"200–300":"150–300"} min/week, moderate</p>${more("Details", `<p>${cardioPlanText()}</p>`)}</div>
+   <div class="card stack"><h3>How it adjusts after each session</h3>
+     ${facts([["Missed the target","Easier next time"],["Top of range twice","Harder or heavier"],["In between","Same; add a rep"]])}
+     ${more("The exact rules", `<ul class="plain">
+      <li><b>Missed</b> means fewer than the minimum reps on 2+ sets. A weighted exercise drops to your next lighter dumbbell. A bodyweight exercise, or one already at your lightest weight, moves down its ladder (e.g. push-ups → incline push-ups). Hit the top of the easier version twice and you move back up.</li>
+      <li><b>Top of range twice</b> means every set at the top of the rep range, two sessions in a row. Muscle and strength goals add weight first (if your next dumbbell is a jump of 20% or less). Fat loss, tone and general goals move to a harder variation first, and rests get 15 s shorter.</li>
+      <li>Light days and deload weeks never trigger changes.</li></ul>
+      <p class="small muted">Based on the NSCA's "2-for-2" rule for adding load, adapted to rep ranges, plus the variation ladders from <i>Overcoming Gravity</i>.</p>`)}</div>`;
 }
 
 /* ---------- Scorecard ---------- */
@@ -844,39 +886,24 @@ function viewLog(){
 
 /* ---------- Fuel & timing ---------- */
 function viewFuel(){
-  const kg=bwKg(), n=(a,b,u)=>kg?`<b>${Math.round(a*kg)}–${Math.round(b*kg)} ${u}</b>`:"", c=calTarget();
+  const kg=bwKg(), n=(a,b,u)=>kg?`${Math.round(a*kg)}–${Math.round(b*kg)} ${u}`:null, c=calTarget(), bed=S.profile.bed;
+  const card=(title,f,key,body)=>`<div class="card stack"><h2>${title}</h2>${f?facts(f):""}${key?`<p class="key">${key}</p>`:""}${body?more("Why, and examples",body):""}</div>`;
   return `<section class="panel">
-  <div class="card stack"><h2>Daily targets</h2>
-    ${c?`<p>Calories: <b>${c.lo.toLocaleString()}–${c.hi.toLocaleString()} kcal/day</b> (${c.why}; estimated burn ~${c.T.toLocaleString()}).</p>`:`<p class="muted">Add sex, age, height and weight in Plan to see calorie and protein numbers.</p>`}
-    <p>Protein: 1.4–2.0 g per kg of body weight a day for people who train (ISSN)${kg?`, which is ${n(1.4,2.0,"g")} for you`:""}. When losing fat, the higher end (up to ~2.2 g/kg) helps keep muscle. Split it across 3–4 meals of about 0.25–0.4 g/kg${kg?` (${n(0.25,0.4,"g")})`:""}.</p>
-  </div>
-  <div class="card stack"><h2>Before you train</h2>
-    <div class="tablewrap"><table class="t"><tbody>
-      <tr><th>2–3 h before</th><td>A normal meal with carbs and protein. Eggs, toast and fruit; Greek yogurt with oats and berries; rice, beans and chicken or fish.</td></tr>
-      <tr><th>30–60 min before</th><td>Only if you're hungry or it's been 4+ hours: a banana, toast with peanut butter, or a yogurt.</td></tr>
-      <tr><th>Water</th><td>About 5–7 mL per kg roughly 4 hours before (ACSM)${kg?`: ${n(5,7,"mL")}`:""}. If urine is still dark, drink a bit more 2 hours before. In heat, start well hydrated and sip during.</td></tr>
-      <tr><th>Caffeine (optional)</th><td>3–6 mg per kg about 60 minutes before improves performance (ISSN)${kg?`: ${n(3,6,"mg")}`:""}. A cup of brewed coffee has ~95 mg. Caffeine 6 h before bed still cut sleep by about an hour in a controlled study, so skip it for late sessions.</td></tr>
-    </tbody></table></div>
-    <p class="small muted">Pre-exercise carb guidelines (1–4 g/kg) are written for long or hard endurance work. For 30–60 minutes with dumbbells, a normal meal a few hours before is enough. Training on an empty stomach is fine if you feel fine.</p>
-  </div>
-  <div class="card stack"><h2>Warm-up and stretching</h2>
-    <p><b>Before: move, don't hold.</b> Each session's warm-up is built from the muscles that session works. It starts with 1–2 minutes of easy cardio (marching, skipping) to raise muscle temperature. Then come dynamic moves (leg swings, hip circles, cat–cow, arm swings, inchworms) that take those joints through the ranges you're about to use. The first exercise starts with a light warm-up set. This follows the NSCA's general-then-specific warm-up.</p>
-    <p><b>Why not long static stretches first?</b> Holding a stretch for over about 60 seconds per muscle right before lifting can briefly reduce strength. Short holds of under 60 s have little effect (Behm et al., 2016). So static stretching goes at the end.</p>
-    <p><b>After: hold and breathe.</b> The cooldown picks static stretches for the muscles you just trained and tells you which ones each covers. Hold each one for 20–30 s per side at mild tension, never pain. ACSM suggests about 60 s total per stretch, at least 2–3 days a week. Repeat any tight spot if you have time.</p>
-  </div>
-  <div class="card stack"><h2>After</h2>
-    <p>A meal with 20–40 g of protein within about 2 hours${kg?` (${n(0.25,0.4,"g")})`:""}, plus carbs and vegetables. Greek yogurt and fruit; eggs and toast; tuna or chicken with rice; beans and cheese in tortillas; a shake with a banana. The daily protein total matters more than exact timing.</p>
-  </div>
-  <div class="card stack"><h2>When to train</h2>
-    <p><b>Pick a time you can keep.</b> Strength is a little higher in the late afternoon and evening. In a 2019 meta-analysis (Grgic et al.), though, morning and evening training produced the same strength and muscle gains, and morning trainees' morning strength caught up.</p>
-    <p><b>Evening is fine for sleep</b> unless the session is hard and ends within about an hour of bed (Stutz et al., 2019). ${S.profile.bed?`With a ${fmtTime(S.profile.bed)} bedtime, finish hard sessions by ${fmtTime(minus(S.profile.bed,60))}.`:"Add your bedtime in Plan for a cutoff."}</p>
-    <p><b>Give muscles about 48 hours</b> between hard sessions. Full-body days work best with a day between them; upper/lower splits can run on consecutive days.</p>
-    <p><b>Cardio:</b> ${cardioPlanText()}</p>
-  </div>
-  <div class="card stack"><h2>Recovery</h2>
-    <p>Most adults need 7–9 hours of sleep. Soreness that peaks 1–3 days after a new exercise is normal and fades as you repeat it. If you're run down, use the light-day option at the start of a session. Stop any exercise that causes sharp or joint pain.</p>
-    <p class="small muted">General guidance, not medical advice. If you have a heart condition, are pregnant, have an injury, or take medication that affects exercise or diet, check with a doctor first.</p>
-  </div></section>`;
+  ${!kg?`<div class="note small">Add your weight (and sex, age, height for calories) in Plan to see personal numbers here.</div>`:""}
+  ${card("Every day",[c?["Calories",`${c.lo.toLocaleString()}–${c.hi.toLocaleString()} kcal`]:null,["Protein",n(1.4,2.2,"g")||"1.4–2.2 g/kg"],["Per meal",n(0.25,0.4,"g protein")||"0.25–0.4 g/kg"],["Meals with protein","3–4, every 3–4 h"]],"",
+    `<p>People who train need 1.4–2.0 g of protein per kg a day (ISSN). When losing fat, aim for the top end, up to about 2.2 g/kg, to keep muscle. Splitting it into 3–4 meals works better than one big serving.</p>${c?`<p>Calories: estimated burn ~${c.T.toLocaleString()} kcal; target is ${c.why}.</p>`:""}`)}
+  ${card("Before you train",[["Meal","2–3 h before"],["Snack (if hungry)","30–60 min before"],["Water",n(5,7,"mL")?n(5,7,"mL")+", ~4 h before":"5–7 mL/kg, ~4 h before"],["Caffeine (optional)",(n(3,6,"mg")||"3–6 mg/kg")+", 60 min before"]],"",
+    `<p><b>Meal ideas:</b> eggs, toast and fruit; Greek yogurt with oats and berries; rice, beans and chicken or fish.</p><p><b>Snack ideas:</b> a banana, toast with peanut butter, a yogurt.</p><p>Training on an empty stomach is fine if you feel fine. Sports guidelines (1–4 g of carbs per kg) are written for long or hard sessions. For 30–60 minutes with dumbbells, a normal meal a few hours before covers it.</p><p><b>Water (ACSM):</b> if your urine is still dark, drink a bit more 2 hours before. In heat, start well hydrated and sip during.</p><p><b>Caffeine (ISSN):</b> a cup of brewed coffee is about 95 mg. Skip it within 6 hours of bed: in a controlled study, caffeine taken then still cut sleep by about an hour.</p>`)}
+  ${card("Warm-up and stretching",[["Before","Dynamic moves, ~5 min"],["After","Static holds, 20–30 s/side"]],"Move before you lift; hold stretches after.",
+    `<p><b>Before:</b> 1–2 minutes of easy cardio to warm the muscles, then moving stretches for the areas that session works: leg swings, hip circles, cat–cow, arm swings, inchworms. Then a light warm-up set of the first exercise (NSCA).</p><p><b>Why not long holds first?</b> Holding a stretch over about 60 s per muscle right before lifting can briefly reduce strength; shorter holds have little effect (Behm et al., 2016).</p><p><b>After:</b> the cooldown picks static stretches for the muscles you just trained and shows which ones each covers. Hold at mild tension, never pain. ACSM suggests about 60 s total per stretch, 2–3+ days a week.</p>`)}
+  ${card("After you train",[["Protein",(n(0.25,0.4,"g")||"20–40 g")+" within ~2 h"],["Fluids","Until urine is pale"]],"",
+    `<p><b>Ideas:</b> Greek yogurt and fruit; eggs and toast; tuna or chicken with rice; beans and cheese in tortillas; a shake with a banana. Add carbs and vegetables. Your daily protein total matters more than exact timing.</p>`)}
+  ${card("When to train",[["Best time","One you can keep"],["Hard sessions end",bed?`by ${fmtTime(minus(bed,60))}`:"≥1 h before bed"],["Same muscles","~48 h apart"],["Each week","2+ strength days, 150–300 min cardio"]],"",
+    `<p>Before training, people are a bit stronger in the late afternoon. But in a 2019 meta-analysis (Grgic et al.), morning and evening groups gained the same strength and muscle, and the morning group's morning strength caught up.</p><p>Evening training doesn't hurt sleep unless the session is hard and ends within about an hour of bed (Stutz et al., 2019).</p><p>Full-body days work best with a day between them. Upper/lower splits can run on back-to-back days.</p><p><b>Cardio:</b> ${cardioPlanText()}</p>`)}
+  ${card("Recovery",[["Sleep","7–9 h"],["Soreness","Normal for 1–3 days"],["Sharp or joint pain","Stop that exercise"]],"",
+    `<p>Soreness after a new exercise fades as you repeat it. Train through mild soreness. On a run-down day, use the light-day option at the start of the session.</p>`)}
+  <p class="small muted">General guidance, not medical advice. If you have a heart condition, are pregnant, have an injury, or take medication that affects exercise or diet, check with a doctor first.</p>
+  </section>`;
 }
 
 /* ---------- Sources ---------- */
@@ -1161,8 +1188,8 @@ document.addEventListener("click", e=>{
   if(d.w){ const inp=$("#inW"); inp.value=stepW(parseFloat(inp.value)||0, +d.w); return; }
   if(d.rp){ const inp=$("#inR"); inp.value=Math.max(0,(parseInt(inp.value,10)||0)+ +d.rp); return; }
   const act=d.act, r=d.r;
-  if(act==="build"){ readPlanForm(); buildPlan(false); toast(S.log.length?"Plan updated. Levels kept.":"Plan built."); render(); return; }
-  if(act==="restart"){ if(confirmInline(t,"Tap again: back to week 1")){ readPlanForm(); S.plan=null; buildPlan(true); render(); } return; }
+  if(act==="build"){ readPlanForm(); formOpen=false; buildPlan(false); toast(S.log.length?"Plan updated. Levels kept.":"Plan built."); render(); return; }
+  if(act==="restart"){ if(confirmInline(t,"Tap again: back to week 1")){ readPlanForm(); formOpen=false; S.plan=null; buildPlan(true); render(); } return; }
   if(act==="start"){ actxInit(); startSession(); return; }
   if(act==="resume"){ openRun(); return; }
   if(act==="discard"){ if(confirmInline(t,"Tap again to discard")){ S.active=null; save(); render(); } return; }
