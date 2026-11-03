@@ -36,6 +36,16 @@ const projects: Project[] = [
     links: { demo: "https://brinamaps.com" },
   },
   {
+    title: "Workout",
+    description:
+      "A dumbbell-and-mat training plan built from goals, body stats and schedule, based on NSCA and ACSM guidelines. " +
+      "It guides each session with warm-ups, rest timers and targeted stretches, then adjusts exercise difficulty and weight from what you log.",
+    tags: ["JavaScript", "Fitness", "Local storage"],
+    type: "apps",
+    date: "2026-11-02",
+    links: { demo: "/workout" },
+  },
+  {
     title: "Net Worth Ledger",
     description:
       "Import CSV exports from any bank and see net worth over time. Matches each bank's columns, removes " +
