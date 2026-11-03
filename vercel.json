@@ -17,6 +17,10 @@
       "destination": "/musicanalyst.html"
     },
     {
+      "source": "/workout",
+      "destination": "/workout/index.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://brinamaps.com/api/:path*"
     },
