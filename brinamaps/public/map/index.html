@@ -1366,12 +1366,14 @@ function turnSymbol(step) {
 let liveLast = '', liveAt = 0, liveOn = false;
 function liveSend(force) {
   if (!LIVE || !nav) return;
+  if (nav.peek != null || nav.busy) return;   // the card is previewing a later turn, or says "Rerouting...": the lock screen keeps the real next turn
   const dEl = $('navDist'), road = dEl.querySelector('.road');
   const st = { dist: tr((dEl.firstChild || dEl).textContent), road: road ? road.textContent : '', text: tr($('navText').textContent), sym: nav.sym || 'arrow.up', arrive: $('navArrive').textContent,
     left: tr($('navLeft').textContent.split(' \u00b7 ')[0]), progress: parseFloat($('navProg').style.width) / 100 || 0 };
   const shape = turnShape(); if (shape) st.shape = shape;
   const key = st.dist + '|' + st.road + '|' + st.text + '|' + st.arrive + '|' + (shape ? shape.length + ':' + shape[0] : '');
   if (!force && (key === liveLast || Date.now() - liveAt < 2000)) return;
+  if (key === liveLast && Date.now() - liveAt < 20000) return;   // forced sends still skip an identical state sent moments ago
   liveLast = key; liveAt = Date.now();
   if (!liveOn) { liveOn = true; LIVE.start(Object.assign({ dest: pts.to ? pts.to.name || pts.to.label.split(',')[0] : '' }, st)).then(r => { if (!r || !r.on) liveOn = false; }).catch(() => { liveOn = false; }); }
   else LIVE.update(st).catch(() => {});
@@ -1681,7 +1683,8 @@ function setTheme(name) {   // with "dark at night" on, picking a dark theme set
   if (prefs.autoNight && THEMES[name].ui === 'dark') prefs.nightTheme = name; else prefs.theme = name;
   savePrefs(); drawThemes(); refreshStyle();
 }
-setInterval(() => { if (themeKey() !== shownTheme) refreshStyle(); }, 300000);   // switch over at dusk and dawn
+setInterval(() => { if (!document.hidden && themeKey() !== shownTheme) refreshStyle(); }, 300000);   // switch over at dusk and dawn (not while the app is away: reloading every tile for nobody)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && themeKey() !== shownTheme) refreshStyle(); });
 function drawThemes() {
   // One picker per time of day: it shows the current choice, and opens to the options
   const box = $('themes'), openNow = [...box.querySelectorAll('details[open]')].map(d => d.dataset.k); box.innerHTML = '';
@@ -2211,9 +2214,11 @@ async function geoFetch(ep, params, signal, body) {
 }
 async function geoFetchNet(ep, qs, signal, body) {
   const url = prefs.geoKey ? 'https://api.geoapify.com' + GEO_EP[ep] + '?' + qs + '&apiKey=' + encodeURIComponent(prefs.geoKey) : API + '/geo?ep=' + ep + (qs ? '&' + qs : '');
-  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal } : { signal };
+  // Nothing waits on the geocoder for more than 8 s (the server side allows 12): a slow answer is treated as no answer
+  const own = AbortSignal.timeout ? AbortSignal.timeout(8000) : null, sig = own && signal && AbortSignal.any ? AbortSignal.any([signal, own]) : signal || own;
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: sig } : { signal: sig };
   let r;
-  try { r = await fetch(url, opt); } catch (e) { if (e.name !== 'AbortError') geoDownUntil = Date.now() + (FREE_OK ? 120000 : 10000); throw e; }
+  try { r = await fetch(url, opt); } catch (e) { if (e.name !== 'AbortError' && e.name !== 'TimeoutError') geoDownUntil = Date.now() + (FREE_OK ? 120000 : 10000); throw e; }
   if (!r.ok) {
     if (prefs.geoKey && (r.status === 401 || r.status === 403)) $('geoMsg').textContent = 'Geoapify did not accept that key.';
     if (!prefs.geoKey && r.status === 503) geoOff = true;
@@ -2470,8 +2475,8 @@ function categoryOf(q) {
   const c = CATS.find(x => x[0].test(t));
   return c ? { tags: c[1], word: c[2], title: c[3] } : null;
 }
-async function nearbyKind(ref, cat, radius) {   // radius in km; without one, looks 5 km around and widens if little is found
-  {   // the app's own place list first: free, and it has hours
+async function nearbyKind(ref, cat, radius, skipOwn) {   // radius in km; without one, looks 5 km around and widens if little is found
+  if (!skipOwn) {   // the app's own place list first: free, and it has hours
     let own = await ownNear(cat.tags, ref, radius || 5);
     if (!radius && own.length < 3) { const wide = await ownNear(cat.tags, ref, 30); if (wide.length > own.length) own = wide; }
     if (own.length >= (radius ? 1 : 3)) return own;
@@ -2508,7 +2513,7 @@ function censusLookup(q) {
   return new Promise(done => {
     const name = '_census' + Date.now() + Math.floor(Math.random() * 1e4), tag = document.createElement('script');
     const finish = r => { clearTimeout(timer); delete window[name]; tag.remove(); done(r); };
-    const timer = setTimeout(() => finish([]), 7000);
+    const timer = setTimeout(() => finish([]), 3500);   // a slow answer is not worth holding the list for
     window[name] = d => finish(((d.result || {}).addressMatches || []).slice(0, 2).map(m => {
       const parts = m.matchedAddress.split(',').map(x => x.trim()), nice = t => t.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
       return { lat: m.coordinates.y, lon: m.coordinates.x, main: nice(parts[0]), sub: [nice(parts[1] || ''), parts[2], parts[3]].filter(Boolean).join(', ') };
@@ -2675,12 +2680,19 @@ async function search(which, q, now) {
   if (m) { list.style.display = 'none'; const p = { lat: +m[1], lon: +m[3], label: q }; if (which === 'friend') meetPick(p); else setPoint(which, p); return; }
   const c = map.getCenter(), ref = here || [c.lat, c.lng], id = ++searchId;
   const ctl = searchCtl = new AbortController();
-  const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(4)}&lon=${ref[1].toFixed(4)}`;
+  // The bias is rounded to about a kilometre: with GPS moving a few metres between searches, finer rounding meant
+  // neither the phone's cache nor the server's ever matched, so every search went all the way to the geocoder
+  const base = `/api/?q=${encodeURIComponent(q)}&lang=en&lat=${ref[0].toFixed(2)}&lon=${ref[1].toFixed(2)}`;
   const dLat = 0.36, dLon = dLat / Math.cos(ref[0] * Math.PI / 180);
   const JUNK = /^(taxi|bus_stop|platform|stop_position|parking|parking_entrance|parking_space|bicycle_parking|vending_machine|atm)$/;
   const get = url => photon(url, ctl.signal).then(d => (d.features || []).filter(f => !JUNK.test(f.properties.osm_value || '') || /taxi|bus|park|atm/i.test(q))
     .map(f => Object.assign(labelOf(f.properties), { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], cc: String(f.properties.countrycode || '').toLowerCase(), named: !!f.properties.name, kind: kindOf(f.properties) }))).catch(() => null);
-  const isAddress = /^\d+\s+\S/.test(q), cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
+  // An address: a house number first ("1234 Main St") or after the street, as Mexican addresses are written ("Blvd Popotla 123")
+  const isAddress = /^\d+\s+\S/.test(q) || (STREETY.test(q) && /\b\d{1,6}\b/.test(q)), addrLike = isAddress || STREETY.test(q);
+  const cat = which === 'to' ? categoryOf(q) : null, deeper = !cat && q.length >= 4;   // deeper: also ask the address servers
+  // The US address server needs a city, state or ZIP, so it is only asked for queries that carry one (it took up to 7 s to answer "no" otherwise)
+  const usAddress = isAddress && (/\b\d{5}(-\d{4})?\b/.test(q) || /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\.?\s*$/i.test(q)
+    || /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new (hampshire|jersey|mexico|york)|north (carolina|dakota)|ohio|oklahoma|oregon|pennsylvania|rhode island|south (carolina|dakota)|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b/i.test(q));
   let near, close, far, exact = [], db = null, pending = 3 + (cat ? 1 : 0), backup = false, hoursAsked = false;
   const dist = p => meters(ref, [p.lat, p.lon]);
   const ql = q.toLowerCase(), mine = [], words = fold(ql).replace(/\bkm\b/g, ' ').split(/[^a-z0-9]+/).filter(w => w.length > 1);
@@ -2700,11 +2712,13 @@ async function search(which, q, now) {
     if (onMap.length) { head('On the map'); onMap.slice(0, 5).forEach(row); }
     list.style.display = 'block';
   }
-  let painted = false, showMore = false, catWait = !!cat;
+  let painted = false, showMore = false, catWait = !!cat, fresh = false;
   if (cat) setTimeout(() => { if (catWait && id === searchId) { catWait = false; paint(); } }, 8000);   // never wait longer than this for the category answers
+  const show = () => { fresh = true; paint(); };   // a main answer (the search or an exact address) is drawn as soon as it comes, even with others still out
   function paint() {
     if (id !== searchId) return;
-    if (pending > 0 && painted) return;   // keep what is showing until everything is in, so the list does not jump
+    if (pending > 0 && painted && !fresh) return;   // a side answer (business list, hours) waits until everything is in, so the list does not jump
+    fresh = false;
     if (pending > 0 && !far && !exact.length && !(tt && tt.length) && !(db && db.length)) return;   // the first answer to arrive is shown at once
     if (catWait) return;   // "coffee": wait for the coffee places near you, not names that happen to contain the word
     if (near === null && close === null && far === null && !backup && !deeper) {   // main search server is down: ask the backup once
@@ -2818,9 +2832,10 @@ async function search(which, q, now) {
   if (geo) { near = []; close = []; pending -= 2; }   // Geoapify: one search ranked around you does it all (each request costs time and a credit)
   else get(base + `&limit=6&bbox=${(ref[1] - dLon).toFixed(4)},${(ref[0] - dLat).toFixed(4)},${(ref[1] + dLon).toFixed(4)},${(ref[0] + dLat).toFixed(4)}`).then(f => { near = f; pending--; paint(); });
   let deeperAsked = false;
-  const askDeeper = () => {   // addresses and street names from the address search
+  const askDeeper = () => {   // addresses and street names from the address search; the US address server is asked alongside, and each is shown as it answers
     if (deeperAsked || id !== searchId) return; deeperAsked = true; pending++;
-    Promise.all([isAddress ? censusLookup(q) : [], nominatimLookup(q, ref, ctl.signal)]).then(([a, b]) => { if (id !== searchId) return; exact = a.concat(b); pending--; paint(); });
+    nominatimLookup(q, ref, ctl.signal).then(b => { if (id !== searchId) return; exact = exact.concat(b || []); pending--; show(); }, () => { if (id === searchId) { pending--; paint(); } });
+    if (usAddress) { pending++; censusLookup(q).then(a => { if (id !== searchId) return; exact = (a || []).concat(exact); pending--; show(); }); }
   };
   // The main search sometimes takes many seconds for a query. After 3 s the list stops waiting for it (what the
   // place list found stays up); a late answer is still added when it comes.
@@ -2832,6 +2847,7 @@ async function search(which, q, now) {
     const late = farDone; farDone = true;
     far = f;
     if (late) { if (id === searchId && f && f.length) { painted = false; paint(); } return; }
+    fresh = true;
     if (geo && deeper && !isAddress && (!f || f.length < 3) && !(tt && tt.length)) askDeeper();   // thin answer: try the address search too
     if (geo && f && !isAddress && !cat && q.length >= 3) {
       // Near the US-Mexico border: the search fills up with one side, so ask the other side too and list both by distance
@@ -2844,7 +2860,9 @@ async function search(which, q, now) {
     pending--; paint();
   });
   };
-  if (cat || !geo) askFar();
+  // The own place list knows names, not house numbers or streets: for those the geocoder is asked at once rather than
+  // after the list answers (that wait was up to 2.5 s on every keystroke pause)
+  if (cat || !geo || addrLike) askFar();
   else dbP.then(o => {
     if (id !== searchId) return;
     if (dbEnough(o)) { farDone = true; far = []; pending--; paint(); }   // the own list covered it: no paid search
@@ -2861,7 +2879,7 @@ async function search(which, q, now) {
     });
   }, now ? 0 : 350);
   // Addresses and street names: asked as you type, once typing pauses for a moment (these free servers are rate limited)
-  if (deeper && (!geo || isAddress)) setTimeout(askDeeper, now ? 0 : 450);
+  if (deeper && (!geo || isAddress)) { if (isAddress) askDeeper(); else setTimeout(askDeeper, now ? 0 : 450); }   // an address goes straight out: the typing pause already waited
 }
 
 async function setPointFromLatLng(which, lat, lon) {
@@ -3361,19 +3379,22 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
   // The toll-free way is asked at the same time as the main one when toll booths are near the trip (answers in parallel)
   const tollKinds = !quiet && (costing === 'auto' || costing === 'truck') && !prefs.noToll;
   const freeBody = Object.assign({}, body, { alternates: 0, costing_options: { [costing]: Object.assign({}, opt, { use_tolls: 0 }) } });
-  const freeP = tollKinds && await tollsLikely() ? fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`).then(r => r.json()).catch(() => ({})) : null;
+  // Every ask of a router stops after 12 s: a request that hangs (the phone changing networks at the border) is a
+  // failed request, and the next service is asked, rather than guidance waiting on it
+  const rfetch = u => fetch(u, { signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined });
+  const freeP = tollKinds && await tollsLikely() ? rfetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`).then(r => r.json()).catch(() => ({})) : null;
   const ask = async () => {
     if (via && via.split) {   // into a border lane: normal roads up to the line's entry, then the lane itself (closed to general traffic in the map data)
       const L = body.locations, k = L.findIndex(q => q.type === 'through' && q.lat === via.split.lat && q.lon === via.split.lon);
       const entry = Object.assign({}, L[k], { type: 'break' });
       const bodyA = Object.assign({}, body, { alternates: 0, locations: L.slice(0, k).concat([entry]) });
       const bodyB = Object.assign({}, body, { alternates: 0, locations: [entry].concat(L.slice(k + 1)), costing_options: { [costing]: via.split.lane ? laneOpts(opt) : opt } });   // only the SENTRI lane itself is closed to general traffic in the map data
-      const [ra, rb] = await Promise.all([bodyA, bodyB].map(b2 => fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(b2))}`)));
+      const [ra, rb] = await Promise.all([bodyA, bodyB].map(b2 => rfetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(b2))}`)));
       const [da, db] = await Promise.all([ra.json(), rb.json()]);
       if (!da.trip || !db.trip) return [da.trip ? rb : ra, da.trip ? db : da];
       return [ra, { trip: joinTrips(da.trip, db.trip) }];
     }
-    const r = await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()];
+    const r = await rfetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`); return [r, await r.json()];
   };
   let [r, data] = await ask(), stuck = false;
   if (!data.trip && skip.length) { delete body.exclude_polygons; [r, data] = await ask(); stuck = !!data.trip; }   // no way around: route through and say so
@@ -3396,7 +3417,7 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
       picked.forEach(h => ex.push({ lat: h.p[0], lon: h.p[1] }));
       body.exclude_locations = ex; body.alternates = 0;
       let d2;
-      try { d2 = await (await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json(); } catch (e) { d2 = {}; }
+      try { d2 = await (await rfetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(body))}`)).json(); } catch (e) { d2 = {}; }
       if (!d2.trip) break;   // no way around: keep the last route; the warning comes from zoneNote()
       trips = [d2.trip]; valhallaRoutes.blocked = ex.length;
     }
@@ -3406,7 +3427,7 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
   const tolled = t => t.legs.some(l => l.maneuvers.some(m => m.toll));
   if (!quiet && (costing === 'auto' || costing === 'truck') && !prefs.noToll && trips.every(tolled)) {
     try {
-      const d3 = freeP ? await freeP : await (await fetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`)).json();
+      const d3 = freeP ? await freeP : await (await rfetch(`${base}/route?json=${encodeURIComponent(JSON.stringify(freeBody))}`)).json();
       if (d3.trip && !tolled(d3.trip) && !zoneHits(shapeOf(d3.trip)).length) trips.push(d3.trip);
     } catch (e) {}
   }
@@ -3723,7 +3744,7 @@ async function route(quiet, afterFires) {
   }
   if (!found && Date.now() > ownDownUntil) {   // own route server first: fast, and free per route
     try { found = await valhallaRoutes(quiet, OWN_ROUTER); }
-    catch (e) { found = null; if (!e.noRoute) ownDownUntil = Date.now() + 600000; }   // outside its area (or no way): the next service is asked
+    catch (e) { found = null; if (!e.noRoute) ownDownUntil = Date.now() + (e.status >= 500 ? 600000 : 45000); }   // outside its area (or no way): the next service is asked. A server error: skipped for 10 minutes; a dropped or hung connection (the phone between networks): 45 seconds
   }
   if (!found && geoRouting()) {
     try { found = await geoapifyRoutes(quiet); }
@@ -3736,8 +3757,9 @@ async function route(quiet, afterFires) {
   if (!found) {
     try { if (!FREE_OK) throw new Error('Routing is unavailable right now. Try again in a moment.'); found = await osrmRoutes(quiet); useBackup = Date.now(); }
     catch (e) {
-      const t = store('map.trip');   // no connection: fall back to the last route to this same place
-      if (t && t.mode === prefs.mode && t.routes && meters([t.to.lat, t.to.lon], [pts.to.lat, pts.to.lon]) < 80) {
+      const t = store('map.trip');   // no connection: fall back to the last route to this same place, with the same stops
+      const sameStops = t && Array.isArray(t.stops) && t.stops.length === pts.stops.length && t.stops.every((p, i) => pts.stops[i] && meters([p.lat, p.lon], [pts.stops[i].lat, pts.stops[i].lon]) < 80);
+      if (t && t.mode === prefs.mode && t.routes && sameStops && meters([t.to.lat, t.to.lon], [pts.to.lat, pts.to.lon]) < 80) {
         found = t.routes; found.saved = true;
         found.note = 'No connection. Showing the route saved at ' + new Date(t.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
       } else { if (id === reqId) status(e.message && !/fetch/i.test(e.message) ? e.message : 'Routing is unavailable right now. Try again in a moment.'); return false; }
@@ -3977,9 +3999,19 @@ function crossingOf(rt) {   // the port a route crosses at, which way, and how l
     pick = { port, crossing, lat, lon, bi, best };
   }
   if (!pick) return null;
-  const bi = pick.bi, before = c[Math.max(0, bi - 40)], after = c[Math.min(c.length - 1, bi + 40)];
+  if (nav && nav.crossed && nav.crossed.port === pick.port) return null;   // already through this port on this trip: a reroute on the far side is not another crossing
+  const bi = pick.bi, M = 110540;   // metres per degree of latitude; the border runs east-west at every port here
+  // The route has to come from one side and go to the other: at least 300 m south of the port before it and 300 m
+  // north after it (or the reverse). Passing by a port, or starting next to it on the US side after crossing, is not a
+  // crossing (that added the whole line's wait, and the lane detour, to a route that never crosses). A route that
+  // starts in the line, within 1.5 km south of the booths, still counts.
+  const southOf = q => (pick.lat - q[0]) * M, northOf = q => (q[0] - pick.lat) * M;
+  const startInLine = southOf(c[0]) > 0 && meters(c[0], [pick.lat, pick.lon]) < 1500;
+  const north = (startInLine || c.slice(0, bi).some(q => southOf(q) > 300)) && c.slice(bi).some(q => northOf(q) > 300);
+  const south = !north && c.slice(0, bi).some(q => northOf(q) > 300) && c.slice(bi).some(q => southOf(q) > 300);
+  if (!north && !south) return null;
   let t = 0; for (const st of rt.steps) { if (st.begin >= bi) break; t += st.time || 0; }
-  return { port: pick.port, crossing: pick.crossing, lat: pick.lat, lon: pick.lon, idx: bi, north: after[0] > before[0], eta: t };
+  return { port: pick.port, crossing: pick.crossing, lat: pick.lat, lon: pick.lon, idx: bi, north, eta: t };
 }
 async function checkBorder(list) {
   list.forEach(rt => {   // undo an earlier lane's changes before working them out again
@@ -4019,8 +4051,12 @@ async function checkBorder(list) {
     const extra = st && st.extra > 120 ? st.extra : 0;
     if (st) rt._border = { time: rt.time, steps: [[st.x, { time: st.x.time, instruction: st.x.instruction, say: st.x.say, short: st.x.short, road: st.x.road }]] };
     if (b.wait != null) {
-      const add = b.wait * 60 - extra;
-      if (st) st.x.time = Math.max(0, (st.x.time || 0) + add);
+      // Rerouted from inside the line: the part of the wait already spent is not added again (each reroute in line
+      // used to start the whole wait over, and the arrival time jumped by an hour)
+      let wait = b.wait * 60;
+      if (nav && nav.queuedAt && nav.queued === b.port) wait = Math.max(0, wait - (Date.now() - nav.queuedAt) / 1000);
+      const add = wait - extra;
+      if (st) { st.x.time = Math.max(0, (st.x.time || 0) + add); b.addedTo = st.x; b.added = add; }
       rt.time = Math.max(60, rt.time + add); b.counted = true;
     }
     if (st && b.laneKey !== 'standard') {
@@ -4093,6 +4129,7 @@ const passesAll = (rt, list) => list.every(v => { for (let i = 0; i < rt.coords.
 async function laneRoute(rt) {
   const b = rt && rt.border, lv = laneVia(b); if (!lv) return null;
   if (passesAll(rt, lv.list)) { markApproach(rt, lv); return rt; }   // already goes the right way
+  if (nav && here && meters(here, [b.lat, b.lon]) < 2500) return null;   // already at the port, in a line: no routing back round to the start of the approach
   const q = tripPts(), near = pt => { let best = Infinity, bi = 0; rt.coords.forEach((c, i) => { const d = meters(c, [pt.lat, pt.lon]); if (d < best) { best = d; bi = i; } }); return bi; };
   let at = q.findIndex((pt, i) => i > 0 && near(pt) > b.idx); if (at < 1) at = q.length - 1;
   const first = lv.list[0], last = lv.list[lv.list.length - 1], via = { at, list: lv.list, split: { lat: first.lat, lon: first.lon, lane: true } };   // normal roads to the approach, then into the lane
@@ -4106,7 +4143,7 @@ async function laneRoute(rt) {
   const entryIdx = alt.coords.findIndex(c => meters(c, [last.lat, last.lon]) < 40);
   if (entryIdx >= 0 && alt.steps.some(st => st.begin > entryIdx && st.begin <= alt.border.idx + 5 && Math.abs(st.angle) >= 170)) return null;
   if (zoneHits(alt.coords).length && !zoneHits(rt.coords).length) return null;
-  if (alt.dist > rt.dist + 10) return null;   // a lane approach is a short detour at most
+  if (alt.dist > rt.dist + 4) return null;   // a lane approach is a short detour at most (miles)
   alt.via = rt.via; markApproach(alt, lv);
   return alt;
 }
@@ -4427,7 +4464,7 @@ function remindBtn(leave, target, sum) {
   };
   return b;
 }
-setInterval(() => { if ($('bottom').style.display === 'block' && !nav) drawTiming(); }, 30000);
+setInterval(() => { if (!document.hidden && $('bottom').style.display === 'block' && !nav) drawTiming(); }, 30000);
 document.querySelectorAll('#tmode button').forEach(b => b.onclick = () => {
   timing.mode = b.dataset.t;
   if (timing.mode === 'by' && !timing.at) { const t = new Date(Math.ceil((Date.now() + 3600000) / 900000) * 900000); timing.at = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); $('arriveAt').value = timing.at; }
@@ -4498,9 +4535,21 @@ function spokenDist(m) {
 async function keepAwake() { if (AWAKE) { try { if (nav) await AWAKE.keepAwake(); } catch (e) {} return; } try { if (navigator.wakeLock && nav) wake = await navigator.wakeLock.request('screen'); } catch (e) {} }
 // Back in the app during directions: follow you again (leaving the app mid-touch, or the map moving while it was
 // away, left the map parked so it needed Recenter)
+// Away from the app: with no trip running there is nothing to do with your location, so the location watch stops
+// (GPS was the biggest use of battery with the app sitting in the background), and comes back when you return.
+// During a trip the watch keeps going (that is what guides you with the screen off), and the lock screen gets the
+// current state at once so it is right the moment you look at it.
+let watchParked = false;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
+  if (document.visibilityState !== 'visible') {
+    if (nav) { liveSend(true); return; }
+    if (BG && bgWatch) { const old = bgWatch; bgWatch = null; watchParked = true; Promise.resolve(old).then(id => id && BG.removeWatcher({ id })).catch(() => {}); }
+    else if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; watchParked = true; }
+    clearTimeout(nameHere.t);
+    return;
+  }
   keepAwake();
+  if (watchParked) { watchParked = false; startWatch(true); }
   if (nav) { touchDown = false; nav.touching = false; setTimeout(() => { if (nav) $('recenter').onclick(); }, 300); }
 });
 
@@ -4580,6 +4629,7 @@ function peekTo(i) {
   if (i === first) {   // back to now
     nav.peek = null; nav.peekPan = false; $('nav').classList.remove('peek'); endPeekMark(); nav.follow = true; document.body.classList.remove('free');
     if (here) refix();
+    liveSend(true);
     return;
   }
   nav.peek = i; $('nav').classList.add('peek'); drawPeek();
@@ -4609,6 +4659,7 @@ function loadNavRoute() {   // (re)build the progress tables for the current rou
   const rt = routes[selected], cum = [0];
   for (let i = 1; i < rt.coords.length; i++) cum.push(cum[i - 1] + meters(rt.coords[i - 1], rt.coords[i]));
   Object.assign(nav, { rt, cum, seg: 0, step: -1, off: 0, said: {}, along: 0, cur: 0, limits: null, peek: null, live: null });
+  liveLast = '';   // a new route: the lock screen gets the next state even if its words look the same
   $('nav').classList.remove('peek'); endPeekMark();
   trackReset(rt);
   loadLimits(rt);
@@ -4630,6 +4681,10 @@ function startNav() {
   // Phones only allow speech that starts inside a tap, so say something now even when the first prompt is far off
   if (prefs.voice === 'detailed') say('Starting directions.', 'detailed'); else if (prefs.voice !== 'off' && window.speechSynthesis) { try { speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch (e) {} }
   keepAwake();
+  // Parked with directions running (no new position for half an hour: the watch only reports movement), the trip ends
+  // on its own rather than keeping GPS and the route checks going all night
+  clearInterval(startNav.park); nav.parkedAt = 0; lastFixAt = Date.now();
+  startNav.park = setInterval(() => { if (!nav) { clearInterval(startNav.park); return; } const still = nav.parkedAt || lastFixAt; if (Date.now() - still > 1800000) { endNav(); status('Directions ended: parked for 30 minutes. Tap Go to start again.'); } }, 60000);
   if (BG) startWatch(true);   // switch to a watch that keeps going with the screen locked
   if (here) refix();
   // One smooth move from the route overview to the driving view, once the directions panels have their size;
@@ -4654,7 +4709,7 @@ function endNav(arrivedAt) {
   if (CAR) CAR.end({ arrived: !!arrivedAt }).catch(() => {});
   if (muteFrom) { prefs.voice = muteFrom; muteFrom = null; savePrefs(); }   // a mute lasts one trip
   if (nav.city) clearTimeout(nav.city.t);
-  nav = null; tempAvoid = null;
+  nav = null; tempAvoid = null; ++tripSaving; clearInterval(startNav.park);   // tiles for this trip stop downloading when the trip is over
   document.body.classList.remove('nav', 'free', 'inCity'); closeSheets();
   try { if (wake) wake.release(); } catch (e) {}
   wake = null;
@@ -4696,21 +4751,33 @@ function inCity() {
   c.t = setTimeout(() => document.body.classList.remove('inCity'), 45000);   // left alone, the card goes and directions carry on to the center
 }
 // Closest point on the route to ll. Searches near the last known segment first, then the whole route.
-function snap(ll) {
-  const c = nav.rt.coords, kx = Math.cos(ll[0] * Math.PI / 180);
-  function scan(a, b) {
-    let best = { d: Infinity, i: 0, t: 0 };
+// Where the route passes itself (a stop that doubles back, a cloverleaf, lanes at a port of entry), the nearest line is
+// not always the right one: a piece of road going the other way than you are moving costs extra, and so does a piece
+// far ahead or behind where you were a moment ago, so the match stays on your part of the route instead of jumping
+// to another part that happens to be a few metres closer (which made the banner, the arrival time and the lock screen
+// flip to the wrong turn).
+function snap(ll, head, speed) {
+  const c = nav.rt.coords, cum = nav.cum, kx = Math.cos(ll[0] * Math.PI / 180);
+  const moving = speed > 3 && head >= 0, along = nav.along || 0;
+  function scan(a, b, strict) {
+    let best = { d: Infinity, i: 0, t: 0, cost: Infinity };
     for (let i = Math.max(0, a); i < Math.min(c.length - 1, b); i++) {
       const ax = (c[i][1] - ll[1]) * kx, ay = c[i][0] - ll[0], bx = (c[i + 1][1] - ll[1]) * kx, by = c[i + 1][0] - ll[0];
       const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
       const t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
       const px = ax + t * dx, py = ay + t * dy, d = Math.sqrt(px * px + py * py) * 111320;
-      if (d < best.d) best = { d, i, t };
+      let cost = d;
+      if (moving && len) {   // a piece of road pointing the other way: a U-turn's worth of road costs 80 m extra, a side road 40
+        const diff = Math.abs((((Math.atan2(dx, dy) * 180 / Math.PI) - head + 540) % 360) - 180);
+        cost += diff * 0.45;
+      }
+      if (cum) cost += Math.abs(cum[i] + t * (cum[i + 1] - cum[i]) - along) * (strict ? 0.02 : 0.05);   // further along the route from where you were: 20 m per kilometre over the whole route, 50 m per kilometre nearby (a loop or lane that doubles back within the window)
+      if (cost < best.cost) best = { d, i, t, cost };
     }
     return best;
   }
-  let s = scan(nav.seg - 3, nav.seg + 150);
-  if (s.d > 50) s = scan(0, c.length);
+  let s = scan(nav.seg - 30, nav.seg + 150);
+  if (s.d > 50) s = scan(0, c.length, true);
   return s;
 }
 // Route again from where you are now, keeping navigation running
@@ -4739,7 +4806,7 @@ function renav(sayIt, silent, offRoute) {
 async function renavNow(sayIt, silent, offRoute) {
   if (!nav || !here) return false;
   nav.busy = true; nav.lastReroute = Date.now(); nav.lastTraffic = Date.now();
-  if (!silent) { $('navArrow').innerHTML = ''; $('navText').textContent = 'Rerouting...'; $('navDist').textContent = ''; $('navThen').textContent = ''; }
+  if (!silent) { const rest = (nav.info || '').replace(/^Rerouting(  ·  |\.\.\.)/, ''); nav.info = rest ? 'Rerouting  ·  ' + rest : 'Rerouting...'; drawStrip(); }
   if (sayIt) say(sayIt);
   pts.from = { lat: here[0], lon: here[1], label: 'My location', auto: true };
   $('from').value = 'My location';
@@ -4776,11 +4843,17 @@ function onFix(p) {
     refreshFromHere();
     return;
   }
-  const s = snap(ll), acc = p.coords.accuracy || 0, c = nav.rt.coords;
+  const acc = p.coords.accuracy || 0, c = nav.rt.coords;
+  const s = snap(ll, p.again ? -1 : (p.coords.heading == null ? -1 : p.coords.heading), p.again ? 0 : p.coords.speed > 0 ? p.coords.speed : 0);
   // Speed, smoothed: it sets how far ahead the voice speaks and how far out the map zooms, so one odd reading moves neither
   if (!p.again && p.coords.speed != null && p.coords.speed >= 0) nav.spd = nav.spd == null ? p.coords.speed : nav.spd * 0.6 + p.coords.speed * 0.4;
   const speed = p.again ? nav.spd || 0 : p.coords.speed > 0 ? p.coords.speed : 0, spd = nav.spd || 0;
-  const onRoute = s.d <= Math.max(50, acc);
+  // At a port of entry: twenty lanes across, booths and canopies over the GPS, creeping traffic. Within 1.5 km of the
+  // booths the route is a wide one (150 m), it takes far longer off it to reroute, and nothing is said about it
+  const bd0 = nav.rt.border, atPort = !!(bd0 && bd0.north && s.i <= bd0.idx + 5 && meters(ll, [bd0.lat, bd0.lon]) < 1500);
+  if (atPort && !nav.queuedAt) { nav.queuedAt = Date.now(); nav.queued = bd0.port; }   // in the line from now: time spent here counts against the wait
+  if (bd0 && bd0.north && s.d <= Math.max(150, acc) && s.i > bd0.idx + 5 && !nav.crossed) nav.crossed = { port: bd0.port, at: Date.now() };   // through the port: no later reroute treats it as a crossing again
+  const onRoute = s.d <= Math.max(atPort ? 150 : 50, acc);
   const head = onRoute && c[s.i + 1] ? bearing(c[s.i], c[s.i + 1]) : (p.coords.heading >= 0 && speed > 1 ? p.coords.heading : nav.head || 0);
   nav.head = head;
   // Where the map should sit: the follow camera eases toward this every frame (and pauses while a finger is on the map)
@@ -4789,10 +4862,16 @@ function onFix(p) {
   const was = nav.cam && nav.cam.pad;
   if (was && ['top', 'bottom', 'left', 'right'].every(k => Math.abs(was[k] - pad[k]) < 40)) pad = was;
   nav.cam = { z: nav.zoom, p: prefs.northUp ? 0 : 50, pad };
-  showMe(ll, head, gap);
-  drawSpeed(ll, speed);
-  if (nav.busy) return;
-  if (onRoute && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > 300000) trafficCheck();
+  const away = document.hidden;   // screen off or another app in front: the map is not drawn, so the camera and marker work is skipped (the fix still drives the voice, the lock screen and CarPlay)
+  if (!away) { showMe(ll, head, gap); drawSpeed(ll, speed); } else here = ll;
+  // While a reroute is being worked out, guidance carries on from the route in hand (the banner, the arrival time and
+  // the voice used to freeze on "Rerouting..." for as long as the request took, a minute or more on a weak signal);
+  // only another reroute or route check waits
+  // Parked for half an hour with directions still running: the trip ends on its own, instead of GPS and the route
+  // checks running all night in the background. Moving again before that keeps everything as it was.
+  if (!p.again) { if (speed < 0.8 && (p.coords.accuracy || 0) < 100) nav.parkedAt = nav.parkedAt || Date.now(); else nav.parkedAt = 0; }
+  if (nav.parkedAt && Date.now() - nav.parkedAt > 1800000) { endNav(); status('Directions ended: parked for 30 minutes. Tap Go to start again.'); return; }
+  if (!nav.busy && onRoute && !atPort && spd > 3 && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > (document.hidden ? 900000 : 300000)) trafficCheck();   // every 5 minutes; 15 with the screen off, where a faster road cannot be shown anyway; not while queued or stopped
   if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
   // Arrived without reaching the end of the line: turned into the parking lot or a driveway near the place, or parked
   // close by. Near the destination, leaving the route or stopping for 15 seconds ends the route instead of rerouting.
@@ -4808,15 +4887,20 @@ function onFix(p) {
       }
     }
   }
-  if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting
+  if (!onRoute) {   // off the route: wait for three fixes in a row before rerouting (twelve at a port)
+    nav.on = 0;
     if (nav.lost) lostGuide(ll, s, head);
-    // No signal: keep pointing back to the route, and try a new route every 30 seconds in case the signal returns
-    if (++nav.off >= 3 && Date.now() - nav.lastReroute > (nav.lost ? 30000 : 8000)) renav(nav.lost ? '' : 'Rerouting.', nav.lost, true);
+    // No signal: every try walks every route service. The wait between tries grows (30 s, 60 s, then 2 min) so a long
+    // stretch without signal does not spend the battery asking
+    if (!nav.busy && ++nav.off >= (atPort ? 12 : 3) && Date.now() - nav.lastReroute > (nav.lost ? Math.min(120000, 30000 * (nav.lostTries || 1)) : atPort ? 20000 : 8000)) { nav.lostTries = nav.lost ? (nav.lostTries || 1) * 2 : 1; renav(nav.lost || atPort ? '' : 'Rerouting.', nav.lost || atPort, true); }
     return;
   }
-  if (nav.lost) { nav.lost = false; say('Back on your route.'); }
+  // Back on the route: said once it is sure (three fixes in a row, or well inside the route), not on one fix that drifted in
+  nav.on = (nav.on || 0) + 1;
+  if (nav.lost && (nav.on >= 3 || s.d <= Math.max(25, acc / 2))) { nav.lost = false; nav.lostTries = 1; say('Back on your route.'); }
+  else if (nav.lost) { lostGuide(ll, s, head); return; }
   nav.off = 0; nav.seg = s.i;
-  trackTo(s.i, s.t);
+  if (!away) trackTo(s.i, s.t);
   const rt = nav.rt, cum = nav.cum, steps = rt.steps, total = cum[cum.length - 1];
   const along = cum[s.i] + s.t * (cum[s.i + 1] - cum[s.i]), left = total - along;
   let cur = 0;
@@ -4824,7 +4908,7 @@ function onFix(p) {
   if (cur >= steps.length - 1) cur = Math.max(0, steps.length - 2);
   const next = steps[cur + 1], after = steps[cur + 2];
   const toNext = next ? Math.max(0, cum[next.begin] - along) : left;
-  drawTurnArrow(nav.peek != null && nav.rt.steps[nav.peek] ? nav.rt.steps[nav.peek] : next);   // previewing a later turn: the arrow is drawn on that one
+  if (!away) drawTurnArrow(nav.peek != null && nav.rt.steps[nav.peek] ? nav.rt.steps[nav.peek] : next);   // previewing a later turn: the arrow is drawn on that one
 
   if (left < 25) {
     say('You have arrived.', 'brief');
@@ -4872,7 +4956,7 @@ function onFix(p) {
   $('navArrive').textContent = arrive;
   nav.sym = turnSymbol(next);
   const bd = rt.border && rt.border.idx > s.i ? rt.border : null;
-  let toBorder = 0; if (bd) { for (let i = cur; i < steps.length && steps[i].begin < bd.idx; i++) toBorder += i === cur ? (steps[i].time || 0) * (curLen ? Math.min(1, toNext / curLen) : 0) : steps[i].time || 0; }
+  let toBorder = 0; if (bd) { for (let i = cur; i < steps.length && steps[i].begin < bd.idx; i++) { const f = i === cur ? (curLen ? Math.min(1, toNext / curLen) : 0) : 1; toBorder += (steps[i].time || 0) * f - (steps[i] === bd.addedTo ? (bd.added || 0) * f : 0); } toBorder = Math.max(0, toBorder); }   // driving time only: the wait is named separately
   $('navLeft').textContent = fmtTime(secs) + ' - ' + fmtDist(left / 1609.34) + (bd ? ' \u00b7 border in ' + fmtTime(toBorder) + (bd.wait != null ? ', ' + fmtTime(bd.wait * 60) + ' wait' : '') : '');
   $('navProg').style.width = (100 * along / total).toFixed(1) + '%';
   liveSend();
@@ -4882,7 +4966,7 @@ function onFix(p) {
   nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));
   if (next && next.kind !== 'arrive' && toNext < 220 && spd < 18) nav.zoom = Math.max(nav.zoom, 17.1);
   if (nav.cam) nav.cam.z = nav.zoom;
-  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: nextStop || [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ') });
+  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: (nav.busy ? 'Rerouting  ·  ' : '') + (nextStop || [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ')) });
   drawStrip();
   if (document.body.classList.contains('steps')) drawNavSteps();
 
@@ -4893,6 +4977,7 @@ function onFix(p) {
   const near = driving ? Math.max(90, spd * 11) : Math.max(25, spd * 10), early = Math.max(driving ? 400 : 120, spd * 30), far = driving && spd > 20 ? Math.max(1600, spd * 75) : 0;
   if (cur !== nav.step) {
     nav.step = cur;
+    liveSend(true);   // a new turn goes to the lock screen at once, not on the next 2-second tick
     if (toNext > Math.max(early, far) * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', 'detailed'); return; }
   }
   if (!next) return;
@@ -5257,6 +5342,10 @@ async function showDetours(list, out, base, msg) {
     p.extra = extra;
     p.em.textContent = (extra < 60 ? 'on the way' : '+' + fmtTime(extra)) + ' \u00b7 ' + base(p);
   });
+  // Now that the real detour is known, the list goes in that order: the one on your side of the road a mile ahead
+  // first, a place across a divided highway (close to the line, far by car) further down
+  const rows = list.filter(p => p.extra != null && p.em && p.em.parentNode).sort((x, y) => (x.extra + (x.ahead || 0) * 0.01) - (y.extra + (y.ahead || 0) * 0.01));
+  if (rows.length === list.length) rows.forEach((p, i) => { const li = p.em.parentNode; if (li.firstChild && li.firstChild.firstChild) li.firstChild.firstChild.textContent = (i + 1) + '. ' + p.main; out.appendChild(li); const m = stopMarkers.find(mk => mk.getLngLat && Math.abs(mk.getLngLat().lat - p.lat) < 1e-9 && Math.abs(mk.getLngLat().lng - p.lon) < 1e-9); if (m) m.getElement().textContent = i + 1; });
   msg('Tap one to add it to your trip. The time is how much it adds.');
 }
 // Meet in the middle by name: places matching the name inside a box around the midpoint
@@ -5288,12 +5377,19 @@ async function findStopsIn(rt, word, label, out, msg, id) {
   for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + meters(c[i - 1], c[i]));
   const total = cum[cum.length - 1], start = nav ? nav.along || 0 : 0, rem = total - start;
   const at = d => c[Math.max(0, cum.findIndex(x => x >= d))] || c[c.length - 1];
-  const fracs = rem < 8000 ? [0.5] : rem < 40000 ? [0.25, 0.7] : [0.08, 0.3, 0.55], radius = Math.min(12, Math.max(2, rem / 1000 * 0.12));
+  // Lookups spaced along the way, the first one just ahead of you: the one right on the road a mile ahead is what you
+  // want most, and a search centred half way along the trip (as before) could miss it altogether
+  const fracs = rem < 8000 ? [0.2, 0.6] : rem < 40000 ? [0.08, 0.3, 0.7] : [0.03, 0.12, 0.3, 0.55], radius = Math.min(12, Math.max(2, rem / 1000 * 0.12));
   let found = await ownAlong(c, cum, start, cat.tags, 1500) || [];   // the app's own place list: the whole route at once
-  if (!found.length) for (const f of fracs) {   // otherwise a few lookups spaced along the way, one at a time
-    const list = await nearbyKind(at(start + rem * f), cat, radius).catch(() => []);
-    list.forEach(p => { if (!found.some(o => o.main === p.main && meters([o.lat, o.lon], [p.lat, p.lon]) < 150)) found.push(p); });
-    if (f !== fracs[fracs.length - 1]) await pause(600);
+  const merge = list => list.forEach(p => { if (!found.some(o => (o.main === p.main || (o.dbid && o.dbid === p.dbid)) && meters([o.lat, o.lon], [p.lat, p.lon]) < 150)) found.push(p); });
+  // The own list can lack a place (newer, or outside the area it covers): when it found nothing within a couple of miles
+  // of you, the search services are asked around the road just ahead as well
+  const nearAhead = l => l.some(p => { let d = Infinity; for (let i = Math.max(0, cum.findIndex(x => x >= start)); i < c.length && cum[i] - start < 4000; i++) d = Math.min(d, meters(c[i], [p.lat, p.lon])); return d < 600; });
+  if (found.length && !nearAhead(found)) merge(await nearbyKind(at(start + Math.min(rem * 0.3, 2500)), cat, Math.min(radius, 3), true).catch(() => []));
+  if (!found.length) for (const f of fracs) {   // nothing on the own list: a few lookups spaced along the way, one at a time
+    merge(await nearbyKind(at(start + rem * f), cat, radius).catch(() => []));
+    if (id !== stopsAsk) return;
+    if (f !== fracs[fracs.length - 1]) await pause(400);
   }
   const stride = Math.max(1, Math.ceil(c.length / 2000)), first = Math.max(0, cum.findIndex(x => x >= start));
   found.forEach(p => {   // how far each place is from the route, and how far along it
@@ -5379,9 +5475,12 @@ async function addStop(p) {
 }
 function removeStop(p, quiet) {
   const i = pts.stops.indexOf(p); if (i < 0) return;
-  pts.stops.splice(i, 1); drawStopPins();
+  pts.stops.splice(i, 1); drawStopPins(); drawTripBtn();
   if (quiet) return;
-  if (nav) renav('Stop removed.'); else route();
+  if (nav) {   // the top line stops naming that stop now, not after the reroute (which can take a while, or fail, with a weak signal)
+    if (nav.info && nav.info.startsWith('Next: ')) { nav.info = ''; drawStrip(); }
+    renav('Stop removed.');
+  } else route();
 }
 
 // ---------- Controls ----------
