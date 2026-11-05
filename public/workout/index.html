@@ -181,6 +181,11 @@ details summary{cursor:pointer;font-weight:700}
 .runbody .frames{aspect-ratio:16/10}
 .runbody ol.ins{font-size:1rem;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:.8rem .9rem .8rem 2rem}
 .rcard{display:grid;gap:.5rem;align-content:start}
+.cues{display:grid;gap:.35rem;background:color-mix(in srgb,var(--teal) 10%,var(--card));border-radius:14px;padding:.7rem .85rem;font-size:.97rem}
+.rest .ring{width:min(48vw,190px)}
+.rest .frames{aspect-ratio:16/9}
+.rest .inner{padding-block:1rem}
+.rest{place-items:start center}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:.55rem}
 .fact{background:var(--soft);border-radius:14px;padding:.6rem .75rem;min-width:0}
 .fact span{display:block;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -503,6 +508,46 @@ function routineBlocked(r){
   if(r.impact && (S.profile.lowImpact || (S.profile.avoid||[]).includes("knees"))) return "Hidden by your low-impact or knee setting.";
   if(r.needs && !(S.profile.equip||[]).includes(r.needs)) return `Needs a ${EQUIP[r.needs].toLowerCase()}. Have one? Switch "Foam roller or ball" to Yes at the top of this page.`;
   return "";
+}
+
+/* ============ coaching cues: what to focus on and when to breathe ============
+   Breathing follows the standard NSCA guidance: exhale through the hard (lifting) part,
+   inhale on the easier (lowering) part, and never hold your breath on holds. */
+const CUE_PAT = {
+  squat:{focus:"Knees track over your toes, chest up, heels down. Sit between your hips, not forward.", inh:"as you lower down", exh:"as you stand up"},
+  hinge:{focus:"Push your hips back, not down. Flat back, weights close to your legs.", inh:"as you hinge down", exh:"as you drive your hips forward to stand"},
+  glute:{focus:"Push through your heels and squeeze your glutes at the top. Ribs down, don't arch your lower back.", inh:"as you lower your hips", exh:"as you lift"},
+  lunge:{focus:"Front knee over mid-foot, torso tall. Control the way down; push through the front heel.", inh:"as you lower", exh:"as you push back up"},
+  hpush:{focus:"Body in one straight line from head to heels. Elbows about 45° from your sides. Full range.", inh:"as you lower your chest", exh:"as you push up"},
+  chest:{focus:"Shoulder blades pulled back and down. Elbows about 45° from your sides.", inh:"as you lower the weights", exh:"as you press up"},
+  hpull:{focus:"Lead with your elbow and squeeze your shoulder blade back. Keep your torso still, no twisting.", inh:"as you lower the weight", exh:"as you pull"},
+  vpush:{focus:"Ribs down and glutes tight so your back doesn't arch. Press straight up, arms by your ears at the top.", inh:"as you lower to your shoulders", exh:"as you press overhead"},
+  rear:{focus:"Move from your upper back, not your arms. Slight bend in the elbows, no swinging.", inh:"as you lower", exh:"as you raise your arms"},
+  lat:{focus:"Lead with your elbows and stop at shoulder height. Keep your shoulders down, away from your ears.", inh:"as you lower", exh:"as you raise"},
+  bi:{focus:"Elbows pinned to your sides. Take 2–3 seconds on the way down.", inh:"as you lower", exh:"as you curl up"},
+  tri:{focus:"Elbows stay still and pointed forward; only your forearms move.", inh:"as you bend your elbows", exh:"as you straighten your arms"},
+  calf:{focus:"Full range: pause at the top, lower your heels all the way down.", inh:"as you lower your heels", exh:"as you rise up"},
+  core:{focus:"Keep your lower back gently pressed toward the floor and ribs down.", inh:"as you return", exh:"as you move"},
+  carry:{focus:"Stand tall, shoulders back and down, stomach braced. No leaning to one side.", breath:"Short, steady breaths while keeping your stomach braced."}
+};
+const CUE_ID = {
+  Plank:{focus:"Straight line from head to heels. Squeeze your glutes and pull your belly button in; don't let your hips sag.", breath:"Breathe slowly and steadily through your nose. Don't hold your breath."},
+  Side_Bridge:{focus:"Hips lifted in a straight line; elbow under your shoulder.", breath:"Slow, steady breaths. Don't hold your breath."},
+  Mountain_Climbers:{focus:"Hands under your shoulders, hips level. Drive your knees toward your chest.", breath:"Quick, rhythmic breathing; don't hold it."},
+  Dead_Bug:{focus:"Lower back stays pressed into the floor the whole time. Move slowly.", inh:"as you bring your arm and leg back", exh:"fully as you extend your arm and leg"},
+  Reverse_Crunch:{focus:"Curl your hips up off the floor using your abs, not momentum.", inh:"as you lower", exh:"as you curl your knees in"},
+  Russian_Twist:{focus:"Rotate from your ribs, not just your arms. Chest up.", exh:"as you turn to each side", inh:"as you pass the middle"},
+  Superman:{focus:"Lift with your back and glutes; keep your neck long, looking at the floor.", inh:"as you lower", exh:"as you lift"},
+  Farmers_Walk:CUE_PAT.carry
+};
+function cueFor(id, pat){
+  const c = CUE_ID[id] || CUE_PAT[pat] || {}, e=EX[id];
+  const breath = c.breath || (c.inh ? `Inhale ${c.inh}. Exhale ${c.exh}.` : "Exhale on the hard part, inhale on the easy part. Don't hold your breath.");
+  return {focus:c.focus||"", breath, works:e?e.pm.join(", "):"", also:e?e.sm.slice(0,3).join(", "):""};
+}
+function cueBlock(id, pat){
+  const c=cueFor(id,pat);
+  return `<div class="cues">${c.works?`<p><b>Works:</b> ${esc(c.works)}${c.also?` <span class="muted">(also ${esc(c.also)})</span>`:""}</p>`:""}${c.focus?`<p><b>Focus:</b> ${esc(c.focus)}</p>`:""}<p><b>Breathe:</b> ${esc(c.breath)}</p></div>`;
 }
 
 /* ============ helpers ============ */
@@ -1237,6 +1282,7 @@ function flowView(label, foot){
    <h2>${esc(st.label)}</h2>
    ${timed?`<p class="target">${st.sec} s${st.side?" each side":""}</p>${st.side?`<p><b>${a.side===0?"First side":"Second side"}</b></p>`:""}`:`<p class="target">${esc(st.reps)}</p>`}
    ${st.why?`<p class="small">${esc(st.why)}</p>`:""}
+   ${(a.phase==="cool"||(a.phase==="rout"&&["Yoga","Posture","Self-massage"].includes(ROUTINES.find(x=>x.key===a.key)?.cat)))&&st.sec&&!st.rest?`<p class="small"><b>Breathe:</b> slow breaths in through your nose and out through your mouth. Ease a little deeper on each exhale.</p>`:""}
    ${timed&&running?ringSVG():""}
    ${ins.length&&!st.rest?`<ol class="ins">${ins.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
    <div class="row">${i>0&&!auto?`<button class="btn ghost" data-r="flowback">Back</button>`:""}
@@ -1262,6 +1308,7 @@ function mainView(){
    ${frames(it.id)}
    <div class="row between"><h2>${esc(nm(it.id))}</h2><span>${sl?lvlDots(sl):""} <span class="chip p">${esc(PAT[it.pat].label)}</span></span></div>
    <p class="target">${it.rx.hold?`Hold ${it.rx.hold} s`:`${t.lo}–${t.hi} reps`}${it.rx.side?` <span class="small" style="font-family:var(--body)">each side</span>`:""}</p>
+   ${cueBlock(it.id, it.pat)}
    <ol class="ins">${insFor(it.id).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
    ${NOTE[it.id]?`<div class="note small">${esc(NOTE[it.id])}</div>`:""}
    ${!it.sets.length?`<div class="note ok small">${esc(it.hint)}</div>`:""}
@@ -1297,12 +1344,23 @@ function finishRoutine(){
 }
 function rpeText(v){ return ({1:"Barely anything",2:"Very easy",3:"Easy",4:"Comfortable",5:"Moderate",6:"Somewhat hard",7:"Hard",8:"Very hard",9:"Near max",10:"Max effort"})[v]; }
 function showRest(){
-  const a=A(), nx=a.steps[a.si], it=nx?a.items[nx.i]:null; let el=$("#restOv");
+  const a=A(), nx=a.steps[a.si], it=nx?a.items[nx.i]:null, prev=a.steps[a.si-1]; let el=$("#restOv");
   if(!el){ el=document.createElement("div"); el.id="restOv"; el.className="rest"; $("#run").appendChild(el); }
+  const same = it && prev && prev.i===nx.i, total = it ? a.steps.filter(x=>x.i===nx.i).length : 0;
+  const last = it && it.sets.length ? it.sets[it.sets.length-1] : null;
+  const tgt = it ? (it.rx.hold ? `Hold ${it.rx.hold} s` : `${curTarget(it).lo}–${curTarget(it).hi} reps`)+(it.rx.side?" each side":"") : "";
   el.innerHTML=`<div class="inner"><p class="eyebrow">Rest</p>${ringSVG()}
    <div class="row" style="justify-content:center"><button class="btn ghost" data-r="rest-15">−15 s</button><button class="btn ghost" data-r="rest+15">+15 s</button><button class="btn pink" data-r="restskip">Ready</button></div>
-   ${it?`<div class="card stack" style="text-align:left"><p class="eyebrow">Up next</p><div class="row" style="flex-wrap:nowrap"><img src="${img(it.id)}" alt="" style="width:64px;height:64px;border-radius:12px;object-fit:cover"><div><b>${esc(nm(it.id))}</b><div class="small muted">Set ${nx.s+1} · ${it.rx.hold?it.rx.hold+" s":curTarget(it).lo+"–"+curTarget(it).hi+" reps"}${it.w?` · ${it.w} ${U()}`:""}</div></div></div></div>`:""}
-   <p class="small muted">Breathe and sip water.</p></div>`;
+   ${it?`<div class="card stack" style="text-align:left">
+     <p class="eyebrow">Up next${same?"":" · new exercise"}</p>
+     ${same?"":frames(it.id)}
+     <div class="row between"><h3>${esc(nm(it.id))}</h3><span class="chip p">Set ${nx.s+1} of ${total}</span></div>
+     <p class="key">${tgt}${it.w?` · ${it.w} ${U()}`:""}</p>
+     ${last?`<p class="small muted">Last set: ${last.s!=null?last.s+" s":(last.w?last.w+" × "+last.r:last.r+" reps")}${!it.rx.hold&&last.r<curTarget(it).lo?". Below target: drop the weight or slow down.":!it.rx.hold&&last.r>=curTarget(it).hi?". At the top of the range.":""}</p>`:""}
+     ${cueBlock(it.id, it.pat)}
+     ${same?more("Steps", `<ol class="ins">${insFor(it.id).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`, "reststeps"):`<ol class="ins">${insFor(it.id).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`}
+   </div>`:""}
+   <p class="small muted">Sip water and shake out your arms and legs. Slow breaths bring your heart rate down faster.</p></div>`;
 }
 function hideRest(){ const el=$("#restOv"); if(el) el.remove(); }
 function startTimer(kind, sec){ A().timer={kind, end:Date.now()+sec*1000, total:sec, lastBeep:null}; save(); }
