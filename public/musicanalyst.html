@@ -24,6 +24,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 ui-sans-serif,
 a{color:var(--accent4)}
 .wrap{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
 header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:20px}
+.home{display:inline-block;margin-bottom:6px;font-size:14px;text-decoration:none;opacity:.8}.home:hover{opacity:1}
 h1{margin:0;font-size:clamp(28px,5vw,44px);letter-spacing:-.02em}
 h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3),var(--accent4));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:300% 100%;animation:shift 9s linear infinite}
 @keyframes shift{to{background-position:300% 0}}
@@ -81,6 +82,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
 <div class="wrap">
 <header>
   <div>
+    <a class="home" href="/">← sabrinapalmer.com</a>
     <h1><span>Music Analyst</span></h1>
     <p class="sub">Your listening history and playlists, outside the app. Everything runs in your browser; nothing is uploaded.</p>
   </div>

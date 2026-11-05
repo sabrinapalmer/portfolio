@@ -286,10 +286,7 @@ const Art: React.FC = () => {
     () =>
       [
         "All",
-        "Painting",
-        "Film Photography",
-        "Digital Photography",
-        "Wood",
+        ...Array.from(new Set(artworks.map((artwork) => artwork.medium))),
       ].map((medium) => (
         <FilterButton
           key={medium}
@@ -311,6 +308,27 @@ const Art: React.FC = () => {
           </h2>
 
           <div className="flex flex-wrap gap-2">{filterButtons}</div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 p-4 rounded-xl bg-white/90 border border-purple-100 shadow-sm backdrop-blur-xs">
+          <p className="font-josefin text-gray-600 flex-1">
+            <span className="font-semibold text-purple-500">Book a shoot.</span>{" "}
+            I photograph beach, family and dog portraits in La Salina, Baja, and listing photos for Airbnbs and homes.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/portraits"
+              className="font-josefin px-4 py-2 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 text-white shadow-md hover:shadow-lg transition-shadow"
+            >
+              Portraits
+            </a>
+            <a
+              href="/listings"
+              className="font-josefin px-4 py-2 rounded-full bg-white text-purple-500 border border-purple-200 hover:bg-purple-50 transition-colors"
+            >
+              Listing photos
+            </a>
+          </div>
         </div>
 
         <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">

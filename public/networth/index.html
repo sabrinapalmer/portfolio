@@ -34,6 +34,7 @@
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
 .app{max-width:1120px;margin:0 auto;padding-inline:20px;padding-block:20px 56px;display:flex;flex-direction:column;gap:18px}
 header.top{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;justify-content:space-between}
+.home{display:block;font-size:12px;color:inherit;opacity:.65;text-decoration:none;margin-bottom:2px}.home:hover{opacity:1}
 h1{font-family:var(--display);font-stretch:112%;font-weight:700;font-size:22px;margin:0;letter-spacing:-.01em}
 .sub{color:var(--muted);font-size:13px}
 nav.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
@@ -141,7 +142,7 @@ ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;m
 
 <div class="app">
   <header class="top">
-    <div><h1>Net Worth Ledger</h1></div>
+    <div><a class="home" href="/">← sabrinapalmer.com</a><h1>Net Worth Ledger</h1></div>
     <div class="sub" id="asof"></div>
   </header>
   <nav class="tabs" role="tablist" id="tabs">
