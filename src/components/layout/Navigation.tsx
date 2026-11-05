@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { navItems } from "../../config/navigation";
+import QuickLinks from "../common/QuickLinks";
 
 interface NavigationProps {
   currentPage: string;
@@ -86,7 +87,7 @@ const Navigation: React.FC<NavigationProps> = ({
   if (isHome) {
     return (
       <motion.div
-        className="h-full flex flex-col justify-center px-4 md:px-12 py-8 md:py-12"
+        className="h-full flex flex-col justify-center px-4 md:px-12 py-6 md:py-12"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -122,6 +123,9 @@ const Navigation: React.FC<NavigationProps> = ({
             </motion.button>
           ))}
         </div>
+        <motion.div variants={itemVariants} className="md:hidden mt-4 -mx-4">
+          <QuickLinks className="flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" />
+        </motion.div>
       </motion.div>
     );
   }

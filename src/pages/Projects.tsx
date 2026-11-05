@@ -26,14 +26,38 @@ const projects: Project[] = [
     links: { demo: "https://www.wearnearlyzero.com" },
   },
   {
-    title: "Map",
+    title: "BrinaMaps",
     description:
       "A map and directions app built on open map data, with no ads or sponsored results. Turn-by-turn voice " +
-      "directions, opening hours, offline areas, and a meet-in-the-middle feature for picking a fair place to meet.",
-    tags: ["JavaScript", "MapLibre", "OpenStreetMap", "PWA"],
+      "directions, opening hours, offline areas, and a meet-in-the-middle feature for picking a fair place to meet. " +
+      "On the web and as an iPhone app.",
+    tags: ["JavaScript", "MapLibre", "OpenStreetMap", "iOS"],
     type: "apps",
     date: "2026-10-16",
     links: { demo: "https://brinamaps.com" },
+  },
+  {
+    title: "SMP Photography",
+    description:
+      "Booking pages for my photography in Baja: beach, family and dog portrait sessions at La Salina, and " +
+      "Airbnb, VRBO and real estate listing photos for the Rosarito to Ensenada area.",
+    tags: ["HTML", "CSS", "Booking"],
+    type: "web",
+    date: "2026-10-28",
+    links: {
+      demo: "/portraits",
+      extra: { label: "Listing Photos", url: "/listings" },
+    },
+  },
+  {
+    title: "Music Analyst",
+    description:
+      "Load a Spotify data export and see your listening history, top artists and playlists outside the app. " +
+      "Exports everything as CSV so you can keep it or move it to another service. Runs entirely in the browser.",
+    tags: ["JavaScript", "Charts", "Data Export"],
+    type: "tools",
+    date: "2026-10-29",
+    links: { demo: "/musicanalyst" },
   },
   {
     title: "Workout",
@@ -41,7 +65,7 @@ const projects: Project[] = [
       "A dumbbell-and-mat training plan built from goals, body stats and schedule, based on NSCA and ACSM guidelines. " +
       "It guides each session with warm-ups, rest timers and targeted stretches, then adjusts exercise difficulty and weight from what you log.",
     tags: ["JavaScript", "Fitness", "Local storage"],
-    type: "apps",
+    type: "tools",
     date: "2026-11-02",
     links: { demo: "/workout" },
   },
@@ -51,7 +75,7 @@ const projects: Project[] = [
       "Import CSV exports from any bank and see net worth over time. Matches each bank's columns, removes " +
       "duplicates across overlapping exports, and never sends files anywhere: everything stays in the browser.",
     tags: ["JavaScript", "Data Cleaning", "Charts"],
-    type: "apps",
+    type: "tools",
     image: NetWorthLedger,
     date: "2026-10-11",
     links: { demo: "/networth" },
@@ -68,8 +92,8 @@ const projects: Project[] = [
   {
     title: "Personal Portfolio",
     description:
-      "A modern, responsive portfolio website built to showcase my projects and skills. Features smooth animations " +
-      "and a clean, minimalist design that adapts seamlessly across all devices.",
+      "This site: a playful, animated home for my work, photography and tools. It also hosts the Net Worth Ledger, " +
+      "Workout, Music Analyst and photography booking pages.",
     tags: ["React", "Tailwind CSS", "Vite", "Vercel", "TypeScript"],
     type: "web",
     image: Portfolio,
@@ -106,7 +130,7 @@ const projects: Project[] = [
       "covers that reflect the songs in their playlist. Users can also reorganize their playlists based on various song features, " +
       "providing a new way to experience their music collections. Currently in development mode - email me to request access and try it out!",
     tags: ["React", "Node.js", "Spotify API"],
-    type: "apps",
+    type: "tools",
     image: SpotifyCustomizer,
     date: "2024-10-01",
     links: {
@@ -151,11 +175,16 @@ const projects: Project[] = [
   },
 ];
 
+const sections: { type: Project["type"]; label: string; blurb: string }[] = [
+  { type: "web", label: "Websites", blurb: "Sites and shops I run or built" },
+  { type: "apps", label: "Apps", blurb: "Things you can install and use daily" },
+  { type: "tools", label: "Tools", blurb: "Free tools for money, music and fitness" },
+  { type: "games", label: "Games", blurb: "Game jam entries" },
+];
+
 const filterLabels: Record<string, string> = {
   all: "All",
-  web: "Websites",
-  apps: "Apps",
-  games: "Games",
+  ...Object.fromEntries(sections.map((s) => [s.type, s.label])),
 };
 
 const isExternal = (url?: string) => !!url && /^https?:/.test(url);
@@ -165,25 +194,29 @@ const linkProps = (url?: string) =>
 const Projects: React.FC = () => {
   const [filter, setFilter] = useState<"all" | Project["type"]>("all");
 
-  const filteredProjects = projects
-    .filter((project) => filter === "all" || project.type === filter)
-    .sort((a, b) => {
-      const dateA = a.date ? new Date(a.date).getTime() : 0;
-      const dateB = b.date ? new Date(b.date).getTime() : 0;
-      return dateB - dateA;
-    });
+  const byDate = (a: Project, b: Project) =>
+    (b.date ? new Date(b.date).getTime() : 0) -
+    (a.date ? new Date(a.date).getTime() : 0);
+
+  const visibleSections = sections
+    .filter((section) => filter === "all" || section.type === filter)
+    .map((section) => ({
+      ...section,
+      items: projects.filter((p) => p.type === section.type).sort(byDate),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <motion.div {...pageTransition}>
       <div className="space-y-8">
         <div>
           <h2 className="font-josefin text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-8 inline-flex items-center backdrop-blur-xs">
-            Creative Projects
+            Projects & Tools
             <Gamepad2 className="text-pink-500 ml-2 mt-[-4px]" size={20} />
           </h2>
 
           <div className="flex flex-wrap gap-2">
-            {["all", "web", "apps", "games"].map((type) => (
+            {["all", ...sections.map((s) => s.type)].map((type) => (
               <button
                 key={type}
                 onClick={() => setFilter(type as typeof filter)}
@@ -199,11 +232,21 @@ const Projects: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredProjects.map((project) => (
-            <ProjectCard key={project.title} project={project} />
-          ))}
-        </div>
+        {visibleSections.map((section) => (
+          <section key={section.type} className="space-y-4">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 backdrop-blur-xs">
+              <h3 className="font-josefin text-2xl font-bold text-purple-500">
+                {section.label}
+              </h3>
+              <p className="font-josefin text-sm text-gray-500">{section.blurb}</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {section.items.map((project) => (
+                <ProjectCard key={project.title} project={project} />
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </motion.div>
   );
@@ -241,8 +284,8 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
     <div className="p-6">
       <div className="flex justify-between items-start mb-2">
         <a
-          href={project.links.extra?.url || project.links.demo}
-          {...linkProps(project.links.extra?.url || project.links.demo)}
+          href={project.links.demo || project.links.extra?.url}
+          {...linkProps(project.links.demo || project.links.extra?.url)}
           className="font-josefin text-xl font-semibold text-purple-500 hover:text-purple-700"
         >
           {project.title}
@@ -296,8 +339,7 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => (
         {project.links.extra && (
           <a
             href={project.links.extra.url}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...linkProps(project.links.extra.url)}
             className="font-josefin flex items-center gap-2 text-purple-500 hover:text-purple-700"
           >
             <Code size={18} />

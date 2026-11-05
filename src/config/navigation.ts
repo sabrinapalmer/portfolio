@@ -12,14 +12,14 @@ export const navItems = [
     path: "projects",
     name: "Projects",
     icon: Gamepad2,
-    description: "Games and personal projects",
+    description: "Websites, apps, free tools and games",
     gradient: "from-pink-400 to-purple-400",
   },
   {
     path: "art",
     name: "Art",
     icon: Palette,
-    description: "Photography and paintings",
+    description: "Film photography and booking a shoot",
     gradient: "from-purple-400 to-pink-400",
   },
   {

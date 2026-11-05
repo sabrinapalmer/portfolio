@@ -1,6 +1,7 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
 import Profile from "../assets/profile.png";
+import QuickLinks from "../components/common/QuickLinks";
 
 const Home: React.FC = () => {
   return (
@@ -28,7 +29,7 @@ const Home: React.FC = () => {
                 Hi, I'm Sabrina! ✨
               </h1>
               <h2 className="font-josefin text-xl md:text-2xl mt-2 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 bg-clip-text text-transparent">
-                Software Engineer & Creative Artist
+                Software Engineer & Photographer
               </h2>
             </div>
 
@@ -36,6 +37,7 @@ const Home: React.FC = () => {
               Building beautiful things with code and creativity 💫
             </p>
           </div>
+          <QuickLinks className="hidden md:flex flex-wrap justify-center gap-2 max-w-md mx-auto" />
         </div>
       </div>
     </div>
