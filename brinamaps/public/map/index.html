@@ -4539,15 +4539,25 @@ async function keepAwake() { if (AWAKE) { try { if (nav) await AWAKE.keepAwake()
 // (GPS was the biggest use of battery with the app sitting in the background), and comes back when you return.
 // During a trip the watch keeps going (that is what guides you with the screen off), and the lock screen gets the
 // current state at once so it is right the moment you look at it.
-let watchParked = false;
+// "Hidden" also fires for moments that are not leaving the app: the system's own location permission alert, Control
+// Center, a notification pulled down, a quick look at another app. So the watch is parked only after the app has been
+// away for a while, and never before the first position has come in (the watch waiting on the permission prompt was
+// being torn down by the prompt itself, and location never got going).
+let watchParked = false, parkTimer = 0;
+function parkWatch() {
+  parkTimer = 0;
+  if (nav || !here || document.visibilityState === 'visible' || locState !== 'ok') return;
+  if (BG && bgWatch) { const old = bgWatch; bgWatch = null; watchParked = true; Promise.resolve(old).then(id => id && BG.removeWatcher({ id })).catch(() => {}); }
+  else if (!BG && watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; watchParked = true; }
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
     if (nav) { liveSend(true); return; }
-    if (BG && bgWatch) { const old = bgWatch; bgWatch = null; watchParked = true; Promise.resolve(old).then(id => id && BG.removeWatcher({ id })).catch(() => {}); }
-    else if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; watchParked = true; }
+    clearTimeout(parkTimer); parkTimer = setTimeout(parkWatch, 45000);
     clearTimeout(nameHere.t);
     return;
   }
+  clearTimeout(parkTimer); parkTimer = 0;
   keepAwake();
   if (watchParked) { watchParked = false; startWatch(true); }
   if (nav) { touchDown = false; nav.touching = false; setTimeout(() => { if (nav) $('recenter').onclick(); }, 300); }
@@ -4869,7 +4879,7 @@ function onFix(p) {
   // only another reroute or route check waits
   // Parked for half an hour with directions still running: the trip ends on its own, instead of GPS and the route
   // checks running all night in the background. Moving again before that keeps everything as it was.
-  if (!p.again) { if (speed < 0.8 && (p.coords.accuracy || 0) < 100) nav.parkedAt = nav.parkedAt || Date.now(); else nav.parkedAt = 0; }
+  if (!p.again && p.coords.speed != null && p.coords.speed >= 0) { if (speed < 0.8 && (p.coords.accuracy || 0) < 100) nav.parkedAt = nav.parkedAt || Date.now(); else nav.parkedAt = 0; }
   if (nav.parkedAt && Date.now() - nav.parkedAt > 1800000) { endNav(); status('Directions ended: parked for 30 minutes. Tap Go to start again.'); return; }
   if (!nav.busy && onRoute && !atPort && spd > 3 && nav.rt && nav.rt.live && Date.now() - nav.lastTraffic > (document.hidden ? 900000 : 300000)) trafficCheck();   // every 5 minutes; 15 with the screen off, where a faster road cannot be shown anyway; not while queued or stopped
   if (prefs.fires && !nav.busy && Date.now() - (nav.lastFire || 0) > 600000) fireCheck();
