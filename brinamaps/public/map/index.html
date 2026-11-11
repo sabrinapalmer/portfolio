@@ -851,7 +851,7 @@ const ES = {
   'Continue straight': 'Siga derecho', 'In ': 'En ', 'Then ': 'Luego ', ' Then ': ' Luego ', 'Then: ': 'Luego: ', 'then ': 'luego ', 'Next: ': 'Siguiente: ', 'Your next turn': 'Su próxima vuelta',
   'Turn left': 'Gire a la izquierda', 'Turn right': 'Gire a la derecha', 'Sharp left': 'Vuelta cerrada a la izquierda', 'Sharp right': 'Vuelta cerrada a la derecha',
   'Bear left': 'Manténgase a la izquierda', 'Bear right': 'Manténgase a la derecha', 'Keep left': 'Manténgase a la izquierda', 'Keep right': 'Manténgase a la derecha',
-  'Make a U-turn': 'Dé vuelta en U', 'Make a U-turn.': 'Dé vuelta en U.', ' U-turn': ' vuelta en U', 'Merge': 'Incorpórese', 'Take the exit': 'Tome la salida',
+  'Make a U-turn': 'Dé vuelta en U', 'Make a U-turn.': 'Dé vuelta en U.', ' U-turn': ' vuelta en U', 'Merge': 'Incorpórese', 'Take the exit': 'Tome la salida', 'Take exit ': 'Tome la salida ', ' to the right': ' a la derecha', ' to the left': ' a la izquierda',
   'Take the exit on the left': 'Tome la salida a la izquierda', 'Take the exit on the right': 'Tome la salida a la derecha', 'Take the ramp': 'Tome la rampa',
   'Take the ramp on the right': 'Tome la rampa a la derecha', 'Take the ramp on the ': 'Tome la rampa a la ', 'Take the roundabout': 'Entre a la glorieta', 'Exit the roundabout': 'Salga de la glorieta',
   'At the roundabout, take exit ': 'En la glorieta, tome la salida ', 'exit roundabout': 'salga de la glorieta', 'exit rotary': 'salga de la glorieta', 'Exit ': 'Salida ', ', exit ': ', salida ',
@@ -3440,8 +3440,20 @@ async function valhallaRoutes(quiet, base = ROUTER, via = null) {
       leg.maneuvers.forEach(m => {
         const arriving = m.type >= 4 && m.type <= 6, stop = arriving && !last;
         const text = stop ? 'Arrive at stop ' + (li + 1) + (stopName(li) ? ', ' + stopName(li) : '') + '.' : m.instruction;
-        const sg = m.sign || {}, signs = k => (sg[k] || []).map(x => x.text).join(' / ');
-        steps.push({ instruction: text, say: stop ? text : m.verbal_pre_transition_instruction || m.instruction, short: stop ? 'Arrive at your stop.' : m.verbal_succinct_transition_instruction || m.instruction, multi: !!m.verbal_multi_cue,
+        const sg = m.sign || {}, signs = k => (sg[k] || []).map(x => x.text).join(' / '), first = k => ((sg[k] || [])[0] || {}).text || '';
+        // Spoken: the action and the exit number, or one sign name when there is no number ("Take exit 28 on the right."),
+        // not the whole gantry ("...onto I-94 East toward Chicago / Milwaukee / O'Hare"); the card shows the rest
+        const ty = m.type, side = ty === 18 || ty === 20 || ty === 23 || ty === 37 ? ' on the right' : ty === 19 || ty === 21 || ty === 24 || ty === 38 ? ' on the left' : '';
+        const num = first('exit_number_elements'), dest = first('exit_branch_elements') || first('exit_toward_elements') || (m.street_names || [])[0] || '';
+        const spoken = stop ? text
+          : ty === 20 || ty === 21 ? (num ? 'Take exit ' + num + side + '.' : 'Take the exit' + side + (dest ? ' toward ' + dest : '') + '.')
+          : ty >= 17 && ty <= 19 ? 'Take the ramp' + side + (dest ? ' toward ' + dest : '') + '.'
+          : ty === 23 || ty === 24 ? 'Keep ' + (ty === 23 ? 'right' : 'left') + (dest ? ' toward ' + dest : '') + '.'
+          : ty === 25 || ty === 37 || ty === 38 ? 'Merge' + (side ? side.replace(' on the', ' to the') : '') + (dest ? ' onto ' + dest : '') + '.'
+          : null;
+        const prevTy = steps.length ? steps[steps.length - 1]._ty : 0;
+        steps.push({ instruction: text, say: spoken || m.verbal_pre_transition_instruction || m.instruction, short: stop ? 'Arrive at your stop.' : spoken || m.verbal_succinct_transition_instruction || m.instruction, multi: !!m.verbal_multi_cue,
+          _ty: ty, flow: !stop && !arriving && (ty === 7 || ty === 8 || ty === 22 || ((ty === 25 || ty === 37 || ty === 38) && prevTy >= 17 && prevTy <= 21)),   // keep driving: the road changes name, or merges off a ramp; nothing to do
           sign: [signs('exit_number_elements') && 'Exit ' + signs('exit_number_elements'), signs('exit_toward_elements') && 'toward ' + signs('exit_toward_elements')].filter(Boolean).join(', '),
           begin: m.begin_shape_index + off, end: m.end_shape_index + off, length: m.length, time: m.time, road: (m.street_names || [])[0] || '',
           angle: V_ANGLE[m.type] || 0, left: m.type >= 13 && m.type <= 15, kind: stop ? 'stop' : arriving ? 'arrive' : m.type === 26 ? 'roundabout' : (m.type >= 9 && m.type <= 16) ? 'turn' : 'other',
@@ -3516,7 +3528,12 @@ async function tomtomRoutes(quiet, more) {
     const steps = ins.map((m, i) => {
       const k = m.maneuver || '', nx = ins[i + 1], arriving = /^ARRIVE/.test(k), stop = /^WAYPOINT/.test(k), si = stop ? wp++ : -1;
       const text = stop ? 'Arrive at stop ' + (si + 1) + (stopName(si) ? ', ' + stopName(si) : '') + '.' : m.message || tomtomShort(m);
-      return { instruction: text, say: text, short: stop ? 'Arrive at your stop.' : tomtomShort(m), multi: false,
+      const prevK = i ? ins[i - 1].maneuver || '' : '';
+      const tSide = /RIGHT/.test(k) ? ' on the right' : /LEFT/.test(k) ? ' on the left' : '', tDest = (m.roadNumbers || [])[0] || m.signpostText || m.street || '';
+      const spoken = /^MOTORWAY_EXIT|^TAKE_EXIT/.test(k) ? (m.exitNumber ? 'Take exit ' + m.exitNumber + tSide + '.' : 'Take the exit' + tSide + (tDest ? ' toward ' + tDest : '') + '.')
+        : /^ENTER_MOTORWAY|^TAKE_FERRY/.test(k) ? null : /^KEEP_/.test(k) ? 'Keep ' + (/LEFT/.test(k) ? 'left' : 'right') + (tDest ? ' toward ' + tDest : '') + '.' : null;
+      return { instruction: text, say: stop ? text : spoken || text, short: stop ? 'Arrive at your stop.' : spoken || tomtomShort(m), multi: false,
+        flow: !stop && !arriving && (/^(STRAIGHT|FOLLOW|SWITCH_PARALLEL_ROAD|ROAD_CHANGE)$/.test(k) || (/^MOTORWAY_MERGE|^MERGE/.test(k) && /EXIT|RAMP|ENTER_MOTORWAY/.test(prevK))),
         sign: [m.exitNumber && 'Exit ' + m.exitNumber, m.signpostText && 'toward ' + m.signpostText].filter(Boolean).join(', '),
         begin: at[i], end: nx ? at[i + 1] : at[i], length: nx ? (nx.routeOffsetInMeters - m.routeOffsetInMeters) / 1609.34 : 0, time: nx ? nx.travelTimeInSeconds - m.travelTimeInSeconds : 0,
         road: m.street || (m.roadNumbers || [])[0] || '', angle: T_ANGLE[k] || 0, left: /^(TURN_LEFT|SHARP_LEFT|MAKE_UTURN)$/.test(k),
@@ -3553,7 +3570,8 @@ async function osrmRoutes(quiet) {
       const begin = Math.max(0, coords.length - 1);
       g.forEach(c => coords.push(c));
       const turning = ['turn', 'end of road', 'fork'].includes(t) && st.maneuver.modifier !== 'straight';
-      steps.push({ instruction: text, say: text, short: text, begin, end: coords.length - 1, length: st.distance / 1609.34, time: st.duration, road: st.name || '',
+      const prevT = steps.length ? steps[steps.length - 1]._ty : '', flow = !stop && (t === 'new name' || (t === 'continue' && (!st.maneuver.modifier || st.maneuver.modifier === 'straight')) || (t === 'merge' && /ramp/.test(prevT)));
+      steps.push({ instruction: text, say: text, short: text, _ty: t, flow, begin, end: coords.length - 1, length: st.distance / 1609.34, time: st.duration, road: st.name || '',
         angle: t === 'depart' || t === 'arrive' ? 0 : O_ANGLE[st.maneuver.modifier] || 0, left: turning && /^(left|sharp left|uturn)$/.test(st.maneuver.modifier), kind: stop ? 'stop' : t === 'arrive' ? 'arrive' : /roundabout|rotary/.test(t) ? 'roundabout' : turning ? 'turn' : 'other' });
     }));
     return { time: rt.duration, dist: rt.distance / 1609.34, coords, steps, basic: true };
@@ -3607,7 +3625,13 @@ function geoParse(d, via) {
         if (stop && via && li >= via.at - 1 && li < via.at - 1 + nv) return;   // passing a port or lane point is not a stop: no "arrive" step there
         const si = via && li >= via.at - 1 + nv ? li - nv : li;
         const text = stop ? 'Arrive at stop ' + (si + 1) + (stopName(si) ? ', ' + stopName(si) : '') + '.' : ins.text || 'Continue.';
-        steps.push({ instruction: text, say: stop ? text : ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : ins.transition_instruction || ins.text || text,
+        const gSide = ty === 18 || ty === 20 || ty === 23 || ty === 37 ? ' on the right' : ty === 19 || ty === 21 || ty === 24 || ty === 38 ? ' on the left' : '';
+        const gNum = [].concat(ins.exitNumber || [])[0] || '', gDest = [].concat(ins.exitTowards || ins.streets || [])[0] || '';
+        const gSpoken = stop ? text : ty === 20 || ty === 21 ? (gNum ? 'Take exit ' + gNum + gSide + '.' : 'Take the exit' + gSide + (gDest ? ' toward ' + gDest : '') + '.')
+          : ty >= 17 && ty <= 19 ? 'Take the ramp' + gSide + (gDest ? ' toward ' + gDest : '') + '.' : ty === 23 || ty === 24 ? 'Keep ' + (ty === 23 ? 'right' : 'left') + (gDest ? ' toward ' + gDest : '') + '.' : null;
+        const gPrev = steps.length ? steps[steps.length - 1]._ty : 0;
+        steps.push({ instruction: text, say: gSpoken || ins.pre_transition_instruction || ins.text || text, short: stop ? 'Arrive at your stop.' : gSpoken || ins.transition_instruction || ins.text || text,
+          _ty: ty, flow: !stop && !arriving && (ty === 7 || ty === 8 || ty === 22 || ((ty === 25 || ty === 37 || ty === 38) && gPrev >= 17 && gPrev <= 21)),
           sign: [ins.exitNumber && 'Exit ' + ins.exitNumber, ins.exitTowards && 'toward ' + [].concat(ins.exitTowards).join(' / ')].filter(Boolean).join(', '),
           begin: st.from_index + off, end: st.to_index + off, length: (st.distance || 0) / 1609.34, time: st.time || 0, road: (ins.streets || [])[0] || st.name || '',
           angle: V_ANGLE[ty] || 0, left: ty >= 13 && ty <= 15, kind: stop ? 'stop' : arriving ? 'arrive' : ty === 26 ? 'roundabout' : (ty >= 9 && ty <= 16) ? 'turn' : 'other',
@@ -3767,6 +3791,7 @@ async function route(quiet, afterFires) {
   }
   if (id !== reqId) return false;
   const fromSaved = !!found.saved;
+  found.forEach(foldSteps);
   found.forEach(checkTurns);
   found.forEach(describe);
   await Promise.all([checkTolls(found).catch(() => {}), checkBorder(found).catch(() => {})]);
@@ -3796,10 +3821,38 @@ async function route(quiet, afterFires) {
   return fromSaved ? 'saved' : true;   // 'saved': the last route kept on the phone, not a new one
 }
 
+// "Continue on Oak Street", "Oak Street becomes Elm", "Merge onto I-5" after the ramp: nothing to do at any of these,
+// so they are folded into the step before. What is left is the turns to make and the exits to take, each with the
+// whole stretch of road up to it, so the voice and the card go straight from one action to the next ("In 12 miles,
+// take exit 28"). The names along the way are kept so the top line can still say which road you are on.
+function foldSteps(t) {
+  const steps = t.steps; if (!steps || steps.length < 2 || steps._folded) return;
+  steps._folded = true;
+  const out = [];
+  steps.forEach(st => {
+    const prev = out[out.length - 1];
+    if (st.flow && prev && prev.kind !== 'arrive' && prev.kind !== 'stop') {
+      prev.end = st.end; prev.length = (prev.length || 0) + (st.length || 0); prev.time = (prev.time || 0) + (st.time || 0);
+      prev.highway = prev.highway || st.highway; prev.toll = prev.toll || st.toll; prev.rough = prev.rough || st.rough; prev.ferry = prev.ferry || st.ferry;
+      prev.roads = prev.roads || [[prev.begin, prev.road]]; if (st.road && st.road !== prev.roads[prev.roads.length - 1][1]) prev.roads.push([st.begin, st.road]);
+      return;
+    }
+    out.push(st);
+  });
+  out._folded = true;
+  t.steps = out;
+}
+// The road you are on within a step (a folded step can run over several names)
+function roadAt(st, seg) {
+  if (!st) return '';
+  if (!st.roads) return st.road || '';
+  let r = st.roads[0][1]; st.roads.forEach(([i, name]) => { if (seg >= i) r = name; }); return r;
+}
 // The router now and then names the wrong turn (a "left U-turn" where the road turns right onto an on-ramp). Each real
 // turn is checked against the route's own line: when the line plainly turns the other way, or turns far less than a
 // U-turn, the words and the arrow are rebuilt from the line. A true U-turn (the line comes back on itself) is left alone.
 function checkTurns(t) {
+  foldSteps(t);
   const c = t.coords, steps = t.steps;
   if (!c || c.length < 3 || !steps) return;
   const cum = [0]; for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + meters(c[i - 1], c[i]));
@@ -4976,19 +5029,26 @@ function onFix(p) {
   nav.zoom = 16.5 - Math.max(0, Math.min(1.9, (spd - 8) * 0.08));
   if (next && next.kind !== 'arrive' && toNext < 220 && spd < 18) nav.zoom = Math.max(nav.zoom, 17.1);
   if (nav.cam) nav.cam.z = nav.zoom;
-  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: (nav.busy ? 'Rerouting  ·  ' : '') + (nextStop || [steps[cur].road && 'On ' + steps[cur].road, speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ')) });
+  Object.assign(nav, { along, cur, nextSay: next ? withMark(next.say, extras.mark) + (extras.laneText ? ' ' + extras.laneText + '.' : '') : '', info: (nav.busy ? 'Rerouting  ·  ' : '') + (nextStop || [roadAt(steps[cur], nav.seg) && 'On ' + roadAt(steps[cur], nav.seg), speed > 1 && fmtSpeed(speed * 2.237), fmtDist(left / 1609.34) + ' left', 'arrive ' + arrive].filter(Boolean).join('  ·  ')) });
   drawStrip();
   if (document.body.classList.contains('steps')) drawNavSteps();
 
   // Voice prompts, timed by speed so each is heard well before the turn: a heads-up a minute or more out at highway
   // speed, one about half a minute out, and the last one about 10 seconds out (never at the turn itself). The position
   // is a moment old and speech takes a moment to start, so the distance is counted from a little further along.
-  const driving = prefs.mode === 'auto' || prefs.mode === 'rig', ahead = toNext - spd * 1.5;
+  const driving = prefs.mode === 'auto' || prefs.mode === 'rig', ahead = toNext - spd * 1.5, lower0 = t => t.charAt(0).toLowerCase() + t.slice(1);
   const near = driving ? Math.max(90, spd * 11) : Math.max(25, spd * 10), early = Math.max(driving ? 400 : 120, spd * 30), far = driving && spd > 20 ? Math.max(1600, spd * 75) : 0;
   if (cur !== nav.step) {
     nav.step = cur;
     liveSend(true);   // a new turn goes to the lock screen at once, not on the next 2-second tick
-    if (toNext > Math.max(early, far) * 1.5) { say('Continue for ' + spokenDist(toNext) + '.', 'detailed'); return; }
+    // A long stretch: what comes at the end of it and how far ("In 12 miles, take exit 28 on the right."), said as
+    // soon as you are on it (the exit is known from the moment you get on the highway), then again nearer
+    if (next && toNext > Math.max(early, far) * 1.5 && next.kind !== 'arrive') {
+      const P = rt.coords[next.begin], hk = 'h:' + P[0].toFixed(4) + ',' + P[1].toFixed(4) + ':' + (next.short || '');   // once per turn, not again after each reroute
+      nav.heard = nav.heard || {};
+      if (!nav.heard[hk] || Date.now() - nav.heard[hk] > 900000) { nav.heard[hk] = Date.now(); say((cur === 0 && steps[0].say && !/^(Continue|Head)/.test(steps[0].say) ? steps[0].say + ' ' : '') + 'In ' + spokenDist(toNext) + ', ' + lower0(next.short), 'standard'); }
+      return;
+    }
   }
   if (!next) return;
   // Just through a turn: nothing about the next one until you are out of it (two turns close together were heard
