@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 import Layout from "./components/layout/Layout";
@@ -7,6 +7,8 @@ import Experience from "./pages/Experience";
 import Projects from "./pages/Projects";
 import Art from "./pages/Art";
 import Contact from "./pages/Contact";
+import Shop from "./pages/Shop";
+const ShopAdmin = lazy(() => import("./pages/ShopAdmin"));
 import NotFound from "./pages/NotFound";
 
 const App = () => {
@@ -18,6 +20,8 @@ const App = () => {
           <Route path="experience" element={<Experience />} />
           <Route path="projects" element={<Projects />} />
           <Route path="art" element={<Art />} />
+          <Route path="shop" element={<Shop />} />
+          <Route path="shop/admin" element={<Suspense fallback={null}><ShopAdmin /></Suspense>} />
           <Route path="contact" element={<Contact />} />
           <Route path="*" element={<NotFound />} />
         </Route>
