@@ -6,4 +6,5 @@ export const quickLinks = [
   { name: "Music Analyst", url: "/musicanalyst" },
   { name: "Net Worth", url: "/networth" },
   { name: "Workout", url: "/workout" },
+  { name: "2048", url: "/2048" },
 ] as const;

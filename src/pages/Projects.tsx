@@ -104,6 +104,16 @@ const projects: Project[] = [
     },
   },
   {
+    title: "2048",
+    description:
+      "My take on the sliding-tile puzzle: merge matching numbers to reach **2048**. Swipe or use the arrow keys; " +
+      "it saves your game and best score in the browser, and has one-step undo.",
+    tags: ["JavaScript", "CSS Animation", "Browser Game"],
+    type: "games",
+    date: "2026-11-26",
+    links: { demo: "/2048" },
+  },
+  {
     title: "Stonemoth",
     description:
       'Created for Ludum Dare Game Jam 56 with the theme "Tiny Creatures". Working alongside ' +
@@ -179,7 +189,7 @@ const sections: { type: Project["type"]; label: string; blurb: string }[] = [
   { type: "web", label: "Websites", blurb: "Sites and shops I run or built" },
   { type: "apps", label: "Apps", blurb: "Things you can install and use daily" },
   { type: "tools", label: "Tools", blurb: "Free tools for money, music and fitness" },
-  { type: "games", label: "Games", blurb: "Game jam entries" },
+  { type: "games", label: "Games", blurb: "Play one here, plus my game jam entries" },
 ];
 
 const filterLabels: Record<string, string> = {
