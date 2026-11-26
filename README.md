@@ -16,6 +16,7 @@ Portfolio site (React + Vite + Tailwind), deployed on Vercel from `master`.
 | `/musicanalyst` | Music Analyst (Spotify export dashboard) | `public/musicanalyst.html` |
 | `/networth` | Net Worth Ledger | `public/networth/index.html` |
 | `/workout` | Workout planner | `public/workout/index.html` |
+| `/2048` | 2048 sliding-tile game | `public/2048/index.html` |
 | `/map` | Redirects to brinamaps.com | `vercel.json` |
 
 BrinaMaps lives in `brinamaps/` and `ios-app/` and deploys as its own Vercel project at brinamaps.com.
